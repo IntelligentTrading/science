@@ -1,12 +1,11 @@
 class RSISignal:
     def __init__(self, trend, horizon, strength_value, strength_max,
-                 price, price_USDT, price_change, timestamp, rsi_value, transaction_currency, counter_currency):
+                 price, price_change, timestamp, rsi_value, transaction_currency, counter_currency):
         self.trend = trend
         self.horizon = horizon
         self.strength_value = strength_value
         self.strength_max = strength_max
         self.price = price
-        self.price_USDT = price_USDT
         self.price_change = price_change
         self.timestamp = timestamp
         self.rsi_value = rsi_value

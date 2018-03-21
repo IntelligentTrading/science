@@ -37,3 +37,19 @@ class SimpleRSIStrategy(Strategy):
         output.append("  overbought_threshold = {}".format(self.overbought_threshold))
         output.append("  oversold_threshold = {}".format(self.oversold_threshold))
         return("\n".join(output))
+
+
+class RSIBuyAndHoldStrategy(SimpleRSIStrategy):
+    def __init__(self, rsi_signals, overbought_threshold=80, oversold_threshold=25):
+        SimpleRSIStrategy.__init__(self, rsi_signals, overbought_threshold, oversold_threshold)
+
+    def get_orders(self, start_cash, start_crypto):
+        orders = SimpleRSIStrategy.get_orders(self, start_cash, start_crypto)
+        filtered = []
+        for order in orders:
+            if order.order_type == OrderType.BUY:
+                filtered.append(order)
+                break
+        return filtered
+
+
