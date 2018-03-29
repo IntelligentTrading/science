@@ -1,6 +1,6 @@
 from orders import *
 from data_sources import SignalType
-
+import operator
 
 class Strategy:
     def get_orders(self, start_cash, start_crypto):
@@ -9,11 +9,23 @@ class Strategy:
     def get_short_summary(self):
         pass
 
+    @staticmethod
+    def filter_based_on_horizon(signals, horizon):
+        output = []
+        for signal in signals:
+            if signal.horizon == horizon:
+                output.append(signal)
+        return output
+
 
 class OneSignalStrategy(Strategy):
-    def __init__(self, signals, signal_type):
-        self.signals = signals
+    def __init__(self, signals, signal_type, horizon):
+        if horizon is not None:
+            self.signals = Strategy.filter_based_on_horizon(signals, horizon)
+        else:
+            self.signals = signals
         self.signal_type = signal_type
+        self.horizon = horizon
 
     def get_orders(self, start_cash, start_crypto):
         orders = []
@@ -32,6 +44,20 @@ class OneSignalStrategy(Strategy):
                 cash = 0
         return orders
 
+    def get_buy_signals(self):
+        buy_signals = []
+        for signal in self.signals:
+            if self.indicates_buy(signal):
+                buy_signals.append(signal)
+        return buy_signals
+
+    def get_sell_signals(self):
+        sell_signals = []
+        for signal in self.signals:
+            if self.indicates_sell(signal):
+                sell_signals.append(signal)
+        return sell_signals
+
     def indicates_sell(self, signal):
         pass
 
@@ -39,10 +65,9 @@ class OneSignalStrategy(Strategy):
         pass
 
 
-
 class SimpleRSIStrategy(OneSignalStrategy):
-    def __init__(self, signals, overbought_threshold=80, oversold_threshold=25):
-        OneSignalStrategy.__init__(self, signals, SignalType.RSI)
+    def __init__(self, signals, overbought_threshold=80, oversold_threshold=25, horizon=None):
+        OneSignalStrategy.__init__(self, signals, SignalType.RSI, horizon)
         self.overbought_threshold = overbought_threshold
         self.oversold_threshold = oversold_threshold
 
@@ -65,15 +90,20 @@ class SimpleRSIStrategy(OneSignalStrategy):
         output.append("Strategy settings:")
         output.append("  overbought_threshold = {}".format(self.overbought_threshold))
         output.append("  oversold_threshold = {}".format(self.oversold_threshold))
+        output.append("  horizon = {}".format(self.horizon if self.horizon is not None else "all"))
+
         return "\n".join(output)
 
     def get_short_summary(self):
-        return "RSI, overbought = {}, oversold = {}".format(self.overbought_threshold, self.oversold_threshold)
+        return "RSI, overbought = {}, oversold = {}, horizon = {}".format(self.overbought_threshold,
+                                                                            self.oversold_threshold,
+                                                                            "all" if self.horizon is None
+                                                                            else self.horizon)
 
 
 class SimpleTrendBasedStrategy(OneSignalStrategy):
-    def __init__(self, signals, signal_type):
-        OneSignalStrategy.__init__(self, signals, signal_type)
+    def __init__(self, signals, signal_type, horizon = None):
+        OneSignalStrategy.__init__(self, signals, signal_type, horizon)
 
     def indicates_sell(self, signal):
         if signal.trend == "-1":
@@ -92,10 +122,12 @@ class SimpleTrendBasedStrategy(OneSignalStrategy):
         output.append("Strategy: a simple {}-based strategy".format(self.signal_type.value))
         output.append(
             "  description: selling when trend = -1, buying when trend = 1 ")
+        output.append("  horizon = {}".format(self.horizon if self.horizon is not None else "all"))
         return "\n".join(output)
 
     def get_short_summary(self):
-        return "{} trend-based".format(self.signal_type.value)
+        return "{} trend-based, horizon = {}".format(self.signal_type.value, "all" if self.horizon is None
+                                                                            else self.horizon)
 
 
 class BuyAndHoldStrategy(Strategy):
@@ -115,3 +147,24 @@ class BuyAndHoldStrategy(Strategy):
         return "Buy first & hold: {}".format(self.strategy.get_short_summary())
 
 
+class MultiSignalStrategy(OneSignalStrategy):
+
+    def __init__(self, buying_strategies, selling_strategies):
+        self.buy_signals = []
+        self.sell_signals = []
+
+        for buying_strategy in buying_strategies:
+            self.buy_signals.extend(buying_strategy.get_buy_signals())
+
+        for selling_strategy in selling_strategies:
+            self.sell_signals.extend(selling_strategy.get_sell_signals())
+
+        unsorted_signals = list(self.buy_signals)
+        unsorted_signals.extend(self.sell_signals)
+        self.signals = sorted(unsorted_signals, key=operator.attrgetter('timestamp'))
+
+    def indicates_sell(self, signal):
+        return signal in self.sell_signals
+
+    def indicates_buy(self, signal):
+        return signal in self.buy_signals

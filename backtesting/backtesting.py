@@ -42,6 +42,18 @@ def evaluate_rsi_comparatively(transaction_currency, counter_currency, start_tim
 
 
 if __name__ == "__main__":
+    start_time = '1513186735.51707'
+    end_time = '1513197243.96346'
+    transaction_currency = "BTC"
+    counter_currency = "USDT"
+
+    rsi_signals = get_signals(SignalType.RSI, transaction_currency, start_time, end_time, counter_currency)
+    rsi_strat = SimpleRSIStrategy(rsi_signals)
+    sma_signals = get_signals(SignalType.SMA, transaction_currency, start_time, end_time, counter_currency)
+    sma_strat = SimpleTrendBasedStrategy(sma_signals, SignalType.SMA)
+
+    multi_strat = MultiSignalStrategy((rsi_strat,sma_strat),(rsi_strat,))
+
     start, end = get_timestamp_range()
     evaluate_trend_based(SignalType.SMA, "OMG", "BTC", start, end, 1, 0)
     evaluate_rsi("OMG", "BTC", 0, end, 1, 0, 20, 75)

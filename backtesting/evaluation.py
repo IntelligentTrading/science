@@ -6,7 +6,13 @@ ordered_columns = ["strategy", "transaction_currency", "counter_currency", "star
                    "end_crypto", "num_trades", "profit", "profit_percent", "profit_USDT", "profit_percent_USDT",
                    "buy_and_hold_profit", "buy_and_hold_profit_percent", "buy_and_hold_profit_USDT",
                    "buy_and_hold_profit_percent_USDT", "end_price", "start_time", "end_time",
-                   "evaluate_profit_on_last_order"]
+                   "evaluate_profit_on_last_order", "horizon"]
+
+ordered_columns_condensed = ["strategy", "transaction_currency", "counter_currency", "num_trades",
+                             "profit_percent", "profit_percent_USDT",
+                             "buy_and_hold_profit_percent",
+                             "buy_and_hold_profit_percent_USDT", "start_time", "end_time",
+                             "evaluate_profit_on_last_order", "horizon"]
 
 class Evaluation:
     def __init__(self, strategy, transaction_currency, counter_currency,
@@ -150,9 +156,14 @@ class Evaluation:
         dictionary = vars(self).copy()
         del dictionary["orders"]
         dictionary["strategy"] = dictionary["strategy"].get_short_summary()
-
+        dictionary["start_time"] = datetime_from_timestamp(dictionary["start_time"])
+        dictionary["end_time"] = datetime_from_timestamp(dictionary["end_time"])
         dictionary["profit"] = self.get_profit_value()
         dictionary["profit_percent"] = self.get_profit_percent()
+        if "horizon" not in vars(self.strategy):
+            dictionary["horizon"] = "N/A"
+        else:
+            dictionary["horizon"] = self.strategy.horizon
 
         try:
             dictionary["profit_USDT"] = self.get_profit_USDT()
@@ -164,31 +175,33 @@ class Evaluation:
         return dictionary
 
 
-class ComparativeEvaluation:
+class ComparativeEvaluationOneSignal:
 
-    def __init__(self, signal_types, currency_pairs, start_cash, start_crypto, start_time, end_time,
+    def __init__(self, signal_types, currency_pairs, start_cash, start_crypto, start_time, end_time, output_file, horizons=(None,),
                  rsi_overbought_values=None, rsi_oversold_values=None):
         output = None
         for (transaction_currency, counter_currency) in currency_pairs:
-            dataframe = self.perform_evaluations(signal_types, transaction_currency, counter_currency, start_cash, start_crypto,
-                                     start_time, end_time, rsi_overbought_values, rsi_oversold_values)
+            dataframe = self.generate_and_perform_evaluations(signal_types, transaction_currency, counter_currency, start_cash, start_crypto,
+                                                              start_time, end_time, horizons, rsi_overbought_values, rsi_oversold_values)
             if output is None:
                 output = dataframe
             else:
                 output = output.append(dataframe)
 
-        writer = pd.ExcelWriter('output.xlsx')
-        output.to_excel(writer, 'Sheet1')
+        output = output[ordered_columns_condensed]
+        output = output[output.num_trades != 0]   # remove empty trades
+        writer = pd.ExcelWriter(output_file)
+        output.to_excel(writer, 'Results')
         writer.save()
 
-
-    def generate_evaluation(self, signal_type, transaction_currency, counter_currency, start_cash, start_crypto,
-                            start_time, end_time, evaluate_profit_on_last_order=True, rsi_overbought=None, rsi_oversold=None):
+    def generate_strategy_and_evaluation(self, signal_type, transaction_currency, counter_currency, start_cash, start_crypto,
+                                         start_time, end_time, horizon=None, evaluate_profit_on_last_order=True,
+                                         rsi_overbought=None, rsi_oversold=None):
         signals = get_signals(signal_type, transaction_currency, start_time, end_time, counter_currency)
         if signal_type == SignalType.RSI:
-            strategy = SimpleRSIStrategy(signals, rsi_overbought, rsi_oversold)
-        elif signal_type in (SignalType.kumo_breakout, SignalType.SMA, SignalType.EMA):
-            strategy = SimpleTrendBasedStrategy(signals, signal_type)
+            strategy = SimpleRSIStrategy(signals, rsi_overbought, rsi_oversold, horizon)
+        elif signal_type in (SignalType.kumo_breakout, SignalType.SMA, SignalType.EMA, SignalType.RSI_Cumulative):
+            strategy = SimpleTrendBasedStrategy(signals, signal_type, horizon)
         baseline = BuyAndHoldStrategy(strategy)
         baseline_evaluation = Evaluation(baseline, transaction_currency, counter_currency, start_cash,
                                          start_crypto, start_time, end_time, evaluate_profit_on_last_order, False)
@@ -205,31 +218,33 @@ class ComparativeEvaluation:
         evaluation_dict["buy_and_hold_profit_percent_USDT"] = baseline_dict["profit_percent_USDT"]
         return evaluation_dict
 
-    def perform_evaluations(self, signal_types, transaction_currency, counter_currency, start_cash, start_crypto,
-                            start_time, end_time, rsi_overbought_values, rsi_oversold_values, evaluate_profit_on_last_order=False):
+    def generate_and_perform_evaluations(self, signal_types, transaction_currency, counter_currency, start_cash, start_crypto,
+                                         start_time, end_time, horizons, rsi_overbought_values, rsi_oversold_values,
+                                         evaluate_profit_on_last_order=False):
         evaluations = []
         evaluation_dicts = []
 
-        for signal_type in signal_types:
-            if signal_type == SignalType.RSI:
-                for overbought_threshold in rsi_overbought_values:
-                    for oversold_threshold in rsi_oversold_values:
-                        evaluation, baseline = self.generate_evaluation(signal_type, transaction_currency,
-                                                                        counter_currency, start_cash, start_crypto,
-                                                                        start_time, end_time,
-                                                                        evaluate_profit_on_last_order,
-                                                                        overbought_threshold, oversold_threshold)
-                        evaluations.append((evaluation, baseline))
-                        evaluation_dicts.append(self.get_pandas_row_dict(evaluation, baseline))
-                        print("Evaluated {}".format(evaluation.get_short_summary()))
+        for horizon in horizons:
+            for signal_type in signal_types:
+                if signal_type == SignalType.RSI:
+                    for overbought_threshold in rsi_overbought_values:
+                        for oversold_threshold in rsi_oversold_values:
+                            evaluation, baseline = self.generate_strategy_and_evaluation(signal_type, transaction_currency,
+                                                                                         counter_currency, start_cash, start_crypto,
+                                                                                         start_time, end_time, horizon,
+                                                                                         evaluate_profit_on_last_order,
+                                                                                         overbought_threshold, oversold_threshold)
+                            evaluations.append((evaluation, baseline))
+                            evaluation_dicts.append(self.get_pandas_row_dict(evaluation, baseline))
+                            print("Evaluated {}".format(evaluation.get_short_summary()))
 
-            else:
-                evaluation, baseline = self.generate_evaluation(signal_type, transaction_currency, counter_currency,
-                                                                start_cash, start_crypto, start_time, end_time,
-                                                                evaluate_profit_on_last_order)
-                evaluations.append((evaluation, baseline))
-                evaluation_dicts.append(self.get_pandas_row_dict(evaluation, baseline))
-                print("Evaluated {}".format(evaluation.get_short_summary()))
+                else:
+                    evaluation, baseline = self.generate_strategy_and_evaluation(signal_type, transaction_currency, counter_currency,
+                                                                                 start_cash, start_crypto, start_time, end_time,
+                                                                                 horizon, evaluate_profit_on_last_order)
+                    evaluations.append((evaluation, baseline))
+                    evaluation_dicts.append(self.get_pandas_row_dict(evaluation, baseline))
+                    print("Evaluated {}".format(evaluation.get_short_summary()))
 
         for evaluation, baseline in evaluations:
             print(evaluation.get_short_summary())
@@ -243,14 +258,17 @@ class ComparativeEvaluation:
 
 if __name__ == "__main__":
     start, end = get_timestamp_range()
-    counter_currency = "BTC"
+    counter_currency = "USDT"
     transaction_currencies = get_currencies_trading_against_counter(counter_currency)
     currency_pairs = []
     for transaction_currency in transaction_currencies:
         currency_pairs.append((transaction_currency, counter_currency))
 
-    eval = ComparativeEvaluation(signal_types=(SignalType.RSI, SignalType.SMA, SignalType.kumo_breakout, SignalType.EMA),
-                                 currency_pairs=currency_pairs,
-                                 start_cash=1000, start_crypto=0,
-                                 start_time=start, end_time=end,
-                                 rsi_overbought_values=[70, 75, 80], rsi_oversold_values=[20, 25, 30])
+    ComparativeEvaluationOneSignal(signal_types=(SignalType.RSI, SignalType.SMA, SignalType.kumo_breakout, SignalType.EMA,
+                                                 SignalType.RSI_Cumulative),
+                                   currency_pairs=currency_pairs,
+                                   start_cash=1000, start_crypto=0,
+                                   start_time=start, end_time=end,
+                                   output_file="output.xlsx",
+                                   horizons=(None, 0, 1, 2),
+                                   rsi_overbought_values=[70, 75, 80], rsi_oversold_values=[20, 25, 30])

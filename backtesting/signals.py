@@ -19,6 +19,9 @@ class Signal:
             self.trend, self.horizon, self.strength_value, self.strength_max,
             self.price, self.price_change, self.timestamp, self.rsi_value))
 
+    def __eq__(self, other):
+        return self.__dict__ == other.__dict__
+
 
 
 

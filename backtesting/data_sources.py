@@ -21,6 +21,7 @@ class SignalType(Enum):
     kumo_breakout = "kumo_breakout"
     SMA = "SMA"
     EMA = "EMA"
+    RSI_Cumulative = "RSI_cumulative"
 
 #(BTC, ETH, USDT, XMR) = list(range(4))
 
@@ -30,7 +31,8 @@ signal_query = """ SELECT trend, horizon, strength_value, strength_max, price, p
                     transaction_currency=%s AND 
                     counter_currency=%s AND
                     timestamp >= %s AND
-                    timestamp <= %s;"""
+                    timestamp <= %s
+            ORDER BY timestamp;"""
 
 most_recent_price_query = """SELECT price FROM indicator_price 
                             WHERE timestamp = 
