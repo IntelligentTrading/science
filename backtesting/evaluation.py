@@ -1,6 +1,7 @@
 from data_sources import *
 from strategies import *
 import pandas as pd
+import itertools
 
 ordered_columns = ["strategy", "transaction_currency", "counter_currency", "start_cash", "start_crypto", "end_cash",
                    "end_crypto", "num_trades", "profit", "profit_percent", "profit_USDT", "profit_percent_USDT",
@@ -14,6 +15,10 @@ ordered_columns_condensed = ["strategy", "transaction_currency", "counter_curren
                              "buy_and_hold_profit_percent_USDT", "start_time", "end_time",
                              "evaluate_profit_on_last_order", "horizon"]
 
+ordered_columns_no_baseline_condensed = ["strategy", "transaction_currency", "counter_currency", "num_trades",
+                             "profit_percent", "profit_percent_USDT", "start_time", "end_time",
+                             "evaluate_profit_on_last_order", "horizon"]
+
 class Evaluation:
     def __init__(self, strategy, transaction_currency, counter_currency,
                  start_cash, start_crypto, start_time, end_time, evaluate_profit_on_last_order=False, verbose=True):
@@ -25,7 +30,7 @@ class Evaluation:
         self.end_time = end_time
         self.strategy = strategy
         self.evaluate_profit_on_last_order = evaluate_profit_on_last_order
-        self.orders = strategy.get_orders(start_cash, start_crypto)
+        self.orders, self.order_signals = strategy.get_orders(start_cash, start_crypto)
         self.num_trades, self.end_cash, self.end_crypto, self.end_price = self.execute_orders(self.orders)
         if verbose:
             print("\n".join(self.get_report()))
@@ -75,9 +80,13 @@ class Evaluation:
     def get_orders(self):
         return self.orders
 
-    def get_report(self):
+    def get_report(self, include_order_signals=True):
         output = []
         output.append(str(self.strategy))
+
+        output.append(self.strategy.get_signal_report())
+        output.append("--")
+
         output.append("\n* Order execution log *\n")
         output.append("Start balance: cash = {} {}, crypto = {} {}".format(self.start_cash, self.counter_currency,
                                                                            self.start_crypto, self.transaction_currency))
@@ -85,8 +94,10 @@ class Evaluation:
         output.append("Start time: {}\n--".format(datetime_from_timestamp(self.start_time)))
         output.append("--")
 
-        for order in self.orders:
+        for i, order in enumerate(self.orders):
             output.append(str(order))
+            if include_order_signals:
+                output.append("   signal: {}".format(self.order_signals[i]))
 
         output.append("End time: {}".format(datetime_from_timestamp(self.end_time)))
         output.append("\nSummary")
@@ -256,6 +267,85 @@ class ComparativeEvaluationOneSignal:
         return dataframe
 
 
+class ComparativeEvaluationMultiSignal:
+
+    def __init__(self, signal_types, currency_pairs, start_cash, start_crypto, start_time, end_time, output_file, horizons=(None,),
+                 rsi_overbought_values=None, rsi_oversold_values=None):
+        output = None
+        for (transaction_currency, counter_currency) in currency_pairs:
+            dataframe = self.generate_and_perform_evaluations(signal_types, transaction_currency, counter_currency, start_cash, start_crypto,
+                                                              start_time, end_time, horizons, rsi_overbought_values, rsi_oversold_values)
+            if output is None:
+                output = dataframe
+            else:
+                output = output.append(dataframe)
+
+        output = output[output.num_trades != 0]   # remove empty trades
+        writer = pd.ExcelWriter(output_file)
+        output.to_excel(writer, 'Results')
+        writer.save()
+
+    def generate_strategy(self, signal_type, transaction_currency, counter_currency, start_cash, start_crypto,
+                                         start_time, end_time, horizon=None, evaluate_profit_on_last_order=True,
+                                         rsi_overbought=None, rsi_oversold=None):
+        signals = get_signals(signal_type, transaction_currency, start_time, end_time, counter_currency)
+        if signal_type == SignalType.RSI:
+            strategy = SimpleRSIStrategy(signals, rsi_overbought, rsi_oversold, horizon)
+        elif signal_type in (SignalType.kumo_breakout, SignalType.SMA, SignalType.EMA, SignalType.RSI_Cumulative):
+            strategy = SimpleTrendBasedStrategy(signals, signal_type, horizon)
+        baseline = BuyAndHoldStrategy(strategy)
+        return strategy, baseline
+
+    def get_pandas_row_dict(self, evaluation, baseline):
+        evaluation_dict = evaluation.to_dictionary()
+        return evaluation_dict
+
+    def generate_and_perform_evaluations(self, signal_types, transaction_currency, counter_currency, start_cash, start_crypto,
+                                         start_time, end_time, horizons, rsi_overbought_values, rsi_oversold_values,
+                                         evaluate_profit_on_last_order=False):
+
+        evaluation_dicts = []
+
+        for horizon in horizons:
+            strategies = []
+            for signal_type in signal_types:
+                if signal_type == SignalType.RSI:
+                    for overbought_threshold in rsi_overbought_values:
+                        for oversold_threshold in rsi_oversold_values:
+                            strategy, baseline = self.generate_strategy(signal_type, transaction_currency, counter_currency,
+                                                                        start_cash, start_crypto,
+                                                                        start_time, end_time, horizon,
+                                                                        evaluate_profit_on_last_order,
+                                                                        overbought_threshold, oversold_threshold)
+                            strategies.append(strategy)
+
+                else:
+                    strategy, baseline = self.generate_strategy(signal_type, transaction_currency, counter_currency,
+                                                                start_cash, start_crypto, start_time, end_time,
+                                                                horizon, evaluate_profit_on_last_order)
+                    strategies.append(strategy)
+
+            combinations = []
+            for i in range(1, len(strategies) + 1):
+                sample = [list(x) for x in itertools.combinations(strategies, i)]
+                combinations.extend(sample)
+            buy_sell_pairs = itertools.product(combinations, repeat=2)
+            i = 0
+            for buy, sell in buy_sell_pairs:
+                i += 1
+                multi_strat = MultiSignalStrategy(buy, sell)
+                evaluation = Evaluation(multi_strat, transaction_currency, counter_currency, start_cash, start_crypto,
+                                        start_time,
+                                        end_time, evaluate_profit_on_last_order, False)
+                evaluation_dicts.append(self.get_pandas_row_dict(evaluation, baseline))
+                print("Evaluated {}".format(evaluation.get_short_summary()))
+
+        dataframe = pd.DataFrame(evaluation_dicts)
+        dataframe = dataframe[ordered_columns_no_baseline_condensed]
+        return dataframe
+
+
+
 if __name__ == "__main__":
     start, end = get_timestamp_range()
     counter_currency = "USDT"
@@ -263,6 +353,19 @@ if __name__ == "__main__":
     currency_pairs = []
     for transaction_currency in transaction_currencies:
         currency_pairs.append((transaction_currency, counter_currency))
+
+    ComparativeEvaluationMultiSignal(
+        signal_types=(SignalType.RSI, SignalType.SMA, SignalType.kumo_breakout, # SignalType.EMA,
+                      SignalType.RSI_Cumulative),
+        #signal_types=(SignalType.SMA, SignalType.kumo_breakout,
+        #              SignalType.RSI_Cumulative),
+        currency_pairs=currency_pairs,
+        start_cash=1000, start_crypto=0,
+        start_time=start, end_time=end,
+        output_file="output_multi.xlsx",
+        horizons=(None,),
+        rsi_overbought_values=[70], rsi_oversold_values=[30])
+
 
     ComparativeEvaluationOneSignal(signal_types=(SignalType.RSI, SignalType.SMA, SignalType.kumo_breakout, SignalType.EMA,
                                                  SignalType.RSI_Cumulative),

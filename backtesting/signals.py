@@ -1,3 +1,5 @@
+from utils import datetime_from_timestamp
+
 class Signal:
     def __init__(self, signal_type, trend, horizon, strength_value, strength_max,
                  price, price_change, timestamp, rsi_value, transaction_currency, counter_currency):
@@ -14,10 +16,8 @@ class Signal:
         self.counter_currency = counter_currency
 
     def __str__(self):
-        return ("{} {} {} {} {} {} {} {} {}".format(
-            self.transaction_currency,
-            self.trend, self.horizon, self.strength_value, self.strength_max,
-            self.price, self.price_change, self.timestamp, self.rsi_value))
+        return ("{} trend={} horizon={} timestamp={}".format(self.signal_type, self.trend,
+                                                             self.horizon, datetime_from_timestamp(self.timestamp)))
 
     def __eq__(self, other):
         return self.__dict__ == other.__dict__
