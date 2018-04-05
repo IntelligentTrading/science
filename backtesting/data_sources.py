@@ -23,6 +23,12 @@ class SignalType(Enum):
     EMA = "EMA"
     RSI_Cumulative = "RSI_cumulative"
 
+class Horizon(Enum):
+    any = None
+    short = 0
+    medium = 1
+    long = 2
+
 #(BTC, ETH, USDT, XMR) = list(range(4))
 
 signal_query = """ SELECT trend, horizon, strength_value, strength_max, price, price_change, timestamp, rsi_value 

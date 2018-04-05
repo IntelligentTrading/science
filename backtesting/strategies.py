@@ -1,4 +1,5 @@
 from orders import *
+from data_sources import Horizon
 from data_sources import SignalType
 import operator
 
@@ -11,20 +12,24 @@ class Strategy:
 
     @staticmethod
     def filter_based_on_horizon(signals, horizon):
+        horizon_id = horizon.value
         output = []
         for signal in signals:
-            if signal.horizon == horizon:
+            if signal.horizon == horizon_id:
                 output.append(signal)
         return output
 
 
 class SignalBasedStrategy(Strategy):
-    def __init__(self, signals, horizon):
-        if horizon is not None:
+    transaction_cost_percent = 0.0025
+
+    def __init__(self, signals, horizon=Horizon.any):
+        if horizon != Horizon.any:
             self.signals = Strategy.filter_based_on_horizon(signals, horizon)
         else:
             self.signals = signals
         self.horizon = horizon
+
 
     def get_orders(self, start_cash, start_crypto):
         orders = []
@@ -34,15 +39,16 @@ class SignalBasedStrategy(Strategy):
         for signal in self.signals:
             if self.indicates_sell(signal) and crypto > 0:
                 orders.append(Order(OrderType.SELL, signal.transaction_currency, signal.counter_currency,
-                                    signal.timestamp, crypto, signal.price))
+                                    signal.timestamp, crypto, signal.price, self.transaction_cost_percent))
                 order_signals.append(signal)
-                cash += crypto * signal.price
+                cash += (crypto * signal.price) * (1 - self.transaction_cost_percent)
                 crypto = 0
             elif self.indicates_buy(signal) and cash > 0:
+                crypto_amount = (cash * (1 - self.transaction_cost_percent)) / signal.price
                 orders.append(Order(OrderType.BUY, signal.transaction_currency, signal.counter_currency,
-                                    signal.timestamp, cash / signal.price, signal.price))
+                                    signal.timestamp, cash, signal.price, self.transaction_cost_percent))
                 order_signals.append(signal)
-                crypto += cash / signal.price
+                crypto += crypto_amount
                 cash = 0
         return orders, order_signals
 
@@ -74,7 +80,7 @@ class SignalBasedStrategy(Strategy):
 
 
 class SimpleRSIStrategy(SignalBasedStrategy):
-    def __init__(self, signals, overbought_threshold=80, oversold_threshold=25, horizon=None):
+    def __init__(self, signals, overbought_threshold=80, oversold_threshold=25, horizon=Horizon.any):
         SignalBasedStrategy.__init__(self, signals, horizon)
         self.overbought_threshold = overbought_threshold
         self.oversold_threshold = oversold_threshold
@@ -98,19 +104,18 @@ class SimpleRSIStrategy(SignalBasedStrategy):
         output.append("Strategy settings:")
         output.append("  overbought_threshold = {}".format(self.overbought_threshold))
         output.append("  oversold_threshold = {}".format(self.oversold_threshold))
-        output.append("  horizon = {}".format(self.horizon if self.horizon is not None else "all"))
+        output.append("  horizon = {}".format(self.horizon.name))
 
         return "\n".join(output)
 
     def get_short_summary(self):
-        return "RSI, overbought = {}, oversold = {}, horizon = {}".format(self.overbought_threshold,
-                                                                            self.oversold_threshold,
-                                                                            "all" if self.horizon is None
-                                                                            else self.horizon)
+        return "RSI, overbought = {}, oversold = {}".format(self.overbought_threshold,
+                                                                           self.oversold_threshold) #,
+                                                                           #self.horizon.name)
 
 
 class SimpleTrendBasedStrategy(SignalBasedStrategy):
-    def __init__(self, signals, signal_type, horizon = None):
+    def __init__(self, signals, signal_type, horizon=Horizon.any):
         SignalBasedStrategy.__init__(self, signals, horizon)
         self.signal_type = signal_type
 
@@ -131,12 +136,12 @@ class SimpleTrendBasedStrategy(SignalBasedStrategy):
         output.append("Strategy: a simple {}-based strategy".format(self.signal_type.value))
         output.append(
             "  description: selling when trend = -1, buying when trend = 1 ")
-        output.append("  horizon = {}".format(self.horizon if self.horizon is not None else "all"))
+        output.append("  horizon = {}".format(self.horizon.name))
         return "\n".join(output)
 
     def get_short_summary(self):
-        return "{} trend-based, horizon = {}".format(self.signal_type.value, "all" if self.horizon is None
-                                                                            else self.horizon)
+        #return "{} trend-based, horizon = {}".format(self.signal_type.value, self.horizon.name)
+        return "{}".format(self.signal_type.value)
 
 
 class BuyAndHoldStrategy(Strategy):
@@ -160,11 +165,12 @@ class BuyAndHoldStrategy(Strategy):
 
 class MultiSignalStrategy(SignalBasedStrategy):
 
-    def __init__(self, buying_strategies, selling_strategies):
+    def __init__(self, buying_strategies, selling_strategies, horizon):
         self.buying_strategies = buying_strategies
         self.selling_strategies = selling_strategies
         self.buy_signals = []
         self.sell_signals = []
+        self.horizon = horizon
 
         for buying_strategy in buying_strategies:
             self.buy_signals.extend(buying_strategy.get_buy_signals())
@@ -195,7 +201,7 @@ class MultiSignalStrategy(SignalBasedStrategy):
 
     def get_short_summary(self):
         return "Multi-signal, buying on ({}), selling on ({})".format(
-            ",".join(x.get_short_summary() for x in self.buying_strategies),
-            ",".join(x.get_short_summary() for x in self.selling_strategies))
+            ", ".join(x.get_short_summary() for x in self.buying_strategies),
+            ", ".join(x.get_short_summary() for x in self.selling_strategies))
 
 

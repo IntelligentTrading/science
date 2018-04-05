@@ -2,6 +2,7 @@ from data_sources import *
 from strategies import *
 import pandas as pd
 import itertools
+from utils import *
 
 ordered_columns = ["strategy", "transaction_currency", "counter_currency", "start_cash", "start_crypto", "end_cash",
                    "end_crypto", "num_trades", "profit", "profit_percent", "profit_USDT", "profit_percent_USDT",
@@ -9,7 +10,7 @@ ordered_columns = ["strategy", "transaction_currency", "counter_currency", "star
                    "buy_and_hold_profit_percent_USDT", "end_price", "start_time", "end_time",
                    "evaluate_profit_on_last_order", "horizon"]
 
-ordered_columns_condensed = ["strategy", "transaction_currency", "counter_currency", "num_trades",
+ordered_columns_condensed = ["strategy", "utilized_signals", "transaction_currency", "counter_currency", "num_trades",
                              "profit_percent", "profit_percent_USDT",
                              "buy_and_hold_profit_percent",
                              "buy_and_hold_profit_percent_USDT", "start_time", "end_time",
@@ -33,7 +34,7 @@ class Evaluation:
         self.orders, self.order_signals = strategy.get_orders(start_cash, start_crypto)
         self.num_trades, self.end_cash, self.end_crypto, self.end_price = self.execute_orders(self.orders)
         if verbose:
-            print("\n".join(self.get_report()))
+            print(self.get_report())
 
     def get_start_value_USDT(self):
         start_value_USDT = convert_value_to_USDT(self.start_cash, self.start_time, self.counter_currency) + \
@@ -128,7 +129,7 @@ class Evaluation:
             except NoPriceDataException:
                 output.append("[ -- WARNING: USDT price information not available -- ]")
 
-        return output
+        return "\n".join(output)
 
     def get_short_summary(self):
         return ("{} \t Invested: {} {}, {} {}\t After investment: {:.2f} {}, {:.2f} {} \t Profit: {}{:.2f}%".format(
@@ -167,6 +168,7 @@ class Evaluation:
         dictionary = vars(self).copy()
         del dictionary["orders"]
         dictionary["strategy"] = dictionary["strategy"].get_short_summary()
+        dictionary["utilized_signals"] = ", ".join(get_distinct_signal_types(self.order_signals))
         dictionary["start_time"] = datetime_from_timestamp(dictionary["start_time"])
         dictionary["end_time"] = datetime_from_timestamp(dictionary["end_time"])
         dictionary["profit"] = self.get_profit_value()
@@ -174,7 +176,7 @@ class Evaluation:
         if "horizon" not in vars(self.strategy):
             dictionary["horizon"] = "N/A"
         else:
-            dictionary["horizon"] = self.strategy.horizon
+            dictionary["horizon"] = self.strategy.horizon.name
 
         try:
             dictionary["profit_USDT"] = self.get_profit_USDT()
@@ -280,7 +282,19 @@ class ComparativeEvaluationMultiSignal:
             else:
                 output = output.append(dataframe)
 
-        output = output[output.num_trades != 0]   # remove empty trades
+        output = output[output.num_trades != 0]  # remove empty trades
+
+        output = output.sort_values(by=['profit_percent'], ascending=False)
+        output.reset_index(inplace=True, drop=True)
+        best_eval = output.iloc[0]["evaluation_object"]
+        print("BEST:")
+        print(best_eval.get_report(include_order_signals=True))
+        # bf = open("best.txt", "w")
+        # bf.write(best_eval.get_report(include_order_signals=True))
+        # bf.close()
+        output = output[ordered_columns_condensed]
+
+
         writer = pd.ExcelWriter(output_file)
         output.to_excel(writer, 'Results')
         writer.save()
@@ -298,6 +312,12 @@ class ComparativeEvaluationMultiSignal:
 
     def get_pandas_row_dict(self, evaluation, baseline):
         evaluation_dict = evaluation.to_dictionary()
+        baseline_dict = baseline.to_dictionary()
+        evaluation_dict["buy_and_hold_profit"] = baseline_dict["profit"]
+        evaluation_dict["buy_and_hold_profit_percent"] = baseline_dict["profit_percent"]
+        evaluation_dict["buy_and_hold_profit_USDT"] = baseline_dict["profit_USDT"]
+        evaluation_dict["buy_and_hold_profit_percent_USDT"] = baseline_dict["profit_percent_USDT"]
+        evaluation_dict["evaluation_object"] = evaluation
         return evaluation_dict
 
     def generate_and_perform_evaluations(self, signal_types, transaction_currency, counter_currency, start_cash, start_crypto,
@@ -307,6 +327,7 @@ class ComparativeEvaluationMultiSignal:
         evaluation_dicts = []
 
         for horizon in horizons:
+            print(transaction_currency, horizon.name)
             strategies = []
             for signal_type in signal_types:
                 if signal_type == SignalType.RSI:
@@ -330,25 +351,30 @@ class ComparativeEvaluationMultiSignal:
                 sample = [list(x) for x in itertools.combinations(strategies, i)]
                 combinations.extend(sample)
             buy_sell_pairs = itertools.product(combinations, repeat=2)
-            i = 0
             for buy, sell in buy_sell_pairs:
-                i += 1
-                multi_strat = MultiSignalStrategy(buy, sell)
+                if len(buy) == 0 or len(sell) == 0:
+                    continue
+                multi_strat = MultiSignalStrategy(buy, sell, horizon)
+                buy_and_hold = BuyAndHoldStrategy(multi_strat)
                 evaluation = Evaluation(multi_strat, transaction_currency, counter_currency, start_cash, start_crypto,
                                         start_time,
                                         end_time, evaluate_profit_on_last_order, False)
-                evaluation_dicts.append(self.get_pandas_row_dict(evaluation, baseline))
-                print("Evaluated {}".format(evaluation.get_short_summary()))
+                baseline = Evaluation(buy_and_hold, transaction_currency, counter_currency, start_cash, start_crypto,
+                                        start_time,
+                                        end_time, evaluate_profit_on_last_order, False)
+                dict = self.get_pandas_row_dict(evaluation, baseline)
+                if len(dict["utilized_signals"].split(",")) == 1:
+                    continue
+                evaluation_dicts.append(dict)
+                #print("Evaluated {}".format(evaluation.get_short_summary()))
 
         dataframe = pd.DataFrame(evaluation_dicts)
-        dataframe = dataframe[ordered_columns_no_baseline_condensed]
         return dataframe
-
 
 
 if __name__ == "__main__":
     start, end = get_timestamp_range()
-    counter_currency = "USDT"
+    counter_currency = "BTC"
     transaction_currencies = get_currencies_trading_against_counter(counter_currency)
     currency_pairs = []
     for transaction_currency in transaction_currencies:
@@ -357,15 +383,12 @@ if __name__ == "__main__":
     ComparativeEvaluationMultiSignal(
         signal_types=(SignalType.RSI, SignalType.SMA, SignalType.kumo_breakout, # SignalType.EMA,
                       SignalType.RSI_Cumulative),
-        #signal_types=(SignalType.SMA, SignalType.kumo_breakout,
-        #              SignalType.RSI_Cumulative),
         currency_pairs=currency_pairs,
         start_cash=1000, start_crypto=0,
         start_time=start, end_time=end,
-        output_file="output_multi.xlsx",
-        horizons=(None,),
+        output_file="output_multi_btc_cost_0.25_percent.xlsx",
+        horizons=(Horizon.any, Horizon.short, Horizon.medium, Horizon.long),
         rsi_overbought_values=[70], rsi_oversold_values=[30])
-
 
     ComparativeEvaluationOneSignal(signal_types=(SignalType.RSI, SignalType.SMA, SignalType.kumo_breakout, SignalType.EMA,
                                                  SignalType.RSI_Cumulative),

@@ -40,8 +40,43 @@ def evaluate_rsi_comparatively(transaction_currency, counter_currency, start_tim
             print("  Profit - RSI trading: {0:.2f}% ({1} trades)\n".format(rsi_evaluation.get_profit_percent(), rsi_evaluation.num_trades))
 
 
+def evaluate_multi(transaction_currency, counter_currency, start_time, end_time,
+                 start_cash, start_crypto, overbought_threshold, oversold_threshold):
+
+    rsi_signals = get_signals(SignalType.RSI, transaction_currency, start_time, end_time, counter_currency)
+    rsi_strategy = SimpleRSIStrategy(rsi_signals, overbought_threshold, oversold_threshold)
+
+    sma_signals = get_signals(SignalType.SMA, transaction_currency, start_time, end_time, counter_currency)
+    sma_strategy = SimpleTrendBasedStrategy(sma_signals, SignalType.SMA)
+
+    kumo_signals = get_signals(SignalType.kumo_breakout, transaction_currency, start_time, end_time, counter_currency)
+    kumo_strategy = SimpleTrendBasedStrategy(kumo_signals, SignalType.kumo_breakout)
+
+    rsi_c_signals = get_signals(SignalType.RSI_Cumulative, transaction_currency, start_time, end_time, counter_currency)
+    rsi_c_strategy = SimpleTrendBasedStrategy(rsi_c_signals, SignalType.RSI_Cumulative)
+
+    buy = (rsi_c_strategy, rsi_strategy )
+    sell = (sma_strategy, kumo_strategy)
+
+    horizon = Horizon.any
+    multi_strat = MultiSignalStrategy(buy, sell, horizon)
+    buy_and_hold = BuyAndHoldStrategy(multi_strat)
+    evaluation = Evaluation(multi_strat, transaction_currency, counter_currency, start_cash, start_crypto,
+                            start_time,
+                            end_time, False, True)
+    baseline = Evaluation(buy_and_hold, transaction_currency, counter_currency, start_cash, start_crypto,
+                          start_time,
+                          end_time, False, True)
+
+    print(evaluation.get_report())
+    print(baseline.get_report())
+
 
 if __name__ == "__main__":
+    start, end = get_timestamp_range()
+    evaluate_multi("ETH", "USDT", start, end, 1000, 0, 70, 30)
+    exit(0)
+
     start_time = '1513186735.51707'
     end_time = '1513197243.96346'
     transaction_currency = "BTC"
@@ -58,6 +93,3 @@ if __name__ == "__main__":
     evaluate_trend_based(SignalType.SMA, "OMG", "BTC", start, end, 1, 0)
     evaluate_rsi("OMG", "BTC", 0, end, 1, 0, 20, 75)
     evaluate_rsi_comparatively("BTC", "USDT", start, end, 1000, 0)
-
-
-
