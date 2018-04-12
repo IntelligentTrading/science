@@ -1,5 +1,3 @@
-from strategies import *
-from data_sources import *
 from evaluation import *
 
 
@@ -9,6 +7,17 @@ def evaluate_rsi(transaction_currency, counter_currency, start_time, end_time,
     rsi_strategy = SimpleRSIStrategy(rsi_signals, overbought_threshold, oversold_threshold)
     evaluation = Evaluation(rsi_strategy, transaction_currency, counter_currency, start_cash, start_crypto, start_time, end_time, False)
 
+def evaluate_rsi_any_currency(counter_currency, start_time, end_time,
+                 start_cash, start_crypto, overbought_threshold, oversold_threshold):
+    rsi_signals = get_filtered_signals(signal_type=SignalType.RSI, start_time=start_time, counter_currency=counter_currency)
+    rsi_strategy = SimpleRSIStrategy(rsi_signals, overbought_threshold, oversold_threshold)
+    evaluation = Evaluation(rsi_strategy, "NOP", counter_currency, start_cash, start_crypto, start_time, end_time, False)
+
+def evaluate_all_signals_any_currency(counter_currency, start_time, end_time,
+                 start_cash, start_crypto, overbought_threshold, oversold_threshold):
+    signals = get_filtered_signals(start_time=start_time, counter_currency=counter_currency)
+    rsi_strategy = SimpleRSIStrategy(rsi_signals, overbought_threshold, oversold_threshold)
+    evaluation = Evaluation(rsi_strategy, "NOP", counter_currency, start_cash, start_crypto, start_time, end_time, False)
 
 def evaluate_trend_based(signal_type, transaction_currency, counter_currency, start_time, end_time,
                  start_cash, start_crypto):
@@ -74,8 +83,9 @@ def evaluate_multi(transaction_currency, counter_currency, start_time, end_time,
 
 if __name__ == "__main__":
     start, end = get_timestamp_range()
+    evaluate_rsi_any_currency("BTC", start, end, 1000, 0, 70, 30)
+
     evaluate_multi("ETH", "USDT", start, end, 1000, 0, 70, 30)
-    exit(0)
 
     start_time = '1513186735.51707'
     end_time = '1513197243.96346'

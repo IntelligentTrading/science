@@ -1,8 +1,10 @@
-import mysql.connector
-from signals import Signal
-from config import database_config
-from utils import datetime_from_timestamp
 from enum import Enum
+
+import mysql.connector
+
+from config import database_config
+from signals import Signal
+from utils import datetime_from_timestamp
 
 
 class NoPriceDataException(Exception):
@@ -15,13 +17,6 @@ class CounterCurrency(Enum):
     USDT = 2
     XMR = 3
 
-
-class SignalType(Enum):
-    RSI = "RSI"
-    kumo_breakout = "kumo_breakout"
-    SMA = "SMA"
-    EMA = "EMA"
-    RSI_Cumulative = "RSI_cumulative"
 
 class Horizon(Enum):
     any = None
@@ -39,6 +34,7 @@ signal_query = """ SELECT trend, horizon, strength_value, strength_max, price, p
                     timestamp >= %s AND
                     timestamp <= %s
             ORDER BY timestamp;"""
+
 
 most_recent_price_query = """SELECT price FROM indicator_price 
                             WHERE timestamp = 
@@ -60,6 +56,47 @@ trading_against_counter_query = """SELECT DISTINCT(transaction_currency) FROM in
 nearest_price_query = """SELECT price, timestamp FROM indicator_price WHERE transaction_currency = %s AND counter_currency = %s 
                          AND timestamp <= %s ORDER BY timestamp DESC LIMIT 1;"""
 
+
+def get_filtered_signals(signal_type=None, transaction_currency=None, start_time=None, end_time=None, counter_currency=None):
+    query = """ SELECT trend, horizon, strength_value, strength_max, price, price_change, timestamp, rsi_value, 
+            transaction_currency, counter_currency FROM signal_signal """
+    additions = []
+    params = []
+    if signal_type is not None:
+        additions.append("signal_signal.signal=%s")
+        params.append(signal_type.value)
+    if transaction_currency is not None:
+        additions.append("transaction_currency = %s")
+        params.append(transaction_currency)
+    if start_time is not None:
+        additions.append("timestamp >= %s")
+        params.append(start_time)
+    if end_time is not None:
+        additions.append("timestamp <= %s")
+        params.append(end_time)
+    if counter_currency is not None:
+        additions.append("counter_currency = %s")
+        params.append(CounterCurrency[counter_currency].value)
+
+    if len(additions) > 0:
+        query += "WHERE {}".format(" AND ".join(additions))
+        params = tuple(params)
+
+    connection = mysql.connector.connect(**database_config)
+    cursor = connection.cursor()
+    cursor.execute(query, params)
+    print(query)
+
+    signals = []
+
+    for (trend, horizon, strength_value, strength_max, price, price_change, timestamp, rsi_value,
+         transaction_currency, counter_currency) in cursor:
+        signals.append(Signal(signal_type, trend, horizon, strength_value, strength_max,
+                              price/1E8,  price_change, timestamp, rsi_value, transaction_currency,
+                              CounterCurrency(counter_currency).name))
+    return signals
+
+
 def get_signals(signal_type, transaction_currency, start_time, end_time, counter_currency="BTC"):
     counter_currency_id = CounterCurrency[counter_currency].value
     connection = mysql.connector.connect(**database_config)
@@ -68,7 +105,8 @@ def get_signals(signal_type, transaction_currency, start_time, end_time, counter
     signals = []
     for (trend, horizon, strength_value, strength_max, price, price_change, timestamp, rsi_value) in cursor:
         signals.append(Signal(signal_type, trend, horizon, strength_value, strength_max,
-                                 price/1E8,  price_change, timestamp, rsi_value, transaction_currency, counter_currency))
+                                 price/1E8,  price_change, timestamp, rsi_value, transaction_currency,
+                              CounterCurrency[counter_currency]))
     return signals
 
 

@@ -8,7 +8,8 @@ class OrderType(Enum):
 
 
 class Order:
-    def __init__(self, order_type, transaction_currency, counter_currency, timestamp, value, unit_price, transaction_cost_percent):
+    def __init__(self, order_type, transaction_currency, counter_currency, timestamp, value, unit_price,
+                 transaction_cost_percent):
         self.order_type = order_type
         self.transaction_currency = transaction_currency
         self.counter_currency = counter_currency
@@ -45,7 +46,7 @@ class BuyOrder:
         self.timestamp = timestamp
         self.cash = cash
         self.unit_price = unit_price
-        self.transaction_cost_percent = 0.02
+        self.transaction_cost_percent = transaction_cost
 
     def execute(self):
         bought_crypto = (self.cash * (1-self.transaction_cost_percent)) / self.unit_price
@@ -67,7 +68,6 @@ class BuyOrder:
         )
 
 
-
 class SellOrder:
     def __init__(self, transaction_currency, counter_currency, timestamp, crypto, unit_price, transaction_cost):
         self.transaction_currency = transaction_currency
@@ -75,7 +75,7 @@ class SellOrder:
         self.timestamp = timestamp
         self.crypto = crypto
         self.unit_price = unit_price
-        self.transaction_cost_percent = 0.02
+        self.transaction_cost_percent = transaction_cost
 
     def execute(self):
         delta_cash = (self.crypto * self.unit_price) * (1-self.transaction_cost_percent)

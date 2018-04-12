@@ -1,7 +1,8 @@
 from orders import *
 from data_sources import Horizon
-from data_sources import SignalType
+from signals import *
 import operator
+
 
 class Strategy:
     def get_orders(self, start_cash, start_crypto):
@@ -19,37 +20,55 @@ class Strategy:
                 output.append(signal)
         return output
 
+    @staticmethod
+    def filter_based_on_strength(signals, strength):
+        output = []
+        for signal in signals:
+            if signal.strength_value == strength:
+                output.append(signal)
+        return output
+
 
 class SignalBasedStrategy(Strategy):
-    transaction_cost_percent = 0.0025
 
-    def __init__(self, signals, horizon=Horizon.any):
+    def __init__(self, signals, horizon=Horizon.any, strength=None):
         if horizon != Horizon.any:
             self.signals = Strategy.filter_based_on_horizon(signals, horizon)
         else:
             self.signals = signals
         self.horizon = horizon
 
+        if strength is not None:
+            self.signals = Strategy.filter_based_on_strength(self.signals, strength)
+        self.strength = strength
 
-    def get_orders(self, start_cash, start_crypto):
+    def get_orders(self, start_cash, start_crypto, transaction_cost_percent=0.0025):
         orders = []
         order_signals = []
         cash = start_cash
         crypto = start_crypto
-        for signal in self.signals:
-            if self.indicates_sell(signal) and crypto > 0:
-                orders.append(Order(OrderType.SELL, signal.transaction_currency, signal.counter_currency,
-                                    signal.timestamp, crypto, signal.price, self.transaction_cost_percent))
+        buy_currency = None
+        for i, signal in enumerate(self.signals):
+            if self.indicates_sell(signal) and crypto > 0 and signal.transaction_currency == buy_currency:
+                order = Order(OrderType.SELL, signal.transaction_currency, signal.counter_currency,
+                                    signal.timestamp, crypto, signal.price, transaction_cost_percent)
+                orders.append(order)
                 order_signals.append(signal)
-                cash += (crypto * signal.price) * (1 - self.transaction_cost_percent)
-                crypto = 0
+                delta_crypto, delta_cash = order.execute()
+                cash = cash + delta_cash
+                crypto = crypto + delta_crypto
+                assert crypto == 0
             elif self.indicates_buy(signal) and cash > 0:
-                crypto_amount = (cash * (1 - self.transaction_cost_percent)) / signal.price
-                orders.append(Order(OrderType.BUY, signal.transaction_currency, signal.counter_currency,
-                                    signal.timestamp, cash, signal.price, self.transaction_cost_percent))
+                buy_currency = signal.transaction_currency
+                order = Order(OrderType.BUY, signal.transaction_currency, signal.counter_currency,
+                                    signal.timestamp, cash, signal.price, transaction_cost_percent)
+                orders.append(order)
                 order_signals.append(signal)
-                crypto += crypto_amount
-                cash = 0
+                delta_crypto, delta_cash = order.execute()
+                cash = cash + delta_cash
+                crypto = crypto + delta_crypto
+                assert cash == 0
+
         return orders, order_signals
 
     def get_buy_signals(self):
@@ -115,8 +134,8 @@ class SimpleRSIStrategy(SignalBasedStrategy):
 
 
 class SimpleTrendBasedStrategy(SignalBasedStrategy):
-    def __init__(self, signals, signal_type, horizon=Horizon.any):
-        SignalBasedStrategy.__init__(self, signals, horizon)
+    def __init__(self, signals, signal_type, horizon=Horizon.any, strength=None):
+        SignalBasedStrategy.__init__(self, signals, horizon, strength)
         self.signal_type = signal_type
 
     def indicates_sell(self, signal):
@@ -141,7 +160,7 @@ class SimpleTrendBasedStrategy(SignalBasedStrategy):
 
     def get_short_summary(self):
         #return "{} trend-based, horizon = {}".format(self.signal_type.value, self.horizon.name)
-        return "{}".format(self.signal_type.value)
+        return "{}".format(Signal.get_signal_name(self.signal_type, self.strength))
 
 
 class BuyAndHoldStrategy(Strategy):
