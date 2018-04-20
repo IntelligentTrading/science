@@ -52,6 +52,8 @@ def evaluate_rsi_comparatively(transaction_currency, counter_currency, start_tim
 def evaluate_multi(transaction_currency, counter_currency, start_time, end_time,
                  start_cash, start_crypto, overbought_threshold, oversold_threshold):
 
+    rsi_signals = get_filtered_signals(signal_type=SignalType.RSI, start_time=start_time, counter_currency=counter_currency)
+
     rsi_signals = get_signals(SignalType.RSI, transaction_currency, start_time, end_time, counter_currency)
     rsi_strategy = SimpleRSIStrategy(rsi_signals, overbought_threshold, oversold_threshold)
 
@@ -81,9 +83,46 @@ def evaluate_multi(transaction_currency, counter_currency, start_time, end_time,
     print(baseline.get_report())
 
 
+def evaluate_multi_any_currency(counter_currency, start_time, end_time,
+                 start_cash, overbought_threshold, oversold_threshold):
+
+    rsi_signals = get_filtered_signals(signal_type=SignalType.RSI, start_time=start_time,
+                                       end_time=end_time, counter_currency=counter_currency)
+    rsi_strategy = SimpleRSIStrategy(rsi_signals, overbought_threshold, oversold_threshold)
+
+    sma_signals = get_filtered_signals(signal_type=SignalType.SMA, start_time=start_time,
+                                    end_time=end_time, counter_currency=counter_currency)
+    sma_strategy = SimpleTrendBasedStrategy(sma_signals, SignalType.SMA)
+
+    kumo_signals = get_filtered_signals(signal_type=SignalType.kumo_breakout, start_time=start_time,
+                                       end_time=end_time, counter_currency=counter_currency)
+    kumo_strategy = SimpleTrendBasedStrategy(kumo_signals, SignalType.kumo_breakout)
+
+    rsi_c_signals = get_filtered_signals(signal_type=SignalType.RSI_Cumulative, start_time=start_time,
+                                       end_time=end_time, counter_currency=counter_currency)
+    rsi_c_strategy = SimpleTrendBasedStrategy(rsi_c_signals, SignalType.RSI_Cumulative)
+
+    buy = (rsi_c_strategy, sma_strategy, kumo_strategy, rsi_strategy)
+    sell = (rsi_c_strategy, sma_strategy, kumo_strategy, rsi_strategy)
+
+    horizon = Horizon.any
+    multi_strat = MultiSignalStrategy(buy, sell, horizon)
+    buy_and_hold = BuyAndHoldStrategy(multi_strat)
+
+    print("Started evaluation")
+    evaluation = Evaluation(multi_strat, None, counter_currency, start_cash, 0,
+                            start_time,
+                            end_time, False, True)
+    baseline = Evaluation(buy_and_hold, None, counter_currency, start_cash, 0,
+                          start_time,
+                          end_time, False, True)
+
+    print(evaluation.get_report())
+    print(baseline.get_report())
+
 if __name__ == "__main__":
     start, end = get_timestamp_range()
-    evaluate_rsi_any_currency("BTC", start, end, 1000, 0, 70, 30)
+    evaluate_multi_any_currency("BTC", start, end, 1000, 70, 30)
 
     evaluate_multi("ETH", "USDT", start, end, 1000, 0, 70, 30)
 

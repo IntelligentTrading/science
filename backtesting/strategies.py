@@ -1,7 +1,9 @@
 from orders import *
-from data_sources import Horizon
+from data_sources import Horizon, get_signals
 from signals import *
 import operator
+
+from signals import SignalType
 
 
 class Strategy:
@@ -10,6 +12,16 @@ class Strategy:
 
     def get_short_summary(self):
         pass
+
+    @staticmethod
+    def generate_strategy(signal_type, transaction_currency, counter_currency, start_time, end_time, horizon=None,
+                          strength=None, rsi_overbought=None, rsi_oversold=None):
+        signals = get_signals(signal_type, transaction_currency, start_time, end_time, counter_currency)
+        if signal_type == SignalType.RSI:
+            strategy = SimpleRSIStrategy(signals, rsi_overbought, rsi_oversold, horizon)
+        elif signal_type in (SignalType.kumo_breakout, SignalType.SMA, SignalType.EMA, SignalType.RSI_Cumulative):
+            strategy = SimpleTrendBasedStrategy(signals, signal_type, horizon, strength)
+        return strategy
 
     @staticmethod
     def filter_based_on_horizon(signals, horizon):
@@ -180,6 +192,9 @@ class BuyAndHoldStrategy(Strategy):
 
     def get_short_summary(self):
         return "Buy first & hold: {}".format(self.strategy.get_short_summary())
+
+    def get_signal_report(self):
+        return self.strategy.get_signal_report()
 
 
 class MultiSignalStrategy(SignalBasedStrategy):
