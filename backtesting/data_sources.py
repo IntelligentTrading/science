@@ -24,6 +24,12 @@ class Horizon(Enum):
     medium = 1
     long = 2
 
+class Strength(Enum):
+    any = None
+    short = 1
+    medium = 2
+    long = 3
+
 #(BTC, ETH, USDT, XMR) = list(range(4))
 
 signal_query = """ SELECT trend, horizon, strength_value, strength_max, price, price_change, timestamp, rsi_value 

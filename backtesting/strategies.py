@@ -1,5 +1,5 @@
 from orders import *
-from data_sources import Horizon, get_signals
+from data_sources import Horizon, Strength, get_signals
 from signals import *
 import operator
 
@@ -14,8 +14,8 @@ class Strategy:
         pass
 
     @staticmethod
-    def generate_strategy(signal_type, transaction_currency, counter_currency, start_time, end_time, horizon=None,
-                          strength=None, rsi_overbought=None, rsi_oversold=None):
+    def generate_strategy(signal_type, transaction_currency, counter_currency, start_time, end_time, horizon=Horizon.any,
+                          strength=Strength.any, rsi_overbought=None, rsi_oversold=None):
         signals = get_signals(signal_type, transaction_currency, start_time, end_time, counter_currency)
         if signal_type == SignalType.RSI:
             strategy = SimpleRSIStrategy(signals, rsi_overbought, rsi_oversold, horizon)
@@ -34,6 +34,7 @@ class Strategy:
 
     @staticmethod
     def filter_based_on_strength(signals, strength):
+        strength_value = strength.value
         output = []
         for signal in signals:
             if signal.strength_value == strength:
@@ -43,14 +44,14 @@ class Strategy:
 
 class SignalBasedStrategy(Strategy):
 
-    def __init__(self, signals, horizon=Horizon.any, strength=None):
+    def __init__(self, signals, horizon=Horizon.any, strength=Strength.any):
         if horizon != Horizon.any:
             self.signals = Strategy.filter_based_on_horizon(signals, horizon)
         else:
             self.signals = signals
         self.horizon = horizon
 
-        if strength is not None:
+        if strength != Strength.any:
             self.signals = Strategy.filter_based_on_strength(self.signals, strength)
         self.strength = strength
 
@@ -146,7 +147,7 @@ class SimpleRSIStrategy(SignalBasedStrategy):
 
 
 class SimpleTrendBasedStrategy(SignalBasedStrategy):
-    def __init__(self, signals, signal_type, horizon=Horizon.any, strength=None):
+    def __init__(self, signals, signal_type, horizon=Horizon.any, strength=Strength.any):
         SignalBasedStrategy.__init__(self, signals, horizon, strength)
         self.signal_type = signal_type
 

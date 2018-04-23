@@ -141,8 +141,8 @@ class Evaluation:
     def get_short_summary(self):
         return ("{} \t Invested: {} {}, {} {}\t After investment: {:.2f} {}, {:.2f} {} \t Profit: {}{:.2f}%".format(
             self.strategy.get_short_summary(),
-            self.start_cash, self.counter_currency, self.start_crypto, self.transaction_currency,
-            self.end_cash, self.counter_currency, self.end_crypto, self.transaction_currency,
+            self.start_cash, self.counter_currency, self.start_crypto, self.start_crypto_currency,
+            self.end_cash, self.counter_currency, self.end_crypto, self.end_crypto_currency,
             "+" if self.get_profit_percent() >= 0 else "", self.get_profit_percent()))
 
     def execute_orders(self, orders):
@@ -159,7 +159,6 @@ class Evaluation:
                 assert order.order_type == OrderType.BUY
                 buy_currency = order.transaction_currency
 
-            # assert order.transaction_currency == self.transaction_currency   # obsolete
             delta_crypto, delta_cash = order.execute()
             cash += delta_cash
             crypto += delta_crypto
@@ -244,8 +243,8 @@ class ComparativeEvaluationOneSignal:
         writer.save()
 
     def generate_strategy_and_evaluation(self, signal_type, transaction_currency, counter_currency, start_cash, start_crypto,
-                                         start_time, end_time, horizon=None, evaluate_profit_on_last_order=True,
-                                         rsi_overbought=None, rsi_oversold=None, strength=None):
+                                         start_time, end_time, horizon=Horizon.any, evaluate_profit_on_last_order=True,
+                                         rsi_overbought=None, rsi_oversold=None, strength=Strength.any):
 
         strategy = Strategy.generate_strategy(signal_type, transaction_currency, counter_currency, start_time, end_time, horizon,
                                      strength, rsi_overbought, rsi_oversold)
@@ -298,7 +297,6 @@ class ComparativeEvaluationOneSignal:
             print(baseline.get_short_summary())
 
         dataframe = pd.DataFrame(evaluation_dicts)
-        dataframe = dataframe[ordered_columns]
 
         return dataframe
 
@@ -306,11 +304,13 @@ class ComparativeEvaluationOneSignal:
 class ComparativeEvaluationMultiSignal:
 
     def __init__(self, signal_types, currency_pairs, start_cash, start_crypto, start_time, end_time, output_file, horizons=(None,),
-                 rsi_overbought_values=None, rsi_oversold_values=None):
+                 rsi_overbought_values=None, rsi_oversold_values=None, sma_strengths=None):
         output = None
         for (transaction_currency, counter_currency) in currency_pairs:
-            dataframe = self.generate_and_perform_evaluations(signal_types, transaction_currency, counter_currency, start_cash, start_crypto,
-                                                              start_time, end_time, horizons, rsi_overbought_values, rsi_oversold_values)
+            dataframe = self.generate_and_perform_evaluations(signal_types, transaction_currency, counter_currency,
+                                                              start_cash, start_crypto, start_time, end_time, horizons,
+                                                              rsi_overbought_values, rsi_oversold_values,
+                                                              sma_strengths)
             if output is None:
                 output = dataframe
             else:
@@ -359,9 +359,8 @@ class ComparativeEvaluationMultiSignal:
 
     def generate_and_perform_evaluations(self, signal_types, transaction_currency, counter_currency, start_cash, start_crypto,
                                          start_time, end_time, horizons, rsi_overbought_values, rsi_oversold_values,
-                                         evaluate_profit_on_last_order=False, strength=None):
+                                         sma_strengths=None, evaluate_profit_on_last_order=False):
 
-        # TODO: strength lists for SMA
         evaluation_dicts = []
 
         for horizon in horizons:
@@ -372,15 +371,20 @@ class ComparativeEvaluationMultiSignal:
                     for overbought_threshold in rsi_overbought_values:
                         for oversold_threshold in rsi_oversold_values:
                             strategy = Strategy.generate_strategy(signal_type, transaction_currency, counter_currency,
-                                                         start_time, end_time, horizon, strength, overbought_threshold,
+                                                         start_time, end_time, horizon, None, overbought_threshold,
                                                          oversold_threshold)
 
                             strategies.append(strategy)
+                elif signal_type == SignalType.SMA:
+                    for strength in sma_strengths:
+                        strategy = Strategy.generate_strategy(signal_type, transaction_currency, counter_currency,
+                                                              start_time, end_time, horizon, strength)
+
+                        strategies.append(strategy)
 
                 else:
                     strategy = Strategy.generate_strategy(signal_type, transaction_currency, counter_currency,
-                                                 start_time, end_time, horizon, strength, overbought_threshold,
-                                                 oversold_threshold)
+                                                 start_time, end_time, horizon)
                     strategies.append(strategy)
 
             combinations = []
@@ -414,6 +418,7 @@ if __name__ == "__main__":
     for transaction_currency in transaction_currencies:
         currency_pairs.append((transaction_currency, counter_currency))
 
+
     eval = ComparativeEvaluationMultiSignal(
         signal_types=(SignalType.RSI, SignalType.SMA, SignalType.kumo_breakout, # SignalType.EMA,
                       SignalType.RSI_Cumulative),
@@ -422,7 +427,8 @@ if __name__ == "__main__":
         start_time=start, end_time=end,
         output_file="test.xlsx",
         horizons=(Horizon.any, Horizon.short, Horizon.medium, Horizon.long),
-        rsi_overbought_values=[70], rsi_oversold_values=[30])
+        rsi_overbought_values=[70], rsi_oversold_values=[30],
+        sma_strengths=(Strength.any,))
     eval.summary_stats("stats_full.xlsx", "stats_profit.xlsx")
 
     ComparativeEvaluationOneSignal(signal_types=(SignalType.RSI, SignalType.SMA, SignalType.kumo_breakout, SignalType.EMA,
@@ -431,5 +437,5 @@ if __name__ == "__main__":
                                    start_cash=1000, start_crypto=0,
                                    start_time=start, end_time=end,
                                    output_file="output.xlsx",
-                                   horizons=(None, 0, 1, 2),
+                                   horizons=(Horizon.any, Horizon.short, Horizon.medium, Horizon.long),
                                    rsi_overbought_values=[70, 75, 80], rsi_oversold_values=[20, 25, 30])
