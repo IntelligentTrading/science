@@ -49,7 +49,7 @@ class Evaluation:
 
     def get_end_value_USDT(self):
         end_value_USDT = convert_value_to_USDT(self.end_cash, self.end_time, self.counter_currency) + \
-                         convert_value_to_USDT(self.end_price * self.end_crypto, self.end_time, self.end_crypto_currency)
+                         convert_value_to_USDT(self.end_crypto, self.end_time, self.end_crypto_currency)
         return end_value_USDT
 
     def get_profit_USDT(self):
@@ -295,6 +295,10 @@ class ComparativeEvaluationOneSignal:
         for evaluation, baseline in evaluations:
             print(evaluation.get_short_summary())
             print(baseline.get_short_summary())
+            if evaluation.get_profit_percent() != 0:
+                tmp = open("output.txt", "w")
+                tmp.write(evaluation.get_report())
+                tmp.close()
 
         dataframe = pd.DataFrame(evaluation_dicts)
 
@@ -412,30 +416,30 @@ class ComparativeEvaluationMultiSignal:
 
 if __name__ == "__main__":
     start, end = get_timestamp_range()
-    counter_currency = "USDT"
+    counter_currency = "BTC"
     transaction_currencies = get_currencies_trading_against_counter(counter_currency)
     currency_pairs = []
     for transaction_currency in transaction_currencies:
         currency_pairs.append((transaction_currency, counter_currency))
 
 
-    eval = ComparativeEvaluationMultiSignal(
-        signal_types=(SignalType.RSI, SignalType.SMA, SignalType.kumo_breakout, # SignalType.EMA,
-                      SignalType.RSI_Cumulative),
-        currency_pairs=currency_pairs,
-        start_cash=1000, start_crypto=0,
-        start_time=start, end_time=end,
-        output_file="test.xlsx",
-        horizons=(Horizon.any, Horizon.short, Horizon.medium, Horizon.long),
-        rsi_overbought_values=[70], rsi_oversold_values=[30],
-        sma_strengths=(Strength.any,))
-    eval.summary_stats("stats_full.xlsx", "stats_profit.xlsx")
+    #eval = ComparativeEvaluationMultiSignal(
+    #    signal_types=(SignalType.RSI, SignalType.SMA, SignalType.kumo_breakout, # SignalType.EMA,
+    #                  SignalType.RSI_Cumulative),
+    #    currency_pairs=currency_pairs,
+    #    start_cash=1000, start_crypto=0,
+    #    start_time=start, end_time=end,
+    #    output_file="test.xlsx",
+    #    horizons=(Horizon.any, Horizon.short, Horizon.medium, Horizon.long),
+    #    rsi_overbought_values=[70], rsi_oversold_values=[30],
+    #    sma_strengths=(Strength.any,))
+    #eval.summary_stats("stats_full.xlsx", "stats_profit.xlsx")
 
-    ComparativeEvaluationOneSignal(signal_types=(SignalType.RSI, SignalType.SMA, SignalType.kumo_breakout, SignalType.EMA,
+    ComparativeEvaluationOneSignal(signal_types=(SignalType.RSI,
                                                  SignalType.RSI_Cumulative),
                                    currency_pairs=currency_pairs,
-                                   start_cash=1000, start_crypto=0,
+                                   start_cash=1, start_crypto=0,
                                    start_time=start, end_time=end,
-                                   output_file="output.xlsx",
+                                   output_file="output2.xlsx",
                                    horizons=(Horizon.any, Horizon.short, Horizon.medium, Horizon.long),
                                    rsi_overbought_values=[70, 75, 80], rsi_oversold_values=[20, 25, 30])

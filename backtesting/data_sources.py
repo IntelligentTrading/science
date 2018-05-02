@@ -128,7 +128,7 @@ def get_price(currency, timestamp, counter_currency="BTC", normalize=True):
     if currency == counter_currency:
         return 1
     counter_currency_id = CounterCurrency[counter_currency].value
-    connection = mysql.connector.connect(**database_config, pool_name="my_pool", pool_size=5)
+    connection = mysql.connector.connect(**database_config, pool_name="my_pool", pool_size=32)
     cursor = connection.cursor()
     cursor.execute(price_query, params=(currency, timestamp, counter_currency_id))
     price = cursor.fetchall()
@@ -168,11 +168,22 @@ def get_price_nearest_to_timestamp(currency, timestamp, counter_currency, max_de
 
 
 def convert_value_to_USDT(value, timestamp, transaction_currency):
-    if transaction_currency == "USDT":
+    if value == 0:
+        return 0
+    if transaction_currency == "USDT": # already in USDT
         return value
-    value_BTC_in_USDT = get_price("BTC", timestamp, "USDT")
-    value_transaction_currency_in_BTC = get_price(transaction_currency, timestamp, "BTC")
-    return value_BTC_in_USDT * value_transaction_currency_in_BTC * value
+    try:
+        value_USDT = value * get_price(transaction_currency, timestamp, "USDT") # if trading against USDT
+        # print("Found USDT price data for {}".format(transaction_currency))
+        return value_USDT
+    except:
+        # print("Couldn't find USDT price data for {}".format(transaction_currency))
+        value_BTC_in_USDT = get_price("BTC", timestamp, "USDT")
+        if transaction_currency == "BTC":
+            return value * value_BTC_in_USDT
+
+        value_transaction_currency_in_BTC = get_price(transaction_currency, timestamp, "BTC")
+        return value_BTC_in_USDT * value_transaction_currency_in_BTC * value
 
 
 def get_currencies_trading_against_counter(counter_currency):
