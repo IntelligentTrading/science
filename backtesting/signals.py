@@ -31,12 +31,12 @@ class Signal:
             else:
                 signal_name += "any"
         else:
-            signal_name = signal_type
+            signal_name = signal_type.value
         return signal_name
 
     def __str__(self):
-        return ("{} trend={} horizon={} timestamp={}".format(Signal.get_signal_name(self.signal_type, self.strength_value),
-                                                             self.trend, self.horizon, datetime_from_timestamp(self.timestamp)))
+        return ("{} trend={} horizon={} timestamp={} rsi_value={}".format(Signal.get_signal_name(self.signal_type, self.strength_value),
+                                                             self.trend, self.horizon, datetime_from_timestamp(self.timestamp), self.rsi_value))
 
     def __eq__(self, other):
         return self.__dict__ == other.__dict__

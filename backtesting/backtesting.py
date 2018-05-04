@@ -2,10 +2,13 @@ from evaluation import *
 
 
 def evaluate_rsi(transaction_currency, counter_currency, start_time, end_time,
-                 start_cash, start_crypto, overbought_threshold, oversold_threshold):
-    rsi_signals = get_signals(SignalType.RSI, transaction_currency, start_time, end_time, counter_currency)
-    rsi_strategy = SimpleRSIStrategy(rsi_signals, overbought_threshold, oversold_threshold)
-    evaluation = Evaluation(rsi_strategy, transaction_currency, counter_currency, start_cash, start_crypto, start_time, end_time, False)
+                 start_cash, start_crypto, overbought_threshold, oversold_threshold, horizon = Horizon.any):
+    rsi_signals = get_signals_rsi(transaction_currency, start_time, end_time,
+                                   overbought_threshold, oversold_threshold, counter_currency)
+    rsi_strategy = SimpleRSIStrategy(rsi_signals, overbought_threshold, oversold_threshold, horizon)
+    evaluation = Evaluation(rsi_strategy, transaction_currency, counter_currency,
+                            start_cash, start_crypto, start_time, end_time, False, False)
+    return evaluation
 
 def evaluate_rsi_any_currency(counter_currency, start_time, end_time,
                  start_cash, start_crypto, overbought_threshold, oversold_threshold):
@@ -20,10 +23,11 @@ def evaluate_all_signals_any_currency(counter_currency, start_time, end_time,
     evaluation = Evaluation(rsi_strategy, "NOP", counter_currency, start_cash, start_crypto, start_time, end_time, False)
 
 def evaluate_trend_based(signal_type, transaction_currency, counter_currency, start_time, end_time,
-                 start_cash, start_crypto):
+                 start_cash, start_crypto, horizon=Horizon.any):
     signals = get_signals(signal_type, transaction_currency, start_time, end_time, counter_currency)
-    strategy = SimpleTrendBasedStrategy(signals, signal_type)
-    evaluation = Evaluation(strategy, transaction_currency, counter_currency, start_cash, start_crypto, start_time, end_time, False)
+    strategy = SimpleTrendBasedStrategy(signals, signal_type, horizon)
+    evaluation = Evaluation(strategy, transaction_currency, counter_currency, start_cash, start_crypto, start_time, end_time, False, False)
+    return evaluation
 
 
 def evaluate_rsi_comparatively(transaction_currency, counter_currency, start_time, end_time,
@@ -83,6 +87,62 @@ def evaluate_multi(transaction_currency, counter_currency, start_time, end_time,
     print(baseline.get_report())
 
 
+def evaluate_rsi_cumulative_compare(start_time, end_time, transaction_currency, counter_currency, horizon=Horizon.any):
+    start_cash = 100000
+    start_crypto = 0
+
+    rsi = evaluate_rsi(transaction_currency, counter_currency, start_time, end_time,
+                     start_cash, start_crypto, 75, 30, horizon)
+
+    rsi_cumulative = evaluate_trend_based(SignalType.RSI_Cumulative, transaction_currency, counter_currency, start_time, end_time,
+                 start_cash, start_crypto, horizon)
+
+    f = open("rsi.txt","w")
+    f.write(rsi.get_report(True))
+    f.close()
+
+    f = open("rsi_cumulative.txt", "w")
+    f.write(rsi_cumulative.get_report(True))
+    f.close()
+
+    print("cumulative: {}, rsi: {}".format(rsi_cumulative.get_profit_percent(), rsi.get_profit_percent()))
+
+    return rsi_cumulative.get_profit_percent(), rsi.get_profit_percent()
+
+
+def find_num_cumulative_outperforms(start_time, end_time, counter_currency):
+    transaction_currencies = get_currencies_for_signal(counter_currency, "RSI_Cumulative")
+    horizons = (Horizon.short, Horizon.medium, Horizon.long)
+    total_rsi_cumulative_better = 0
+    total_rsi_cumulative_eq = 0
+    total = 0
+    for transaction_currency in transaction_currencies:
+        for horizon in horizons:
+            try:
+                cumulative, rsi = evaluate_rsi_cumulative_compare(start_time, end_time, transaction_currency, counter_currency, horizon)
+                if cumulative == 0 and rsi == 0:
+                    continue
+                if cumulative > rsi:
+                    total_rsi_cumulative_better += 1
+                elif cumulative == rsi:
+                    total_rsi_cumulative_eq += 1
+
+                total += 1
+
+            except(NoPriceDataException):
+                print("Error in price")
+    print (total_rsi_cumulative_better)
+    print("Total: {}".format(total))
+    print("Outperforms: {}, equal: {}".format(total_rsi_cumulative_better/total, total_rsi_cumulative_eq/total))
+
+
+
+
+
+
+
+
+
 def evaluate_multi_any_currency(counter_currency, start_time, end_time,
                  start_cash, overbought_threshold, oversold_threshold):
 
@@ -120,7 +180,34 @@ def evaluate_multi_any_currency(counter_currency, start_time, end_time,
     print(evaluation.get_report())
     print(baseline.get_report())
 
+def core_test():
+    start = 1522866403.0284002
+    end = 1525458403.0284002
+    transaction_currency = "LTC"
+    counter_currency = "BTC"
+    overbought = 80
+    oversold = 20
+    start_cash = 1000
+    evaluation = evaluate_rsi(transaction_currency, counter_currency, start, end,
+                 start_cash, 0, overbought, oversold, horizon = Horizon.short)
+    print(evaluation.get_report())
+
+
+
 if __name__ == "__main__":
+    core_test()
+    exit(0)
+    #start = 1518523200  # first instance of RSI_Cumulative signal
+    #end = 1524355233.882  # April 23
+    end = 1525445779.6664
+    start = end - 60*60*24*5
+
+    evaluate_rsi_cumulative_compare(start, end, "OMG", "BTC", Horizon.short)
+    #find_num_cumulative_outperforms(start, end, "BTC")
+    exit(0)
+
+
+
     start, end = get_timestamp_range()
     evaluate_multi_any_currency("BTC", start, end, 1000, 70, 30)
 

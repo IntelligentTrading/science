@@ -1,5 +1,5 @@
 from orders import *
-from data_sources import Horizon, Strength, get_signals
+from data_sources import Horizon, Strength, get_signals, get_signals_rsi, get_price
 from signals import *
 import operator
 
@@ -18,6 +18,7 @@ class Strategy:
                           strength=Strength.any, rsi_overbought=None, rsi_oversold=None):
         signals = get_signals(signal_type, transaction_currency, start_time, end_time, counter_currency)
         if signal_type == SignalType.RSI:
+            signals = get_signals_rsi(transaction_currency, start_time, end_time, rsi_overbought, rsi_oversold, counter_currency)
             strategy = SimpleRSIStrategy(signals, rsi_overbought, rsi_oversold, horizon)
         elif signal_type in (SignalType.kumo_breakout, SignalType.SMA, SignalType.EMA, SignalType.RSI_Cumulative):
             strategy = SimpleTrendBasedStrategy(signals, signal_type, horizon, strength)
@@ -118,12 +119,14 @@ class SimpleRSIStrategy(SignalBasedStrategy):
         self.oversold_threshold = oversold_threshold
 
     def indicates_sell(self, signal):
+        return signal.trend == "-1"
         if signal.rsi_value >= self.overbought_threshold:
             return True
         else:
             return False
 
     def indicates_buy(self, signal):
+        return signal.trend == "1"
         if signal.rsi_value <= self.oversold_threshold:
             return True
         else:
@@ -152,12 +155,18 @@ class SimpleTrendBasedStrategy(SignalBasedStrategy):
         self.signal_type = signal_type
 
     def indicates_sell(self, signal):
+        if self.signal_type == SignalType.RSI_Cumulative: #TODO makni
+            return signal.trend == "1"
+
         if signal.trend == "-1":
             return True
         else:
             return False
 
     def indicates_buy(self, signal):
+        if self.signal_type == SignalType.RSI_Cumulative:
+            return signal.trend == "-1"
+
         if signal.trend == "1":
             return True
         else:
@@ -196,6 +205,41 @@ class BuyAndHoldStrategy(Strategy):
 
     def get_signal_report(self):
         return self.strategy.get_signal_report()
+
+
+
+class BuyAndHoldStrategyTimebased(Strategy):
+    def __init__(self, start_time, end_time, transaction_currency, counter_currency, source, horizon, transaction_cost_percent=0.0025):
+        self.start_time = start_time
+        self.end_time = end_time
+        self.transaction_currency = transaction_currency
+        self.counter_currency = counter_currency
+        self.source = source
+        self.horizon = horizon
+        self.transaction_cost_percent = transaction_cost_percent
+        self.strategy = "N/A"
+
+    def get_orders(self, start_cash, start_crypto):
+        orders = []
+        start_price = get_price(self.transaction_currency, self.start_time, self.counter_currency)
+        end_price = get_price(self.transaction_currency, self.end_time, self.counter_currency)
+        order = Order(OrderType.BUY, self.transaction_currency, self.counter_currency,
+                      self.start_time, start_cash, start_price, self.transaction_cost_percent)
+        orders.append(order)
+        delta_crypto, delta_cash = order.execute()
+        order = Order(OrderType.SELL, self.transaction_currency, self.counter_currency,
+                      self.start_time, delta_crypto, end_price, self.transaction_cost_percent)
+        orders.append(order)
+        return orders, []
+
+
+
+    def get_short_summary(self):
+        return "Buy & hold"
+
+    def get_signal_report(self):
+        return self.strategy.get_signal_report()
+
 
 
 class MultiSignalStrategy(SignalBasedStrategy):
