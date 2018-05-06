@@ -1,7 +1,7 @@
 from enum import Enum
 
 from utils import datetime_from_timestamp
-
+from collections import namedtuple
 
 class Signal:
     def __init__(self, signal_type, trend, horizon, strength_value, strength_max,
@@ -17,6 +17,9 @@ class Signal:
         self.rsi_value = rsi_value
         self.transaction_currency = transaction_currency
         self.counter_currency = counter_currency
+        if strength_value == None:
+            strength_value = 3
+        self.signal_signature = get_signal_type(SignalType(signal=signal_type, trend=int(float(trend)), strength=int(strength_value)))
 
     @staticmethod
     def get_signal_name(signal_type, strength_value):
@@ -34,17 +37,52 @@ class Signal:
             signal_name = signal_type.value
         return signal_name
 
+
     def __str__(self):
-        return ("{} trend={} horizon={} timestamp={} rsi_value={}".format(Signal.get_signal_name(self.signal_type, self.strength_value),
+        return ("{} strength={} trend={} horizon={} timestamp={} rsi_value={}".format(self.signal_signature, self.strength_value,
                                                              self.trend, self.horizon, datetime_from_timestamp(self.timestamp), self.rsi_value))
 
     def __eq__(self, other):
         return self.__dict__ == other.__dict__
 
 
-class SignalType(Enum):
-    RSI = "RSI"
-    kumo_breakout = "kumo_breakout"
-    SMA = "SMA"
-    EMA = "EMA"
-    RSI_Cumulative = "RSI_cumulative"
+def get_signal_type(signal_record):
+    id = [x for x in ALL_SIGNALS if ALL_SIGNALS[x] == signal_record]
+    assert len(id) == 1
+    return id[0]
+
+
+SignalType = namedtuple('SignalType', 'signal, trend, strength')
+ALL_SIGNALS = {
+    # TEST, delete in production
+    #'rsi_sell_3_test': SignalType(signal = 'RSI', trend = 1, strength = 1),
+    #'rsi_buy_3_test' : SignalType(signal = 'RSI', trend = -1, strength = 1),
+    ############################
+
+    'rsi_buy_1' : SignalType('RSI', 1, 1),
+    'rsi_buy_2' : SignalType('RSI', 1, 2),
+    'rsi_buy_3' : SignalType('RSI', 1, 3),
+    'rsi_sell_1': SignalType(signal='RSI', trend=-1, strength=1),
+    'rsi_sell_2': SignalType(signal='RSI', trend=-1, strength=2),
+    'rsi_sell_3': SignalType(signal='RSI', trend=-1, strength=3),
+
+    'rsi_cumulat_buy_2' : SignalType('RSI_Cumulative', 1, 2),
+    'rsi_cumulat_buy_3' : SignalType('RSI_Cumulative', 1, 3),
+    'rsi_cumulat_sell_2': SignalType('RSI_Cumulative', -1, 2),
+    'rsi_cumulat_sell_3': SignalType('RSI_Cumulative', -1, 3),
+
+    'ichi_kumo_up' : SignalType('kumo_breakout', 1, 3),
+    'ichi_kumo_down' : SignalType('kumo_breakout', -1, 3),
+
+    'sma_bull_1' : SignalType('SMA', 1, 1),  # price crosses sma50 up
+    'sma_bear_1' : SignalType('SMA', -1, 1),
+    'sma_bull_2' : SignalType('SMA', 1, 2),   # price crosses sma200 up
+    'sma_bear_2' : SignalType('SMA', -1, 2),
+    'sma_bull_3' : SignalType('SMA', 1, 3),    # sma50 crosses sma200 up
+    'sma_bear_3' : SignalType('SMA', -1, 3),
+
+    'ann_simple_bull': SignalType('ANN_Simple', 1, 3),  # price cross sma200 up
+    'ann_simple_bear': SignalType('ANN_Simple', -1, 3),
+
+
+}

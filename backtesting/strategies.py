@@ -5,6 +5,65 @@ import operator
 
 from signals import SignalType
 
+class SignalTypedStrategy:
+    def __init__(self, signal_set, signals):
+        self.signal_set = signal_set
+        self.signals = signals
+
+    def get_orders(self, start_cash, start_crypto, transaction_cost_percent=0.0025):
+        orders = []
+        order_signals = []
+        cash = start_cash
+        crypto = start_crypto
+        buy_currency = None
+        for i, signal in enumerate(self.signals):
+            if signal.signal_signature not in self.signal_set:
+                continue
+            if self.indicates_sell(signal) and crypto > 0 and signal.transaction_currency == buy_currency:
+                order = Order(OrderType.SELL, signal.transaction_currency, signal.counter_currency,
+                              signal.timestamp, crypto, signal.price, transaction_cost_percent)
+                orders.append(order)
+                order_signals.append(signal)
+                delta_crypto, delta_cash = order.execute()
+                cash = cash + delta_cash
+                crypto = crypto + delta_crypto
+                assert crypto == 0
+            elif self.indicates_buy(signal) and cash > 0:
+                buy_currency = signal.transaction_currency
+                order = Order(OrderType.BUY, signal.transaction_currency, signal.counter_currency,
+                              signal.timestamp, cash, signal.price, transaction_cost_percent)
+                orders.append(order)
+                order_signals.append(signal)
+                delta_crypto, delta_cash = order.execute()
+                cash = cash + delta_cash
+                crypto = crypto + delta_crypto
+                assert cash == 0
+
+        return orders, order_signals
+
+    def indicates_buy(self, signal):
+        return int(float(signal.trend)) == 1
+
+    def indicates_sell(self, signal):
+        return int(float(signal.trend)) == -1
+
+    def __str__(self):
+        output = []
+        output.append("Strategy: a simple trend-based strategy")
+        output.append("  description: trading according to signal set {}".format(str(self.signal_set)))
+        return "\n".join(output)
+
+    def get_short_summary(self):
+        return "  description: trading according to signal set {}".format(str(self.signal_set))
+
+    def get_signal_report(self):
+        output = []
+        for signal in self.signals:
+            output.append("{} {}".format("BUY" if self.indicates_buy(signal) else "SELL", str(signal)))
+        return "\n".join(output)
+
+
+
 
 class Strategy:
     def get_orders(self, start_cash, start_crypto):
@@ -23,6 +82,7 @@ class Strategy:
         elif signal_type in (SignalType.kumo_breakout, SignalType.SMA, SignalType.EMA, SignalType.RSI_Cumulative):
             strategy = SimpleTrendBasedStrategy(signals, signal_type, horizon, strength)
         return strategy
+
 
     @staticmethod
     def filter_based_on_horizon(signals, horizon):
@@ -98,6 +158,10 @@ class SignalBasedStrategy(Strategy):
             if self.indicates_sell(signal):
                 sell_signals.append(signal)
         return sell_signals
+
+
+
+
 
     def indicates_sell(self, signal):
         pass

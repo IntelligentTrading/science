@@ -42,6 +42,16 @@ signal_query = """ SELECT trend, horizon, strength_value, strength_max, price, p
                     source = 0
             ORDER BY timestamp;"""
 
+all_signals_query = """ SELECT signal_signal.signal, trend, horizon, strength_value, strength_max, price, price_change, timestamp, rsi_value 
+            FROM signal_signal 
+            WHERE   transaction_currency=%s AND 
+                    counter_currency=%s AND
+                    timestamp >= %s AND
+                    timestamp <= %s AND
+                    source = 0 AND
+                    horizon = %s
+            ORDER BY timestamp;"""
+
 rsi_signal_query = """ SELECT trend, horizon, strength_value, strength_max, price, price_change, timestamp, rsi_value 
             FROM signal_signal 
             WHERE   signal_signal.signal=%s AND 
@@ -129,6 +139,19 @@ def get_signals(signal_type, transaction_currency, start_time, end_time, counter
     cursor.execute(signal_query, params=(signal_type.value, transaction_currency, counter_currency_id, start_time, end_time))
     signals = []
     for (trend, horizon, strength_value, strength_max, price, price_change, timestamp, rsi_value) in cursor:
+        signals.append(Signal(signal_type, trend, horizon, strength_value, strength_max,
+                                 price/1E8,  price_change, timestamp, rsi_value, transaction_currency,
+                              CounterCurrency[counter_currency]))
+    return signals
+
+def get_all_signals(transaction_currency, start_time, end_time, horizon, counter_currency="BTC"):
+    counter_currency_id = CounterCurrency[counter_currency].value
+    horizon_id = horizon.value
+    connection = mysql.connector.connect(**database_config)
+    cursor = connection.cursor()
+    cursor.execute(all_signals_query, params=(transaction_currency, counter_currency_id, start_time, end_time, horizon_id))
+    signals = []
+    for (signal_type, trend, horizon, strength_value, strength_max, price, price_change, timestamp, rsi_value) in cursor:
         signals.append(Signal(signal_type, trend, horizon, strength_value, strength_max,
                                  price/1E8,  price_change, timestamp, rsi_value, transaction_currency,
                               CounterCurrency[counter_currency]))

@@ -6,4 +6,4 @@ def datetime_from_timestamp(timestamp):
 
 
 def get_distinct_signal_types(signals):
-    return set([x.signal_type.name for x in signals])
+    return set([x.signal_signature for x in signals])
