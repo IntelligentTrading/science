@@ -21,23 +21,6 @@ class Signal:
             strength_value = 3
         self.signal_signature = get_signal_type(SignalType(signal=signal_type, trend=int(float(trend)), strength=int(strength_value)))
 
-    @staticmethod
-    def get_signal_name(signal_type, strength_value):
-        if signal_type == SignalType.SMA:
-            signal_name = "SMA "
-            if strength_value == 1:
-                signal_name += "short"
-            elif strength_value == 2:
-                signal_name += "medium"
-            elif strength_value == 3:
-                signal_name += "long"
-            else:
-                signal_name += "any"
-        else:
-            signal_name = signal_type.value
-        return signal_name
-
-
     def __str__(self):
         return ("{} strength={} trend={} horizon={} timestamp={} rsi_value={}".format(self.signal_signature, self.strength_value,
                                                              self.trend, self.horizon, datetime_from_timestamp(self.timestamp), self.rsi_value))
@@ -54,11 +37,6 @@ def get_signal_type(signal_record):
 
 SignalType = namedtuple('SignalType', 'signal, trend, strength')
 ALL_SIGNALS = {
-    # TEST, delete in production
-    #'rsi_sell_3_test': SignalType(signal = 'RSI', trend = 1, strength = 1),
-    #'rsi_buy_3_test' : SignalType(signal = 'RSI', trend = -1, strength = 1),
-    ############################
-
     'rsi_buy_1' : SignalType('RSI', 1, 1),
     'rsi_buy_2' : SignalType('RSI', 1, 2),
     'rsi_buy_3' : SignalType('RSI', 1, 3),
@@ -83,6 +61,4 @@ ALL_SIGNALS = {
 
     'ann_simple_bull': SignalType('ANN_Simple', 1, 3),  # price cross sma200 up
     'ann_simple_bear': SignalType('ANN_Simple', -1, 3),
-
-
 }

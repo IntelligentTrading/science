@@ -178,7 +178,6 @@ class Evaluation:
 
         return "\n".join(output)
 
-
     def get_short_summary(self):
         return ("{} \t Invested: {} {}, {} {}\t After investment: {:.2f} {}, {:.2f} {} \t Profit: {}{:.2f}%".format(
             self.strategy.get_short_summary(),

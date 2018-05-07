@@ -29,7 +29,6 @@ def evaluate_trend_based(signal_type, transaction_currency, counter_currency, st
     evaluation = Evaluation(strategy, transaction_currency, counter_currency, start_cash, start_crypto, start_time, end_time, False, False)
     return evaluation
 
-
 def evaluate_rsi_comparatively(transaction_currency, counter_currency, start_time, end_time,
                  start_cash, start_crypto):
     rsi_signals = get_signals(SignalType.RSI, transaction_currency, start_time, end_time, counter_currency)
@@ -134,13 +133,6 @@ def find_num_cumulative_outperforms(start_time, end_time, counter_currency):
     print (total_rsi_cumulative_better)
     print("Total: {}".format(total))
     print("Outperforms: {}, equal: {}".format(total_rsi_cumulative_better/total, total_rsi_cumulative_eq/total))
-
-
-
-
-
-
-
 
 
 def evaluate_multi_any_currency(counter_currency, start_time, end_time,

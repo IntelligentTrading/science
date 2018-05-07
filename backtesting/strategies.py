@@ -1,14 +1,16 @@
 from orders import *
-from data_sources import Horizon, Strength, get_signals, get_signals_rsi, get_price
+from data_sources import *
 from signals import *
 import operator
 
 from signals import SignalType
 
 class SignalTypedStrategy:
-    def __init__(self, signal_set, signals):
+    def __init__(self, signal_set, start_time, end_time, horizon, counter_currency, transaction_currency=None):
         self.signal_set = signal_set
-        self.signals = signals
+        self.signals = get_filtered_signals(start_time=start_time, end_time=end_time, counter_currency=counter_currency,
+                                            horizon=horizon, transaction_currency=transaction_currency)
+        self.horizon = horizon
 
     def get_orders(self, start_cash, start_crypto, transaction_cost_percent=0.0025):
         orders = []
@@ -59,7 +61,8 @@ class SignalTypedStrategy:
     def get_signal_report(self):
         output = []
         for signal in self.signals:
-            output.append("{} {}".format("BUY" if self.indicates_buy(signal) else "SELL", str(signal)))
+            if signal.signal_signature in self.signal_set:
+                output.append("{} {}".format("BUY" if self.indicates_buy(signal) else "SELL", str(signal)))
         return "\n".join(output)
 
 
