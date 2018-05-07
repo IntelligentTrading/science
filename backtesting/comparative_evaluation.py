@@ -133,14 +133,14 @@ if __name__ == "__main__":
     for transaction_currency in transaction_currencies:
         currency_pairs.append((transaction_currency, counter_currency))
 
-    currency_pairs = [("OMG","BTC"),]
-    ComparativeEvaluation(buy_signals=['rsi_buy_3', 'rsi_buy_2', 'rsi_buy_1'],
-                          sell_signals=['rsi_sell_3', 'rsi_sell_2', 'rsi_sell_1'],
-                          num_buy=2,
-                          num_sell=2,
-                          signal_combination_mode=SignalCombinationMode.SAME_TYPE_AND_STRENGTH,
+    #currency_pairs = [("OMG","BTC"),]
+    ComparativeEvaluation(buy_signals=['rsi_buy_3', 'rsi_buy_2', 'rsi_buy_1', 'rsi_cumulat_buy_2', 'rsi_cumulat_buy_3'],
+                          sell_signals=['rsi_sell_3', 'rsi_sell_2', 'rsi_sell_1', 'rsi_cumulat_sell_2', 'rsi_cumulat_sell_3'],
+                          num_buy=1,
+                          num_sell=1,
+                          signal_combination_mode=SignalCombinationMode.SAME_TYPE,
                           currency_pairs=currency_pairs,
                           start_cash=1, start_crypto=0,
                           start_time=start, end_time=end,
-                          output_file="output_new 4.xlsx",
+                          output_file="output_new 4 cumulative.xlsx",
                           horizons=(Horizon.short, Horizon.medium, Horizon.long))

@@ -1,8 +1,9 @@
 from evaluation import *
 
+### Various hardcoded backtesting runs
 
 def evaluate_rsi(transaction_currency, counter_currency, start_time, end_time,
-                 start_cash, start_crypto, overbought_threshold, oversold_threshold, horizon = Horizon.any):
+                 start_cash, start_crypto, overbought_threshold, oversold_threshold, horizon=Horizon.any):
     rsi_signals = get_signals_rsi(transaction_currency, start_time, end_time,
                                    overbought_threshold, oversold_threshold, counter_currency)
     rsi_strategy = SimpleRSIStrategy(rsi_signals, overbought_threshold, oversold_threshold, horizon)
