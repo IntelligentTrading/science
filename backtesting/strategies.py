@@ -44,10 +44,10 @@ class SignalTypedStrategy:
         return orders, order_signals
 
     def indicates_buy(self, signal):
-        return int(float(signal.trend)) == 1
+        return int(float(signal.trend)) == -1
 
     def indicates_sell(self, signal):
-        return int(float(signal.trend)) == -1
+        return int(float(signal.trend)) == 1
 
     def __str__(self):
         output = []
@@ -65,6 +65,42 @@ class SignalTypedStrategy:
                 output.append("{} {}".format("BUY" if self.indicates_buy(signal) else "SELL", str(signal)))
         return "\n".join(output)
 
+
+class SimpleRSIStrategy():
+    def __init__(self, start_time, end_time, horizon, counter_currency, overbought_threshold=80, oversold_threshold=25, transaction_currency=None):
+        self.signals = get_filtered_signals(start_time=start_time, end_time=end_time, counter_currency=counter_currency,
+                                            horizon=horizon, transaction_currency=transaction_currency)
+        self.horizon = horizon
+        self.overbought_threshold = overbought_threshold
+        self.oversold_threshold = oversold_threshold
+
+    def indicates_sell(self, signal):
+        if signal.rsi_value >= self.overbought_threshold:
+            return True
+        else:
+            return False
+
+    def indicates_buy(self, signal):
+        if signal.rsi_value <= self.oversold_threshold:
+            return True
+        else:
+            return False
+
+    def __str__(self):
+        output = []
+        output.append("Strategy: a simple RSI-based strategy")
+        output.append("  description: selling when rsi_value >= overbought_threshold, buying when rsi_value <= oversold threshold ")
+        output.append("Strategy settings:")
+        output.append("  overbought_threshold = {}".format(self.overbought_threshold))
+        output.append("  oversold_threshold = {}".format(self.oversold_threshold))
+        output.append("  horizon = {}".format(self.horizon.name))
+
+        return "\n".join(output)
+
+    def get_short_summary(self):
+        return "RSI, overbought = {}, oversold = {}".format(self.overbought_threshold,
+                                                                           self.oversold_threshold) #,
+                                                                           #self.horizon.name)
 
 
 
@@ -163,9 +199,6 @@ class SignalBasedStrategy(Strategy):
         return sell_signals
 
 
-
-
-
     def indicates_sell(self, signal):
         pass
 
@@ -178,42 +211,6 @@ class SignalBasedStrategy(Strategy):
             output.append("{} {}".format("BUY" if self.indicates_buy(signal) else "SELL", str(signal)))
         return "\n".join(output)
 
-
-class SimpleRSIStrategy(SignalBasedStrategy):
-    def __init__(self, signals, overbought_threshold=80, oversold_threshold=25, horizon=Horizon.any):
-        SignalBasedStrategy.__init__(self, signals, horizon)
-        self.overbought_threshold = overbought_threshold
-        self.oversold_threshold = oversold_threshold
-
-    def indicates_sell(self, signal):
-        return signal.trend == "-1"
-        if signal.rsi_value >= self.overbought_threshold:
-            return True
-        else:
-            return False
-
-    def indicates_buy(self, signal):
-        return signal.trend == "1"
-        if signal.rsi_value <= self.oversold_threshold:
-            return True
-        else:
-            return False
-
-    def __str__(self):
-        output = []
-        output.append("Strategy: a simple RSI-based strategy")
-        output.append("  description: selling when rsi_value >= overbought_threshold, buying when rsi_value <= oversold threshold ")
-        output.append("Strategy settings:")
-        output.append("  overbought_threshold = {}".format(self.overbought_threshold))
-        output.append("  oversold_threshold = {}".format(self.oversold_threshold))
-        output.append("  horizon = {}".format(self.horizon.name))
-
-        return "\n".join(output)
-
-    def get_short_summary(self):
-        return "RSI, overbought = {}, oversold = {}".format(self.overbought_threshold,
-                                                                           self.oversold_threshold) #,
-                                                                           #self.horizon.name)
 
 
 class SimpleTrendBasedStrategy(SignalBasedStrategy):

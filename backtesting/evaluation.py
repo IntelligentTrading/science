@@ -121,7 +121,7 @@ class Evaluation:
 
     def format_price_dependent_value(self, value):
         if value is None:
-            return "N/A"
+            return float('nan')
         else:
             return value
 

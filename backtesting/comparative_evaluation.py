@@ -28,7 +28,7 @@ class ComparativeEvaluation:
         self.end_time = end_time
         self.start_cash = start_cash
         self.start_crypto = start_crypto
-        self.evaluate_profit_on_last_order = True
+        self.evaluate_profit_on_last_order = False
         self.buy_first_and_hold = False
         self.output_file = output_file
 
@@ -60,7 +60,7 @@ class ComparativeEvaluation:
     def evaluate(self, signal_set, transaction_currency, counter_currency, horizon):
         source = 0
 
-        signals = get_all_signals(transaction_currency, self.start_time, self.end_time, horizon, counter_currency)
+        #signals = get_all_signals(transaction_currency, self.start_time, self.end_time, horizon, counter_currency)
         strategy = SignalTypedStrategy(signal_set, self.start_time, self.end_time, horizon, counter_currency,
                                        transaction_currency)
         baseline = BuyAndHoldStrategyTimebased(self.start_time, self.end_time, transaction_currency,
@@ -133,14 +133,17 @@ if __name__ == "__main__":
     for transaction_currency in transaction_currencies:
         currency_pairs.append((transaction_currency, counter_currency))
 
-    #currency_pairs = [("OMG","BTC"),]
-    ComparativeEvaluation(buy_signals=['rsi_buy_3', 'rsi_buy_2', 'rsi_buy_1', 'rsi_cumulat_buy_2', 'rsi_cumulat_buy_3'],
-                          sell_signals=['rsi_sell_3', 'rsi_sell_2', 'rsi_sell_1', 'rsi_cumulat_sell_2', 'rsi_cumulat_sell_3'],
-                          num_buy=1,
-                          num_sell=1,
+    start = 1518523200  # first instance of RSI_Cumulative signal
+    end = 1524355233.882  # April 23
+
+    currency_pairs = [("AMP","BTC"),]
+    ComparativeEvaluation(buy_signals=['rsi_buy_3', 'rsi_buy_2','rsi_cumulat_buy_2', 'rsi_cumulat_buy_3'],
+                          sell_signals=['rsi_sell_3', 'rsi_sell_2', 'rsi_cumulat_sell_2', 'rsi_cumulat_sell_3'],
+                          num_buy=2,
+                          num_sell=2,
                           signal_combination_mode=SignalCombinationMode.SAME_TYPE,
                           currency_pairs=currency_pairs,
                           start_cash=1, start_crypto=0,
                           start_time=start, end_time=end,
-                          output_file="output_new 4 cumulative.xlsx",
+                          output_file="output new cumulative.xlsx",
                           horizons=(Horizon.short, Horizon.medium, Horizon.long))

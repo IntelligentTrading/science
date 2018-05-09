@@ -59,6 +59,6 @@ ALL_SIGNALS = {
     'sma_bull_3' : SignalType('SMA', 1, 3),    # sma50 crosses sma200 up
     'sma_bear_3' : SignalType('SMA', -1, 3),
 
-    'ann_simple_bull': SignalType('ANN_Simple', 1, 3),  # price cross sma200 up
+    'ann_simple_bull': SignalType('ANN_Simple', 1, 3),  # price crosses sma200 up
     'ann_simple_bear': SignalType('ANN_Simple', -1, 3),
 }

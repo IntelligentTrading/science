@@ -133,6 +133,8 @@ def get_filtered_signals(signal_type=None, transaction_currency=None, start_time
 
     for (signal_type, trend, horizon, strength_value, strength_max, price, price_change, timestamp, rsi_value,
          transaction_currency, counter_currency) in cursor:
+        if len(trend) > 5:   # hacky solution for one instance of bad data
+            continue
         signals.append(Signal(signal_type, trend, horizon, strength_value, strength_max,
                               price/1E8,  price_change, timestamp, rsi_value, transaction_currency,
                               CounterCurrency(counter_currency).name))

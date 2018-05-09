@@ -3,13 +3,12 @@ from evaluation import *
 ### Various hardcoded backtesting runs
 
 def evaluate_rsi(transaction_currency, counter_currency, start_time, end_time,
-                 start_cash, start_crypto, overbought_threshold, oversold_threshold, horizon=Horizon.any):
-    rsi_signals = get_signals_rsi(transaction_currency, start_time, end_time,
-                                   overbought_threshold, oversold_threshold, counter_currency)
-    rsi_strategy = SimpleRSIStrategy(rsi_signals, overbought_threshold, oversold_threshold, horizon)
+                 start_cash, start_crypto, horizon=Horizon.any):
+    rsi_strategy = SignalTypedStrategy(['rsi_buy_1','rsi_sell_1'], start_time, end_time, horizon, counter_currency, transaction_currency)
     evaluation = Evaluation(rsi_strategy, transaction_currency, counter_currency,
-                            start_cash, start_crypto, start_time, end_time, False, False)
+                            start_cash, start_crypto, start_time, end_time, True, False)
     return evaluation
+
 
 def evaluate_rsi_any_currency(counter_currency, start_time, end_time,
                  start_cash, start_crypto, overbought_threshold, oversold_threshold):
@@ -176,13 +175,16 @@ def evaluate_multi_any_currency(counter_currency, start_time, end_time,
 def core_test():
     start = 1522866403.0284002
     end = 1525458403.0284002
-    transaction_currency = "LTC"
+    end = 1525445779.6664
+    start = end - 60*60*24*5
+
+    transaction_currency = None #"LTC"
     counter_currency = "BTC"
     overbought = 80
     oversold = 20
     start_cash = 1000
     evaluation = evaluate_rsi(transaction_currency, counter_currency, start, end,
-                 start_cash, 0, overbought, oversold, horizon = Horizon.short)
+                 start_cash, 0, horizon=Horizon.short)
     print(evaluation.get_report())
 
 
