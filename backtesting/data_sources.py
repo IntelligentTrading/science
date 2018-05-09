@@ -100,7 +100,7 @@ def get_filtered_signals(signal_type=None, transaction_currency=None, start_time
     params = []
     if signal_type is not None:
         additions.append("signal_signal.signal=%s")
-        params.append(signal_type.value)
+        params.append(signal_type)
     if transaction_currency is not None:
         additions.append("transaction_currency = %s")
         params.append(transaction_currency)
