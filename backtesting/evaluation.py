@@ -129,7 +129,7 @@ class Evaluation:
         output = []
         output.append(str(self.strategy))
 
-        output.append(self.strategy.get_signal_report())
+        # output.append(self.strategy.get_signal_report())
         output.append("--")
 
         output.append("\n* Order execution log *\n")
@@ -285,49 +285,3 @@ class Evaluation:
                 dictionary["profit_percent_USDT"] = "N/A"
         return dictionary
 
-
-if __name__ == "__main__":
-    start, end = get_timestamp_range()
-    start = 1518523200 # first instance of RSI_Cumulative signal
-    end = 1524355233.882 # April 23
-    counter_currency = "BTC"
-    transaction_currencies = get_currencies_for_signal(counter_currency, "RSI_Cumulative")
-    currency_pairs = []
-    for transaction_currency in transaction_currencies:
-        currency_pairs.append((transaction_currency, counter_currency))
-
-
-    #eval = ComparativeEvaluationMultiSignal(
-    #    signal_types=(SignalType.RSI, SignalType.SMA, SignalType.kumo_breakout, # SignalType.EMA,
-    #                  SignalType.RSI_Cumulative),
-    #    currency_pairs=currency_pairs,
-    #    start_cash=1000, start_crypto=0,
-    #    start_time=start, end_time=end,
-    #    output_file="test.xlsx",
-    #    horizons=(Horizon.any, Horizon.short, Horizon.medium, Horizon.long),
-    #    rsi_overbought_values=[70], rsi_oversold_values=[30],
-    #    sma_strengths=(Strength.any,))
-    #eval.summary_stats("stats_full.xlsx", "stats_profit.xlsx")
-
-    #currency_pairs = (("DGB", "BTC"),)
-
-    #ComparativeEvaluationOneSignal(signal_types=(SignalType.RSI,
-    #                                             SignalType.RSI_Cumulative),
-    #                               currency_pairs=currency_pairs,
-    #                               start_cash=1, start_crypto=0,
-    #                               start_time=start, end_time=end,
-    #                               output_file="output5.xlsx",
-    #                               horizons=(Horizon.any,),
-    #                               rsi_overbought_values=[75], rsi_oversold_values=[25])
-
-    #exit(0)
-    end = 1525445779.6664
-    start = end - 60*60*24*5
-    ComparativeEvaluationOneSignal(signal_types=(SignalType.RSI,
-                                                 SignalType.RSI_Cumulative, SignalType.kumo_breakout),
-                                   currency_pairs=currency_pairs,
-                                   start_cash=1, start_crypto=0,
-                                   start_time=start, end_time=end,
-                                   output_file="output_comparative_v4.xlsx",
-                                   horizons=(Horizon.short, Horizon.medium, Horizon.long),
-                                   rsi_overbought_values=[70, 75, 80], rsi_oversold_values=[20, 25, 30])

@@ -5,7 +5,7 @@ import pandas as pd
 from data_sources import *
 from evaluation import ordered_columns_condensed, Evaluation
 from signals import SignalType, ALL_SIGNALS
-from strategies import Strategy, BuyAndHoldStrategyTimebased, MultiSignalStrategy, BuyAndHoldStrategy, SignalTypedStrategy, SimpleRSIStrategy
+from strategies import Strategy, BuyAndHoldStrategyTimebased, MultiSignalStrategy, BuyAndHoldStrategy, SignalSignatureStrategy, SimpleRSIStrategy
 from enum import Enum
 
 class SignalCombinationMode(Enum):
@@ -43,8 +43,8 @@ class StrategyEvaluationSetBuilder:
 
             for horizon in horizons:
                 for transaction_currency, counter_currency in currency_pairs:
-                    strategy = SignalTypedStrategy(signal_set, start_time, end_time, horizon, counter_currency,
-                                               transaction_currency)
+                    strategy = SignalSignatureStrategy(signal_set, start_time, end_time, horizon, counter_currency,
+                                                       transaction_currency)
                     strategies.append(strategy)
 
         return strategies
@@ -74,11 +74,9 @@ class StrategyEvaluationSetBuilder:
                 for transaction_currency, counter_currency in currency_pairs:
                     for horizon in horizons:
                         strategy = SimpleRSIStrategy(start_time, end_time, horizon, counter_currency,
-                                                     overbought, oversold, transaction_currency)
+                                                     overbought, oversold, transaction_currency, signal_type)
                         strategies.append(strategy)
         return strategies
-
-
 
 
 class ComparativeEvaluation:
@@ -145,55 +143,3 @@ class ComparativeEvaluation:
         return evaluation_dict
 
 
-
-
-if __name__ == "__main__":
-    end = 1525445779.6664
-    start = end - 60*60*24*5
-    counter_currency = "BTC"
-    transaction_currencies = get_currencies_for_signal(counter_currency, "RSI_Cumulative")
-    currency_pairs = []
-    for transaction_currency in transaction_currencies:
-        currency_pairs.append((transaction_currency, counter_currency))
-
-    start = 1518523200  # first instance of RSI_Cumulative signal
-    end = 1524355233.882  # April 23
-
-    currency_pairs = [("AMP","BTC"),]
-    buy_signals = ['rsi_buy_3', 'rsi_buy_2', 'rsi_cumulat_buy_2', 'rsi_cumulat_buy_3']
-    sell_signals = ['rsi_sell_3', 'rsi_sell_2', 'rsi_cumulat_sell_2', 'rsi_cumulat_sell_3']
-    num_buy = 2
-    num_sell = 2
-    signal_combination_mode = SignalCombinationMode.SAME_TYPE
-    currency_pairs = currency_pairs
-    start_cash = 1
-    start_crypto = 0
-    start_time = start
-    end_time = end
-    output_file = "output new cumulative.xlsx",
-    horizons = (Horizon.short, Horizon.medium, Horizon.long)
-
-
-    strategies = StrategyEvaluationSetBuilder.build_from_signal_set(buy_signals, sell_signals, num_buy, num_sell, signal_combination_mode,
-                          horizons, start_time, end_time, currency_pairs)
-
-    strategies = StrategyEvaluationSetBuilder.build_from_rsi_thresholds("RSI", [70,75,80],[20,25,30],horizons, start_time,
-                                                                        end_time, currency_pairs)
-
-    ComparativeEvaluation(strategy_set=strategies,
-                          start_cash=1, start_crypto=0,
-                          start_time=start, end_time=end,
-                          output_file="output new cumulative refactored rsi.xlsx"
-                          )
-    exit(0)
-
-    ComparativeEvaluation(buy_signals=['rsi_buy_3', 'rsi_buy_2','rsi_cumulat_buy_2', 'rsi_cumulat_buy_3'],
-                          sell_signals=['rsi_sell_3', 'rsi_sell_2', 'rsi_cumulat_sell_2', 'rsi_cumulat_sell_3'],
-                          num_buy=2,
-                          num_sell=2,
-                          signal_combination_mode=SignalCombinationMode.SAME_TYPE,
-                          currency_pairs=currency_pairs,
-                          start_cash=1, start_crypto=0,
-                          start_time=start, end_time=end,
-                          output_file="output new cumulative.xlsx",
-                          horizons=(Horizon.short, Horizon.medium, Horizon.long))

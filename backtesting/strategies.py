@@ -5,14 +5,15 @@ import operator
 
 from signals import SignalType
 
-class SignalTypedStrategy:
-    def __init__(self, signal_set, start_time, end_time, horizon, counter_currency, transaction_currency=None):
-        self.signal_set = signal_set
+
+class Strategy:
+    def __init__(self, start_time, end_time, horizon, counter_currency, transaction_currency=None, strength=Strength.any):
         self.signals = get_filtered_signals(start_time=start_time, end_time=end_time, counter_currency=counter_currency,
-                                            horizon=horizon, transaction_currency=transaction_currency)
+                                            horizon=horizon, transaction_currency=transaction_currency, strength=strength)
         self.horizon = horizon
         self.transaction_currency = transaction_currency
         self.counter_currency = counter_currency
+        self.strength = strength
 
     def get_orders(self, start_cash, start_crypto, transaction_cost_percent=0.0025):
         orders = []
@@ -21,7 +22,7 @@ class SignalTypedStrategy:
         crypto = start_crypto
         buy_currency = None
         for i, signal in enumerate(self.signals):
-            if signal.signal_signature not in self.signal_set:
+            if not self.belongs_to_this_strategy(signal):
                 continue
             if self.indicates_sell(signal) and crypto > 0 and signal.transaction_currency == buy_currency:
                 order = Order(OrderType.SELL, signal.transaction_currency, signal.counter_currency,
@@ -46,36 +47,37 @@ class SignalTypedStrategy:
         return orders, order_signals
 
     def indicates_buy(self, signal):
-        return int(float(signal.trend)) == -1
+        pass
 
     def indicates_sell(self, signal):
-        return int(float(signal.trend)) == 1
+        pass
 
-    def __str__(self):
-        output = []
-        output.append("Strategy: a simple trend-based strategy")
-        output.append("  description: trading according to signal set {}".format(str(self.signal_set)))
-        return "\n".join(output)
+    def belongs_to_this_strategy(self, signal):
+        pass
 
     def get_short_summary(self):
-        return "  description: trading according to signal set {}".format(str(self.signal_set))
+        pass
+
+    def get_buy_signals(self):
+        buy_signals = []
+        for signal in self.signals:
+            if self.belongs_to_this_strategy(signal) and self.indicates_buy(signal):
+                buy_signals.append(signal)
+        return buy_signals
+
+    def get_sell_signals(self):
+        sell_signals = []
+        for signal in self.signals:
+            if self.belongs_to_this_strategy(signal) and self.indicates_sell(signal):
+                sell_signals.append(signal)
+        return sell_signals
 
     def get_signal_report(self):
         output = []
         for signal in self.signals:
-            if signal.signal_signature in self.signal_set:
+            if self.belongs_to_this_strategy(signal):
                 output.append("{} {}".format("BUY" if self.indicates_buy(signal) else "SELL", str(signal)))
         return "\n".join(output)
-
-
-
-
-class Strategy:
-    def get_orders(self, start_cash, start_crypto):
-        pass
-
-    def get_short_summary(self):
-        pass
 
     @staticmethod
     def generate_strategy(signal_type, transaction_currency, counter_currency, start_time, end_time, horizon=Horizon.any,
@@ -89,115 +91,45 @@ class Strategy:
         return strategy
 
 
-    @staticmethod
-    def filter_based_on_horizon(signals, horizon):
-        horizon_id = horizon.value
-        output = []
-        for signal in signals:
-            if signal.horizon == horizon_id:
-                output.append(signal)
-        return output
-
-    @staticmethod
-    def filter_based_on_strength(signals, strength):
-        strength_value = strength.value
-        output = []
-        for signal in signals:
-            if signal.strength_value == strength:
-                output.append(signal)
-        return output
-
-
-class SignalBasedStrategy(Strategy):
-
-    def __init__(self, signals, horizon=Horizon.any, strength=Strength.any):
-        if horizon != Horizon.any:
-            self.signals = Strategy.filter_based_on_horizon(signals, horizon)
-        else:
-            self.signals = signals
-        self.horizon = horizon
-
-        if strength != Strength.any:
-            self.signals = Strategy.filter_based_on_strength(self.signals, strength)
-        self.strength = strength
-
-    def get_orders(self, start_cash, start_crypto, transaction_cost_percent=0.0025):
-        orders = []
-        order_signals = []
-        cash = start_cash
-        crypto = start_crypto
-        buy_currency = None
-        for i, signal in enumerate(self.signals):
-            if self.indicates_sell(signal) and crypto > 0 and signal.transaction_currency == buy_currency:
-                order = Order(OrderType.SELL, signal.transaction_currency, signal.counter_currency,
-                                    signal.timestamp, crypto, signal.price, transaction_cost_percent)
-                orders.append(order)
-                order_signals.append(signal)
-                delta_crypto, delta_cash = order.execute()
-                cash = cash + delta_cash
-                crypto = crypto + delta_crypto
-                assert crypto == 0
-            elif self.indicates_buy(signal) and cash > 0:
-                buy_currency = signal.transaction_currency
-                order = Order(OrderType.BUY, signal.transaction_currency, signal.counter_currency,
-                                    signal.timestamp, cash, signal.price, transaction_cost_percent)
-                orders.append(order)
-                order_signals.append(signal)
-                delta_crypto, delta_cash = order.execute()
-                cash = cash + delta_cash
-                crypto = crypto + delta_crypto
-                assert cash == 0
-
-        return orders, order_signals
-
-    def get_buy_signals(self):
-        buy_signals = []
-        for signal in self.signals:
-            if self.indicates_buy(signal):
-                buy_signals.append(signal)
-        return buy_signals
-
-    def get_sell_signals(self):
-        sell_signals = []
-        for signal in self.signals:
-            if self.indicates_sell(signal):
-                sell_signals.append(signal)
-        return sell_signals
-
-
-    def indicates_sell(self, signal):
-        pass
+class SignalSignatureStrategy(Strategy):
+    def __init__(self, signal_set, start_time, end_time, horizon, counter_currency, transaction_currency=None):
+        Strategy.__init__(self, start_time, end_time, horizon, counter_currency, transaction_currency)
+        self.signal_set = signal_set
 
     def indicates_buy(self, signal):
-        pass
+        return int(float(signal.trend)) == -1
 
-    def get_signal_report(self):
+    def indicates_sell(self, signal):
+        return int(float(signal.trend)) == 1
+
+    def belongs_to_this_strategy(self, signal):
+        return signal.signal_signature in self.signal_set
+
+    def __str__(self):
         output = []
-        for signal in self.signals:
-            output.append("{} {}".format("BUY" if self.indicates_buy(signal) else "SELL", str(signal)))
+        output.append("Strategy: a simple trend-based strategy")
+        output.append("  description: trading according to signal set {}".format(str(self.signal_set)))
         return "\n".join(output)
 
-class SimpleRSIStrategy(SignalBasedStrategy):
-    def __init__(self, start_time, end_time, horizon, counter_currency, overbought_threshold=80, oversold_threshold=25, transaction_currency=None):
-        self.signals = get_filtered_signals("RSI", start_time=start_time, end_time=end_time, counter_currency=counter_currency,
-                                            horizon=horizon, transaction_currency=transaction_currency)
-        self.horizon = horizon
+    def get_short_summary(self):
+        return "  description: trading according to signal set {}".format(str(self.signal_set))
+
+
+class SimpleRSIStrategy(Strategy):
+    def __init__(self, start_time, end_time, horizon, counter_currency, overbought_threshold=80, oversold_threshold=25, transaction_currency=None, signal_type="RSI"):
+        Strategy.__init__(self, start_time, end_time, horizon, counter_currency, transaction_currency)
         self.overbought_threshold = overbought_threshold
         self.oversold_threshold = oversold_threshold
-        self.transaction_currency = transaction_currency
-        self.counter_currency = counter_currency
+        self.signal_type = signal_type
 
     def indicates_sell(self, signal):
-        if signal.rsi_value >= self.overbought_threshold:
-            return True
-        else:
-            return False
+        return signal.rsi_value >= self.overbought_threshold
 
     def indicates_buy(self, signal):
-        if signal.rsi_value <= self.oversold_threshold:
-            return True
-        else:
-            return False
+        return signal.rsi_value <= self.oversold_threshold
+
+    def belongs_to_this_strategy(self, signal):
+        return signal.signal_type == self.signal_type
 
     def __str__(self):
         output = []
@@ -212,33 +144,19 @@ class SimpleRSIStrategy(SignalBasedStrategy):
 
     def get_short_summary(self):
         return "RSI, overbought = {}, oversold = {}".format(self.overbought_threshold,
-                                                                           self.oversold_threshold) #,
-                                                                           #self.horizon.name)
+                                                                           self.oversold_threshold)
 
 
-
-class SimpleTrendBasedStrategy(SignalBasedStrategy):
-    def __init__(self, signals, signal_type, horizon=Horizon.any, strength=Strength.any):
-        SignalBasedStrategy.__init__(self, signals, horizon, strength)
+class SimpleTrendBasedStrategy(Strategy):
+    def __init__(self, signal_type, start_time, end_time, horizon, counter_currency, transaction_currency=None, strength=None):
+        Strategy.__init__(self, start_time, end_time, horizon, counter_currency, transaction_currency, strength)
         self.signal_type = signal_type
 
     def indicates_sell(self, signal):
-        if self.signal_type == SignalType.RSI_Cumulative: #TODO makni
-            return signal.trend == "1"
-
-        if signal.trend == "-1":
-            return True
-        else:
-            return False
+        return int(float(signal.trend)) == -1
 
     def indicates_buy(self, signal):
-        if self.signal_type == SignalType.RSI_Cumulative:
-            return signal.trend == "-1"
-
-        if signal.trend == "1":
-            return True
-        else:
-            return False
+        return int(float(signal.trend)) == 1
 
     def __str__(self):
         output = []
@@ -250,7 +168,7 @@ class SimpleTrendBasedStrategy(SignalBasedStrategy):
 
     def get_short_summary(self):
         #return "{} trend-based, horizon = {}".format(self.signal_type.value, self.horizon.name)
-        return "{}".format(Signal.get_signal_name(self.signal_type, self.strength))
+        return "{} {}".format(self.signal_type, self.strength.value)
 
 
 class BuyAndHoldStrategy(Strategy):
@@ -273,7 +191,6 @@ class BuyAndHoldStrategy(Strategy):
 
     def get_signal_report(self):
         return self.strategy.get_signal_report()
-
 
 
 class BuyAndHoldStrategyTimebased(Strategy):
@@ -300,8 +217,6 @@ class BuyAndHoldStrategyTimebased(Strategy):
         orders.append(order)
         return orders, []
 
-
-
     def get_short_summary(self):
         return "Buy & hold"
 
@@ -309,8 +224,7 @@ class BuyAndHoldStrategyTimebased(Strategy):
         return self.strategy.get_signal_report()
 
 
-
-class MultiSignalStrategy(SignalBasedStrategy):
+class MultiSignalStrategy(Strategy):
 
     def __init__(self, buying_strategies, selling_strategies, horizon):
         self.buying_strategies = buying_strategies
@@ -334,6 +248,15 @@ class MultiSignalStrategy(SignalBasedStrategy):
 
     def indicates_buy(self, signal):
         return signal in self.buy_signals
+
+    def belongs_to_this_strategy(self, signal):
+        for buying in self.buying_strategies:
+            if buying.belongs_to_this_strategy(signal):
+                return True
+        for selling in self.selling_strategies:
+            if selling.belongs_to_this_strategy(signal):
+                return True
+        return False
 
     def __str__(self):
         output = []

@@ -92,8 +92,8 @@ nearest_price_query = """SELECT price, timestamp FROM indicator_price WHERE tran
                          AND source = 0 AND timestamp <= %s ORDER BY timestamp DESC LIMIT 1;"""
 
 
-def get_filtered_signals(signal_type=None, transaction_currency=None, start_time=None, end_time=None, horizon=None,
-                         counter_currency=None):
+def get_filtered_signals(signal_type=None, transaction_currency=None, start_time=None, end_time=None, horizon=Horizon.any,
+                         counter_currency=None, strength=Strength.any):
     query = """ SELECT signal_signal.signal, trend, horizon, strength_value, strength_max, price, price_change, 
                 timestamp, rsi_value, transaction_currency, counter_currency FROM signal_signal """
     additions = []
@@ -110,12 +110,15 @@ def get_filtered_signals(signal_type=None, transaction_currency=None, start_time
     if end_time is not None:
         additions.append("timestamp <= %s")
         params.append(end_time)
-    if horizon is not None:
+    if horizon.value is not None:
         additions.append("horizon = %s")
         params.append(horizon.value)
     if counter_currency is not None:
         additions.append("counter_currency = %s")
         params.append(CounterCurrency[counter_currency].value)
+    if strength.value is not None:
+        additions.append("strength_value = %s")
+        params.append(strength.value)
 
     # TODO: support for different sources
     additions.append("source = %s")
@@ -125,6 +128,7 @@ def get_filtered_signals(signal_type=None, transaction_currency=None, start_time
         query += "WHERE {}".format(" AND ".join(additions))
         params = tuple(params)
 
+    print(query)
     connection = mysql.connector.connect(**database_config)
     cursor = connection.cursor()
     cursor.execute(query, params)
