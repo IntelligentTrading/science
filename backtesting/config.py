@@ -3,6 +3,6 @@ database_config = {
   'password': 'karla',
   'host': '127.0.0.1',
 #  'database': 'prodclone_core_2018_04_23',
-  'database': 'prodclone_core_2018_05_04', # trend for RSI switched
+  'database': 'prodclone_core_2018_05_10', # trend for RSI switched
   'raise_on_warnings': True,
 }

@@ -97,7 +97,10 @@ class ComparativeEvaluation:
     def build_dataframe(self, strategy_set, output_file):
         evaluation_dicts = []
         for strategy in strategy_set:
-            dict = self.evaluate(strategy)
+            try:
+                dict = self.evaluate(strategy)
+            except NoPriceDataException:
+                continue
             evaluation_dicts.append(dict)
 
         output = pd.DataFrame(evaluation_dicts)
@@ -120,6 +123,7 @@ class ComparativeEvaluation:
         source = 0
         transaction_currency = strategy.transaction_currency
         counter_currency = strategy.counter_currency
+        print("Evaluating strategy...")
         horizon = strategy.horizon
 
         baseline = BuyAndHoldStrategyTimebased(self.start_time, self.end_time, transaction_currency,
@@ -141,5 +145,3 @@ class ComparativeEvaluation:
         evaluation_dict["buy_and_hold_profit_USDT"] = baseline_dict["profit_USDT"]
         evaluation_dict["buy_and_hold_profit_percent_USDT"] = baseline_dict["profit_percent_USDT"]
         return evaluation_dict
-
-

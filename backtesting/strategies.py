@@ -97,10 +97,10 @@ class SignalSignatureStrategy(Strategy):
         self.signal_set = signal_set
 
     def indicates_buy(self, signal):
-        return int(float(signal.trend)) == -1
+        return int(float(signal.trend)) == 1
 
     def indicates_sell(self, signal):
-        return int(float(signal.trend)) == 1
+        return int(float(signal.trend)) == -1
 
     def belongs_to_this_strategy(self, signal):
         return signal.signal_signature in self.signal_set

@@ -129,4 +129,3 @@ def evaluate_multi_any_currency(counter_currency, start_time, end_time,
                  start_cash, overbought_threshold, oversold_threshold):
     return evaluate_multi(None, counter_currency, start_time, end_time,
                  1000, 0, overbought_threshold, oversold_threshold)
-

@@ -128,7 +128,6 @@ def get_filtered_signals(signal_type=None, transaction_currency=None, start_time
         query += "WHERE {}".format(" AND ".join(additions))
         params = tuple(params)
 
-    print(query)
     connection = mysql.connector.connect(**database_config)
     cursor = connection.cursor()
     cursor.execute(query, params)
