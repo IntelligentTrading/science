@@ -121,7 +121,7 @@ class ComparativeEvaluation:
         writer.save()
 
     def evaluate(self, strategy):
-        source = 0
+        source = strategy.source
         transaction_currency = strategy.transaction_currency
         counter_currency = strategy.counter_currency
         print("Evaluating strategy...")

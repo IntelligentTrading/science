@@ -36,7 +36,7 @@ class Strategy:
             if self.indicates_sell(signal) and crypto > 0 and signal.transaction_currency == buy_currency:
                 price = self.fetch_delayed_price(signal, time_delay)
                 order = Order(OrderType.SELL, signal.transaction_currency, signal.counter_currency,
-                              signal.timestamp, crypto, price, transaction_cost_percent)
+                              signal.timestamp, crypto, price, transaction_cost_percent, time_delay, signal.price)
                 orders.append(order)
                 order_signals.append(signal)
                 delta_crypto, delta_cash = order.execute()
@@ -47,7 +47,7 @@ class Strategy:
                 price = self.fetch_delayed_price(signal, time_delay)
                 buy_currency = signal.transaction_currency
                 order = Order(OrderType.BUY, signal.transaction_currency, signal.counter_currency,
-                              signal.timestamp, cash, price, transaction_cost_percent)
+                              signal.timestamp, cash, price, transaction_cost_percent, time_delay, signal.price)
                 orders.append(order)
                 order_signals.append(signal)
                 delta_crypto, delta_cash = order.execute()
@@ -229,8 +229,8 @@ class BuyAndHoldTimebasedStrategy(Strategy):
 
     def get_orders(self, start_cash, start_crypto, time_delay=0):
         orders = []
-        start_price = get_price(self.transaction_currency, self.start_time, self.counter_currency)
-        end_price = get_price(self.transaction_currency, self.end_time, self.counter_currency)
+        start_price = get_price(self.transaction_currency, self.start_time, self.source, self.counter_currency)
+        end_price = get_price(self.transaction_currency, self.end_time, self.source, self.counter_currency)
         order = Order(OrderType.BUY, self.transaction_currency, self.counter_currency,
                       self.start_time, start_cash, start_price, self.transaction_cost_percent)
         orders.append(order)

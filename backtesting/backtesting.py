@@ -6,7 +6,7 @@ def evaluate_rsi(transaction_currency, counter_currency, start_time, end_time,
                  start_cash, start_crypto, horizon=Horizon.any, time_delay=0):
     rsi_strategy = SignalSignatureStrategy(['rsi_buy_2', 'rsi_sell_2'], start_time, end_time, horizon, counter_currency, transaction_currency)
     evaluation = Evaluation(rsi_strategy, transaction_currency, counter_currency,
-                            start_cash, start_crypto, start_time, end_time, True, False, time_delay)
+                            start_cash, start_crypto, start_time, end_time, False, False, time_delay)
     print(evaluation.get_report())
     return evaluation
 

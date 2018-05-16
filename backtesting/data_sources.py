@@ -233,6 +233,9 @@ def get_price_nearest_to_timestamp(currency, timestamp, source, counter_currency
     assert cursor.rowcount == 1
     price, nearest_timestamp = data[0]
     if abs(timestamp - nearest_timestamp) > max_delta_seconds:
+        error_text = "ERROR: {} trading against {}. Nearest timestamp to {} is {} (a difference of {} seconds), aborting...".\
+            format(currency, counter_currency, timestamp, nearest_timestamp, timestamp - nearest_timestamp)
+        print(error_text)
         connection.close()
         raise NoPriceDataException()
     connection.close()
