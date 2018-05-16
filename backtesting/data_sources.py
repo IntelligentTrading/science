@@ -77,7 +77,7 @@ most_recent_price_query = """SELECT price FROM indicator_price
 price_query = """SELECT price FROM indicator_price 
                             WHERE transaction_currency = %s
                             AND timestamp = %s
-                            AND source = 0
+                            AND source = %s
                             AND counter_currency = %s;"""
 
 timestamp_range_query = """SELECT MIN(timestamp), MAX(timestamp) FROM indicator_price WHERE counter_currency = 2 AND source = 0;"""
@@ -89,11 +89,11 @@ trading_against_counter_and_signal_query = """SELECT DISTINCT(transaction_curren
                                               WHERE counter_currency = %s AND signal_signal.signal = %s AND source = 0"""
 
 nearest_price_query = """SELECT price, timestamp FROM indicator_price WHERE transaction_currency = %s AND counter_currency = %s 
-                         AND source = 0 AND timestamp <= %s ORDER BY timestamp DESC LIMIT 1;"""
+                         AND source = %s AND timestamp <= %s ORDER BY timestamp DESC LIMIT 1;"""
 
 
 def get_filtered_signals(signal_type=None, transaction_currency=None, start_time=None, end_time=None, horizon=Horizon.any,
-                         counter_currency=None, strength=Strength.any):
+                         counter_currency=None, strength=Strength.any, source=None):
     query = """ SELECT signal_signal.signal, trend, horizon, strength_value, strength_max, price, price_change, 
                 timestamp, rsi_value, transaction_currency, counter_currency FROM signal_signal """
     additions = []
@@ -119,10 +119,9 @@ def get_filtered_signals(signal_type=None, transaction_currency=None, start_time
     if strength.value is not None:
         additions.append("strength_value = %s")
         params.append(strength.value)
-
-    # TODO: support for different sources
-    additions.append("source = %s")
-    params.append(0)
+    if source is not None:
+        additions.append("source = %s")
+        params.append(source)
 
     if len(additions) > 0:
         query += "WHERE {}".format(" AND ".join(additions))
@@ -192,17 +191,19 @@ def get_timestamp_range(counter_currency=CounterCurrency.USDT.value):
     return start, end
 
 
-def get_price(currency, timestamp, counter_currency="BTC", normalize=True):
+def get_price(currency, timestamp, source, counter_currency="BTC", normalize=True):
     if currency == counter_currency:
         return 1
     counter_currency_id = CounterCurrency[counter_currency].value
     connection = mysql.connector.connect(**database_config, pool_name="my_pool", pool_size=32)
     cursor = connection.cursor()
-    cursor.execute(price_query, params=(currency, timestamp, counter_currency_id))
+    cursor.execute(price_query, params=(currency, timestamp, source, counter_currency_id))
+
+
     price = cursor.fetchall()
     if cursor.rowcount == 0:
         connection.close()
-        return get_price_nearest_to_timestamp(currency, timestamp, counter_currency)
+        return get_price_nearest_to_timestamp(currency, timestamp, source, counter_currency)
         #raise NoPriceDataException(error_text)
 
     assert cursor.rowcount == 1
@@ -215,11 +216,12 @@ def get_price(currency, timestamp, counter_currency="BTC", normalize=True):
         return price
 
 
-def get_price_nearest_to_timestamp(currency, timestamp, counter_currency, max_delta_seconds=60*5):
+def get_price_nearest_to_timestamp(currency, timestamp, source, counter_currency, max_delta_seconds=60*5):
     counter_currency_id = CounterCurrency[counter_currency].value
     connection = mysql.connector.connect(**database_config, pool_name="my_pool", pool_size=32)
     cursor = connection.cursor()
-    cursor.execute(nearest_price_query, params=(currency, counter_currency_id, timestamp))
+    cursor.execute(nearest_price_query, params=(currency, counter_currency_id, source, timestamp))
+
     data = cursor.fetchall()
     if len(data) == 0:
         error_text = "ERROR: No data for value of {} in {} on {}".format(currency, counter_currency,
@@ -237,18 +239,18 @@ def get_price_nearest_to_timestamp(currency, timestamp, counter_currency, max_de
     return price / 1E8
 
 
-def convert_value_to_USDT(value, timestamp, transaction_currency):
+def convert_value_to_USDT(value, timestamp, transaction_currency, source):
     if value == 0:
         return 0
     if transaction_currency == "USDT": # already in USDT
         return value
     try:
-        value_USDT = value * get_price(transaction_currency, timestamp, "USDT") # if trading against USDT
+        value_USDT = value * get_price(transaction_currency, timestamp, source, "USDT") # if trading against USDT
         # print("Found USDT price data for {}".format(transaction_currency))
         return value_USDT
     except:
         # print("Couldn't find USDT price data for {}".format(transaction_currency))
-        value_BTC_in_USDT = get_price("BTC", timestamp, "USDT")
+        value_BTC_in_USDT = get_price("BTC", timestamp, source, "USDT")
         if transaction_currency == "BTC":
             return value * value_BTC_in_USDT
 

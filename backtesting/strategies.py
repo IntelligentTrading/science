@@ -7,15 +7,18 @@ from signals import SignalType
 
 
 class Strategy:
-    def __init__(self, start_time, end_time, horizon, counter_currency, transaction_currency=None, strength=Strength.any):
+    def __init__(self, start_time, end_time, horizon, counter_currency,
+                 transaction_currency=None, strength=Strength.any, source=0):
         self.signals = get_filtered_signals(start_time=start_time, end_time=end_time, counter_currency=counter_currency,
-                                            horizon=horizon, transaction_currency=transaction_currency, strength=strength)
+                                            horizon=horizon, transaction_currency=transaction_currency, strength=strength,
+                                            source=source)
         self.horizon = horizon
         self.transaction_currency = transaction_currency
         self.counter_currency = counter_currency
         self.strength = strength
+        self.source = source
 
-    def get_orders(self, start_cash, start_crypto, transaction_cost_percent=0.0025):
+    def get_orders(self, start_cash, start_crypto, transaction_cost_percent=0.0025, time_delay=0):
         orders = []
         order_signals = []
         cash = start_cash
@@ -24,9 +27,16 @@ class Strategy:
         for i, signal in enumerate(self.signals):
             if not self.belongs_to_this_strategy(signal):
                 continue
+
+            print(i,signal)
+
+            # delayed trading, X seconds after the signal is emitted
+
+
             if self.indicates_sell(signal) and crypto > 0 and signal.transaction_currency == buy_currency:
+                price = self.fetch_delayed_price(signal, time_delay)
                 order = Order(OrderType.SELL, signal.transaction_currency, signal.counter_currency,
-                              signal.timestamp, crypto, signal.price, transaction_cost_percent)
+                              signal.timestamp, crypto, price, transaction_cost_percent)
                 orders.append(order)
                 order_signals.append(signal)
                 delta_crypto, delta_cash = order.execute()
@@ -34,9 +44,10 @@ class Strategy:
                 crypto = crypto + delta_crypto
                 assert crypto == 0
             elif self.indicates_buy(signal) and cash > 0:
+                price = self.fetch_delayed_price(signal, time_delay)
                 buy_currency = signal.transaction_currency
                 order = Order(OrderType.BUY, signal.transaction_currency, signal.counter_currency,
-                              signal.timestamp, cash, signal.price, transaction_cost_percent)
+                              signal.timestamp, cash, price, transaction_cost_percent)
                 orders.append(order)
                 order_signals.append(signal)
                 delta_crypto, delta_cash = order.execute()
@@ -45,6 +56,12 @@ class Strategy:
                 assert cash == 0
 
         return orders, order_signals
+
+    def fetch_delayed_price(self, signal, time_delay):
+        if time_delay != 0:
+            return get_price(signal.transaction_currency, signal.timestamp + time_delay, self.source, signal.counter_currency)
+        else:
+           return signal.price
 
     def indicates_buy(self, signal):
         pass
@@ -107,12 +124,14 @@ class SignalSignatureStrategy(Strategy):
 
     def __str__(self):
         output = []
-        output.append("Strategy: a simple trend-based strategy")
+        output.append("Strategy: a simple signal set-based strategy")
         output.append("  description: trading according to signal set {}".format(str(self.signal_set)))
+        output.append("Strategy settings:")
+        output.append("  horizon = {}".format(self.horizon.name))
         return "\n".join(output)
 
     def get_short_summary(self):
-        return "  description: trading according to signal set {}".format(str(self.signal_set))
+        return "Signal-set based strategy, trading according to signal set {}".format(str(self.signal_set))
 
 
 class SimpleRSIStrategy(Strategy):
@@ -143,7 +162,7 @@ class SimpleRSIStrategy(Strategy):
         return "\n".join(output)
 
     def get_short_summary(self):
-        return "RSI, overbought = {}, oversold = {}".format(self.overbought_threshold,
+        return "RSI based strategy, overbought = {}, oversold = {}".format(self.overbought_threshold,
                                                                            self.oversold_threshold)
 
 
@@ -160,23 +179,27 @@ class SimpleTrendBasedStrategy(Strategy):
 
     def __str__(self):
         output = []
-        output.append("Strategy: a simple {}-based strategy".format(self.signal_type.value))
+        output.append("Strategy: trend-based strategy ({})".format(self.signal_type.value))
         output.append(
             "  description: selling when trend = -1, buying when trend = 1 ")
+        output.append("Strategy settings:")
         output.append("  horizon = {}".format(self.horizon.name))
         return "\n".join(output)
 
     def get_short_summary(self):
-        #return "{} trend-based, horizon = {}".format(self.signal_type.value, self.horizon.name)
-        return "{} {}".format(self.signal_type, self.strength.value)
+        return "Trend-based strategy, signal: {}, strength: {}, horizon: {}".format(self.signal_type,
+                                                                                    self.strength.value,
+                                                                                    self.horizon)
 
 
-class BuyAndHoldStrategy(Strategy):
+class BuyOnFirstSignalAndHoldStrategy(Strategy):
     def __init__(self, strategy):
         self.strategy = strategy
+        self.source = strategy.source
 
-    def get_orders(self, start_cash, start_crypto):
-        orders, order_signals = self.strategy.get_orders(start_cash, start_crypto)
+    def get_orders(self, start_cash, start_crypto, time_delay=0):
+        orders, order_signals = self.strategy.get_orders(start_cash=start_cash,
+                                                         start_crypto=start_crypto, time_delay=time_delay)
         filtered_orders = []
         filtered_signals = []
         for i, order in enumerate(orders):
@@ -193,7 +216,7 @@ class BuyAndHoldStrategy(Strategy):
         return self.strategy.get_signal_report()
 
 
-class BuyAndHoldStrategyTimebased(Strategy):
+class BuyAndHoldTimebasedStrategy(Strategy):
     def __init__(self, start_time, end_time, transaction_currency, counter_currency, source, horizon, transaction_cost_percent=0.0025):
         self.start_time = start_time
         self.end_time = end_time
@@ -204,7 +227,7 @@ class BuyAndHoldStrategyTimebased(Strategy):
         self.transaction_cost_percent = transaction_cost_percent
         self.strategy = "N/A"
 
-    def get_orders(self, start_cash, start_crypto):
+    def get_orders(self, start_cash, start_crypto, time_delay=0):
         orders = []
         start_price = get_price(self.transaction_currency, self.start_time, self.counter_currency)
         end_price = get_price(self.transaction_currency, self.end_time, self.counter_currency)

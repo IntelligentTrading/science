@@ -5,7 +5,7 @@ import pandas as pd
 from data_sources import *
 from evaluation import ordered_columns_condensed, Evaluation
 from signals import SignalType, ALL_SIGNALS
-from strategies import Strategy, BuyAndHoldStrategyTimebased, MultiSignalStrategy, BuyAndHoldStrategy, SignalSignatureStrategy, SimpleRSIStrategy
+from strategies import Strategy, BuyAndHoldTimebasedStrategy, MultiSignalStrategy, BuyOnFirstSignalAndHoldStrategy, SignalSignatureStrategy, SimpleRSIStrategy
 from enum import Enum
 
 class SignalCombinationMode(Enum):
@@ -81,7 +81,7 @@ class StrategyEvaluationSetBuilder:
 
 class ComparativeEvaluation:
 
-    def __init__(self, strategy_set, start_cash, start_crypto, start_time, end_time, output_file):
+    def __init__(self, strategy_set, start_cash, start_crypto, start_time, end_time, output_file, time_delay):
 
         self.strategy_set = strategy_set
         self.start_time = start_time
@@ -91,6 +91,7 @@ class ComparativeEvaluation:
         self.evaluate_profit_on_last_order = False
         self.buy_first_and_hold = False
         self.output_file = output_file
+        self.time_delay = time_delay
 
         self.build_dataframe(strategy_set, output_file)
 
@@ -126,14 +127,14 @@ class ComparativeEvaluation:
         print("Evaluating strategy...")
         horizon = strategy.horizon
 
-        baseline = BuyAndHoldStrategyTimebased(self.start_time, self.end_time, transaction_currency,
+        baseline = BuyAndHoldTimebasedStrategy(self.start_time, self.end_time, transaction_currency,
                                                counter_currency, source, horizon)
         baseline_evaluation = Evaluation(baseline, transaction_currency, counter_currency, self.start_cash,
                                          self.start_crypto, self.start_time, self.end_time,
                                          self.evaluate_profit_on_last_order, verbose=False)
         evaluation = Evaluation(strategy, transaction_currency, counter_currency, self.start_cash,
                                 self.start_crypto, self.start_time, self.end_time,
-                                self.evaluate_profit_on_last_order, verbose=False)
+                                self.evaluate_profit_on_last_order, verbose=False, time_delay=self.time_delay)
         return self.get_pandas_row_dict(evaluation, baseline_evaluation)
 
     def get_pandas_row_dict(self, evaluation, baseline):

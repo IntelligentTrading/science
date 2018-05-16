@@ -3,10 +3,10 @@ from evaluation import *
 ### Various sample backtesting runs
 
 def evaluate_rsi(transaction_currency, counter_currency, start_time, end_time,
-                 start_cash, start_crypto, horizon=Horizon.any):
+                 start_cash, start_crypto, horizon=Horizon.any, time_delay=0):
     rsi_strategy = SignalSignatureStrategy(['rsi_buy_2', 'rsi_sell_2'], start_time, end_time, horizon, counter_currency, transaction_currency)
     evaluation = Evaluation(rsi_strategy, transaction_currency, counter_currency,
-                            start_cash, start_crypto, start_time, end_time, True, False)
+                            start_cash, start_crypto, start_time, end_time, True, False, time_delay)
     print(evaluation.get_report())
     return evaluation
 
@@ -39,7 +39,7 @@ def evaluate_rsi_comparatively(transaction_currency, counter_currency, start_tim
         for oversold_threshold in oversold:
             rsi_strategy = SimpleRSIStrategy(start_time, end_time, Horizon.short, counter_currency,
                                              overbought_threshold, oversold_threshold, transaction_currency)
-            baseline = BuyAndHoldStrategy(rsi_strategy)
+            baseline = BuyOnFirstSignalAndHoldStrategy(rsi_strategy)
             baseline_evaluation = Evaluation(baseline, transaction_currency, counter_currency, start_cash,
                                              start_crypto, start_time, end_time, False)
             rsi_evaluation = Evaluation(rsi_strategy, transaction_currency, counter_currency, start_cash,
@@ -65,7 +65,7 @@ def evaluate_multi(transaction_currency, counter_currency, start_time, end_time,
     sell = (sma_strategy, kumo_strategy)
 
     multi_strat = MultiSignalStrategy(buy, sell, horizon)
-    buy_and_hold = BuyAndHoldStrategy(multi_strat)
+    buy_and_hold = BuyOnFirstSignalAndHoldStrategy(multi_strat)
     evaluation = Evaluation(multi_strat, transaction_currency, counter_currency, start_cash, start_crypto,
                             start_time,
                             end_time, False, True)
