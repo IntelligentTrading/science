@@ -83,7 +83,7 @@ class Evaluation:
         try:
             return self.start_cash + \
                (self.start_crypto * get_price(
-                   self.transaction_currency,
+                   self.start_crypto_currency,
                    self.start_time,
                    self.source,
                    self.counter_currency) if self.start_crypto > 0 else 0)

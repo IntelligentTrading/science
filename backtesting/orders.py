@@ -39,8 +39,8 @@ class Order:
                 self.transaction_currency,
                 self.unit_price,
                 self.counter_currency,
-                "(delayed trading with delay={} seconds, original price = {}".format(self.time_delay, self.original_price)
-                if self.time_delay != 0 else ""
+                " -> delayed trading with delay = {} seconds, original price = {}".
+                    format(self.time_delay, self.original_price) if self.time_delay != 0 else ""
                 )
 
 
