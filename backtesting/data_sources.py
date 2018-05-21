@@ -165,6 +165,7 @@ def get_signals(signal_type, transaction_currency, start_time, end_time, counter
                               CounterCurrency[counter_currency]))
     return signals
 
+
 def get_all_signals(transaction_currency, start_time, end_time, horizon, counter_currency="BTC"):
     counter_currency_id = CounterCurrency[counter_currency].value
     horizon_id = horizon.value
@@ -177,6 +178,7 @@ def get_all_signals(transaction_currency, start_time, end_time, horizon, counter
                                  price/1E8,  price_change, timestamp, rsi_value, transaction_currency,
                               CounterCurrency[counter_currency]))
     return signals
+
 
 def get_signals_rsi(transaction_currency, start_time, end_time, rsi_overbought, rsi_oversold, counter_currency="BTC"):
     counter_currency_id = CounterCurrency[counter_currency].value
@@ -260,7 +262,7 @@ def get_prices_in_range(start_time, end_time, transaction_currency, counter_curr
                                                                                start_time,
                                                                                end_time),
                              index_col="timestamp")
-
+    connection.close()
     return price_data
 
 
