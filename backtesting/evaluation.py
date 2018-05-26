@@ -1,6 +1,6 @@
 #from comparative_evaluation import ComparativeEvaluationOneSignal
 from data_sources import *
-from strategies import *
+from orders import *
 from utils import *
 
 ordered_columns = ["strategy", "transaction_currency", "counter_currency", "start_cash", "start_crypto", "end_cash",
@@ -100,7 +100,7 @@ class Evaluation:
     def get_end_value(self):
         try:
             return self.end_cash + self.end_price * self.end_crypto
-        except NoPriceDataException:
+        except:
             return None
 
     def get_profit_value(self):
@@ -148,7 +148,7 @@ class Evaluation:
 
         for i, order in enumerate(self.orders):
             output.append(str(order))
-            if include_order_signals:
+            if include_order_signals and len(self.order_signals) == len(self.orders): # for buy & hold we don't have signals
                 output.append("   signal: {}".format(self.order_signals[i]))
 
         output.append("End time: {}".format(datetime_from_timestamp(self.end_time)))
@@ -158,7 +158,7 @@ class Evaluation:
         output.append("End cash: {0:.2f} {1}".format(self.end_cash, self.counter_currency))
         output.append("End crypto: {0:.6f} {1}".format(self.end_crypto, self.end_crypto_currency))
 
-        sign = "+" if self.get_profit_value() >= 0 else ""
+        sign = "+" if self.get_profit_value() != None and self.get_profit_value() >= 0 else ""
         output.append("Total value invested: {} {}".format(self.format_price_dependent_value(self.get_start_value()),
                                                            self.counter_currency))
         output.append(

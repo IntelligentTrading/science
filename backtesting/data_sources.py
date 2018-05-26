@@ -42,15 +42,6 @@ signal_query = """ SELECT trend, horizon, strength_value, strength_max, price, p
                     source = 0
             ORDER BY timestamp;"""
 
-all_signals_query = """ SELECT signal_signal.signal, trend, horizon, strength_value, strength_max, price, price_change, timestamp, rsi_value 
-            FROM signal_signal 
-            WHERE   transaction_currency=%s AND 
-                    counter_currency=%s AND
-                    timestamp >= %s AND
-                    timestamp <= %s AND
-                    source = 0 AND
-                    horizon = %s
-            ORDER BY timestamp;"""
 
 rsi_signal_query = """ SELECT trend, horizon, strength_value, strength_max, price, price_change, timestamp, rsi_value 
             FROM signal_signal 
@@ -65,14 +56,6 @@ rsi_signal_query = """ SELECT trend, horizon, strength_value, strength_max, pric
             ORDER BY timestamp;"""
 
 
-most_recent_price_query = """SELECT price FROM indicator_price 
-                            WHERE timestamp = 
-                                (SELECT MAX(timestamp) 
-                                FROM indicator_price 
-                                WHERE transaction_currency = "%s") 
-                            AND transaction_currency = "%s"
-                            AND source = 0
-                            AND counter_currency = %s;"""
 
 price_query = """SELECT price FROM indicator_price 
                             WHERE transaction_currency = %s
@@ -80,19 +63,11 @@ price_query = """SELECT price FROM indicator_price
                             AND source = %s
                             AND counter_currency = %s;"""
 
-timestamp_range_query = """SELECT MIN(timestamp), MAX(timestamp) FROM indicator_price WHERE counter_currency = 2 AND source = 0;"""
-
 trading_against_counter_query = """SELECT DISTINCT(transaction_currency) FROM indicator_price WHERE counter_currency = %s AND source = 0"""
 
 
 trading_against_counter_and_signal_query = """SELECT DISTINCT(transaction_currency) FROM signal_signal 
                                               WHERE counter_currency = %s AND signal_signal.signal = %s AND source = 0"""
-
-nearest_price_query = """SELECT price, timestamp FROM indicator_price WHERE transaction_currency = %s AND counter_currency = %s 
-                         AND source = %s AND timestamp <= %s ORDER BY timestamp DESC LIMIT 1;"""
-
-nearest_price_query = """SELECT price, timestamp FROM indicator_price WHERE transaction_currency = %s AND counter_currency = %s 
-                         AND source = %s AND timestamp <= %s ORDER BY timestamp DESC LIMIT 1;"""
 
 price_in_range_query_desc = """SELECT price, timestamp FROM indicator_price WHERE transaction_currency = %s AND counter_currency = %s 
                          AND source = %s AND timestamp >= %s AND timestamp <= %s ORDER BY timestamp DESC"""
@@ -166,20 +141,6 @@ def get_signals(signal_type, transaction_currency, start_time, end_time, counter
     return signals
 
 
-def get_all_signals(transaction_currency, start_time, end_time, horizon, counter_currency="BTC"):
-    counter_currency_id = CounterCurrency[counter_currency].value
-    horizon_id = horizon.value
-    connection = mysql.connector.connect(**database_config)
-    cursor = connection.cursor()
-    cursor.execute(all_signals_query, params=(transaction_currency, counter_currency_id, start_time, end_time, horizon_id))
-    signals = []
-    for (signal_type, trend, horizon, strength_value, strength_max, price, price_change, timestamp, rsi_value) in cursor:
-        signals.append(Signal(signal_type, trend, horizon, strength_value, strength_max,
-                                 price/1E8,  price_change, timestamp, rsi_value, transaction_currency,
-                              CounterCurrency[counter_currency]))
-    return signals
-
-
 def get_signals_rsi(transaction_currency, start_time, end_time, rsi_overbought, rsi_oversold, counter_currency="BTC"):
     counter_currency_id = CounterCurrency[counter_currency].value
     connection = mysql.connector.connect(**database_config)
@@ -192,14 +153,6 @@ def get_signals_rsi(transaction_currency, start_time, end_time, rsi_overbought, 
                               CounterCurrency[counter_currency]))
     return signals
 
-
-
-def get_timestamp_range(counter_currency=CounterCurrency.USDT.value):
-    connection = mysql.connector.connect(**database_config)
-    cursor = connection.cursor()
-    cursor.execute(timestamp_range_query, params=(counter_currency))
-    (start, end) = cursor.fetchone()
-    return start, end
 
 
 def get_price(currency, timestamp, source, counter_currency="BTC", normalize=True):

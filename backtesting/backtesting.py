@@ -1,8 +1,9 @@
 from evaluation import *
+from strategies import *
 
 ### Various sample backtesting runs
 
-def evaluate_rsi(transaction_currency, counter_currency, start_time, end_time,
+def evaluate_rsi_signature(transaction_currency, counter_currency, start_time, end_time,
                  start_cash, start_crypto, horizon=Horizon.any, time_delay=0):
     rsi_strategy = SignalSignatureStrategy(['rsi_buy_2', 'rsi_sell_2'], start_time, end_time, horizon, counter_currency, transaction_currency)
     evaluation = Evaluation(rsi_strategy, transaction_currency, counter_currency,
@@ -10,6 +11,14 @@ def evaluate_rsi(transaction_currency, counter_currency, start_time, end_time,
     print(evaluation.get_report())
     return evaluation
 
+def evaluate_rsi(transaction_currency, counter_currency, start_time, end_time,
+                 start_cash, start_crypto, overbought_threshold, oversold_threshold, horizon=Horizon.any, signal_type="RSI",
+                 time_delay=0):
+    rsi_strategy = SimpleRSIStrategy(start_time, end_time, horizon, counter_currency, overbought_threshold,
+                                     oversold_threshold, transaction_currency, signal_type)
+    evaluation = rsi_strategy.evaluate(start_cash, start_crypto, start_time, end_time)
+    print(evaluation.get_report())
+    return evaluation
 
 def evaluate_rsi_any_currency(counter_currency, start_time, end_time,
                  start_cash, start_crypto, overbought_threshold, oversold_threshold):
@@ -78,52 +87,82 @@ def evaluate_multi(transaction_currency, counter_currency, start_time, end_time,
 
 
 def evaluate_rsi_cumulative_compare(start_time, end_time, transaction_currency, counter_currency, horizon=Horizon.any):
-    start_cash = 100000
+    start_cash = 1
     start_crypto = 0
+    overbought_threshold = 75
+    oversold_threshold = 25
 
-    rsi = evaluate_rsi(transaction_currency, counter_currency, start_time, end_time,
-                     start_cash, start_crypto, 75, 30, horizon)
+    rsi = SimpleRSIStrategy(start_time, end_time, horizon, counter_currency, overbought_threshold,
+                                     oversold_threshold, transaction_currency, "RSI")
+    evaluation_rsi = rsi.evaluate(start_cash, start_crypto, start_time, end_time)
 
-    rsi_cumulative = evaluate_trend_based(SignalType.RSI_Cumulative, transaction_currency, counter_currency,
-                                          start_time, end_time, start_cash, start_crypto, horizon)
+    rsi_cumulative = SimpleRSIStrategy(start_time, end_time, horizon, counter_currency, overbought_threshold,
+                                     oversold_threshold, transaction_currency, "RSI_Cumulative")
+    evaluation_rsi_cumulative = rsi_cumulative.evaluate(start_cash, start_crypto, start_time, end_time)
 
     f = open("rsi.txt", "w")
-    f.write(rsi.get_report(True))
+    f.write(evaluation_rsi.get_report(True))
     f.close()
 
     f = open("rsi_cumulative.txt", "w")
-    f.write(rsi_cumulative.get_report(True))
+    f.write(evaluation_rsi_cumulative.get_report(True))
     f.close()
 
-    print("cumulative: {}, rsi: {}".format(rsi_cumulative.get_profit_percent(), rsi.get_profit_percent()))
-    return rsi_cumulative.get_profit_percent(), rsi.get_profit_percent()
+    return evaluation_rsi_cumulative, evaluation_rsi
 
 
-def find_num_cumulative_outperforms(start_time, end_time, counter_currency):
-    transaction_currencies = get_currencies_for_signal(counter_currency, "RSI_Cumulative")
+def find_num_cumulative_outperforms(start_time, end_time, currency_pairs):
     horizons = (Horizon.short, Horizon.medium, Horizon.long)
     total_rsi_cumulative_better = 0
     total_rsi_cumulative_eq = 0
-    total = 0
-    for transaction_currency in transaction_currencies:
+    total_evaluated_pairs = 0
+    sprofit = 0
+    rsi_profitable = 0
+    rsi_cumulative_profitable = 0
+    total_rsi = 0
+    total_cumulative = 0
+    for transaction_currency, counter_currency in currency_pairs:
         for horizon in horizons:
             try:
-                cumulative, rsi = evaluate_rsi_cumulative_compare(start_time, end_time, transaction_currency, counter_currency, horizon)
-                if cumulative == 0 and rsi == 0:
+                evaluation_cumulative, evaluation_rsi = evaluate_rsi_cumulative_compare(start_time, end_time,
+                                                                  transaction_currency,
+                                                                  counter_currency,
+                                                                  horizon)
+
+                profit_rsi_cumulative = evaluation_cumulative.get_profit_percent()
+                profit_rsi = evaluation_rsi.get_profit_percent()
+
+                if evaluation_cumulative.get_num_trades() == 0 and evaluation_rsi.get_num_trades() == 0:
                     continue
-                if cumulative > rsi:
+                if profit_rsi_cumulative is None or profit_rsi is None:
+                    continue
+                if profit_rsi_cumulative > profit_rsi:
                     total_rsi_cumulative_better += 1
-                elif cumulative == rsi:
+                elif profit_rsi_cumulative == profit_rsi:
                     total_rsi_cumulative_eq += 1
 
-                total += 1
+                if profit_rsi_cumulative > 0:
+                    rsi_cumulative_profitable += 1
+                if profit_rsi > 0:
+                    rsi_profitable += 1
 
+                if evaluation_rsi.num_trades > 0:
+                    total_rsi += 1
+                if evaluation_cumulative.num_trades > 0:
+                    total_cumulative += 1
+
+                total_evaluated_pairs += 1
             except(NoPriceDataException):
-                print("Error in price")
-    print (total_rsi_cumulative_better)
-    print("Total: {}".format(total))
-    print("Outperforms: {}, equal: {}".format(total_rsi_cumulative_better/total, total_rsi_cumulative_eq/total))
+                print("Error obtaining price, skipping...")
 
+    print (total_rsi_cumulative_better)
+    print("Total evaluated pairs: {}".format(total_evaluated_pairs))
+    print("RSI cumulative outperforms RSI: {0:0.2f}, equal: {1:0.2f}".format(
+        total_rsi_cumulative_better / total_evaluated_pairs,
+        total_rsi_cumulative_eq / total_evaluated_pairs))
+    print("Sprofit: {}".format(sprofit))
+    print("RSI was profitable for {0:0.2f}% of pairs".format(rsi_profitable / total_rsi * 100))
+    print("RSI cumulative was profitable for {0:0.2f}% of pairs".format(rsi_cumulative_profitable / total_cumulative * 100))
 
 def evaluate_multi_any_currency(counter_currency, start_time, end_time,
                  start_cash, overbought_threshold, oversold_threshold):

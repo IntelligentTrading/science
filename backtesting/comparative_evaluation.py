@@ -1,7 +1,5 @@
 import itertools
 
-import pandas as pd
-
 from data_sources import *
 from evaluation import ordered_columns_condensed, Evaluation
 from signals import SignalType, ALL_SIGNALS
@@ -81,7 +79,7 @@ class StrategyEvaluationSetBuilder:
 
 class ComparativeEvaluation:
 
-    def __init__(self, strategy_set, start_cash, start_crypto, start_time, end_time, output_file, time_delay):
+    def __init__(self, strategy_set, start_cash, start_crypto, start_time, end_time, output_file, time_delay=0):
 
         self.strategy_set = strategy_set
         self.start_time = start_time
@@ -105,6 +103,8 @@ class ComparativeEvaluation:
             evaluation_dicts.append(dict)
 
         output = pd.DataFrame(evaluation_dicts)
+        if len(output) == 0:
+            return
         #output = output[output.num_trades != 0]  # remove empty trades
         output = output.sort_values(by=['profit_percent'], ascending=False)
         output.reset_index(inplace=True, drop=True)
