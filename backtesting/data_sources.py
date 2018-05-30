@@ -6,6 +6,8 @@ from config import database_config
 from signals import Signal
 import pandas as pd
 from signals import SignalType
+from config import output_log
+
 
 class NoPriceDataException(Exception):
     pass
@@ -75,6 +77,31 @@ price_in_range_query_desc = """SELECT price, timestamp FROM indicator_price WHER
 price_in_range_query_asc = """SELECT price, timestamp FROM indicator_price WHERE transaction_currency = %s AND counter_currency = %s 
                          AND source = %s AND timestamp >= %s AND timestamp <= %s ORDER BY timestamp ASC"""
 
+resampled_price_range_query = """SELECT timestamp, close_price
+                                 FROM indicator_priceresampl 
+                                 WHERE transaction_currency = %s 
+                                 AND counter_currency = %s 
+                                 AND source = %s 
+                                 AND timestamp >= %s AND timestamp <= %s
+                                 AND resample_period = %s
+                                 AND close_price is not null"""
+
+
+def get_resampled_prices_in_range(start_time, end_time, transaction_currency, counter_currency, resample_period, source=0,
+                                  normalize=True):
+    counter_currency_id = CounterCurrency[counter_currency].value
+    connection = mysql.connector.connect(**database_config, pool_name="my_pool", pool_size=32)
+    price_data = pd.read_sql(resampled_price_range_query, con=connection, params=(transaction_currency,
+                                                                               counter_currency_id,
+                                                                               source,
+                                                                               start_time,
+                                                                               end_time,
+                                                                               resample_period),
+                             index_col="timestamp")
+    if normalize:
+        price_data.loc[:, 'close_price'] /= 1E8
+    connection.close()
+    return price_data
 
 def get_filtered_signals(signal_type=None, transaction_currency=None, start_time=None, end_time=None, horizon=Horizon.any,
                          counter_currency=None, strength=Strength.any, source=None):
@@ -192,17 +219,16 @@ def get_price_nearest_to_timestamp(currency, timestamp, source, counter_currency
     connection.close()
 
     if len(history) == 0:
-        print("Error: no historical price data in {} minutes before timestamp {}...".format(max_delta_seconds_past/60, timestamp))
+        output_log("Error: no historical price data in {} minutes before timestamp {}...".format(max_delta_seconds_past/60, timestamp))
         if len(future) == 0:
-            print("No future data found.")
+            output_log("No future data found.")
             raise NoPriceDataException()
         else:
-            print("Returning future price...")
+            output_log("Returning future price...")
 
             return future[0][0]
     else:
-
-        print("Returning historical price data for timestamp {} (difference of {} minutes)"
+        output_log("Returning historical price data for timestamp {} (difference of {} minutes)"
               .format(timestamp,(timestamp - history[0][1])/60))
         return history[0][0]
 

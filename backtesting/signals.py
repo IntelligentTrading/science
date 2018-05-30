@@ -61,4 +61,7 @@ ALL_SIGNALS = {
 
     'ann_simple_bull': SignalType('ANN_Simple', 1, 3),  # price crosses sma200 up
     'ann_simple_bear': SignalType('ANN_Simple', -1, 3),
+
+    'genetic_up': SignalType('Genetic', 1, 3),
+    'genetic_down': SignalType('Genetic', -1, 3),
 }
