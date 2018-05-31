@@ -1,21 +1,19 @@
-
 from deap import base
 from deap import gp
 from deap import algorithms
 from deap import creator
 from deap import tools
-
 import operator
 import random
 import types
 import talib
-import numpy as np
 from backtesting.signals import Signal
 from backtesting.strategies import Strategy, Horizon, Strength, BuyAndHoldTimebasedStrategy
 from data_sources import get_resampled_prices_in_range
 from chart_plotter import *
 import pandas as pd
 
+SUPER_VERBOSE = False
 
 transaction_currency = "OMG"
 counter_currency = "BTC"
@@ -28,19 +26,32 @@ start_crypto = 0
 source = 0
 history_size = 100
 
+class Data:
+    def __init__(self, start_time, end_time, transaction_currency, counter_currency, resample_period, horizon,
+                 start_cash, start_crypto, source):
+        self.start_time = start_time
+        self.end_time = end_time
+        self.transaction_currency = transaction_currency
+        self.counter_currency = counter_currency
+        self.resample_period = resample_period
+        self.horizon = horizon
+        self.start_cash = start_cash
+        self.start_crypto = start_crypto
+        self.source = source
 
-price_data = get_resampled_prices_in_range(start_time, end_time, transaction_currency, counter_currency, resample_period)
-rsi_data = talib.RSI(np.array(price_data.close_price, dtype=float), timeperiod=14)
-sma_data = talib.SMA(np.array(price_data.close_price, dtype=float), timeperiod=50)
+        self.price_data = get_resampled_prices_in_range(start_time, end_time, transaction_currency, counter_currency, resample_period)
+        self.rsi_data = talib.RSI(np.array(self.price_data.close_price, dtype=float), timeperiod=14)
+        self.sma_data = talib.SMA(np.array(self.price_data.close_price, dtype=float), timeperiod=50)
+        self.ema_data = talib.EMA(np.array(self.price_data.close_price, dtype=float), timeperiod=50)
+        self.prices = self.price_data.as_matrix(columns=["close_price"])
+        self.timestamps = pd.to_datetime(self.price_data.index.values, unit='s')
+        assert len(self.prices) == len(self.timestamps)
 
-prices = price_data.as_matrix(columns=["close_price"])
-values = price_data.index.values
-timestamps = pd.to_datetime(price_data.index.values, unit='s')
-#timestamps = np.array(price_data.index.to_datetime(unit='s').values)
-assert len(prices) == len(timestamps)
-#draw_chart(timestamps, prices)
 
-start_bah =int(price_data.iloc[history_size].name)
+data = Data(start_time, end_time, transaction_currency, counter_currency, resample_period, horizon, start_cash,
+            start_crypto, source)
+
+start_bah = int(data.price_data.iloc[history_size].name)
 bah = BuyAndHoldTimebasedStrategy(start_bah, end_time, transaction_currency, counter_currency, source)
 print("Buy and hold baseline: {0:0.2f}%".format(bah.evaluate(start_cash, start_crypto,
                                                              start_bah, end_time,
@@ -48,14 +59,16 @@ print("Buy and hold baseline: {0:0.2f}%".format(bah.evaluate(start_cash, start_c
 
 
 class GeneticTradingStrategy(Strategy):
-    def __init__(self, tree):
+    def __init__(self, tree, data):
+        self.data = data
+        self.horizon = data.horizon
         self.horizon = horizon
-        self.transaction_currency = transaction_currency
-        self.counter_currency = counter_currency
+        self.transaction_currency = data.transaction_currency
+        self.counter_currency = data.counter_currency
         self.strength = Strength.any
-        self.source = 0
-        self.start_time = start_time
-        self.end_time = end_time
+        self.source = data.source
+        self.start_time = data.start_time
+        self.end_time = data.end_time
         self.tree = tree
         self.build_from_gp_tree(tree)
 
@@ -67,7 +80,7 @@ class GeneticTradingStrategy(Strategy):
         func = toolbox.compile(expr=tree)
 
         outcomes = []
-        for i, row in enumerate(price_data.itertuples()):
+        for i, row in enumerate(data.price_data.itertuples()):
             price = row.close_price
             timestamp = row.Index
             if i < history_size:
@@ -102,19 +115,24 @@ def if_then_else(input, output1, output2):
 
 def rsi(input):
     timestamp = input[0]
-    timestamp_index = np.where(price_data.index == timestamp)[0]
-    return rsi_data[timestamp_index]
+    timestamp_index = np.where(data.price_data.index == timestamp)[0]
+    return data.rsi_data[timestamp_index]
 
 
 def sma(input):
     timestamp = input[0]
-    timestamp_index = np.where(price_data.index == timestamp)[0]
-    return sma_data[timestamp_index]
+    timestamp_index = np.where(data.price_data.index == timestamp)[0]
+    return data.sma_data[timestamp_index]
 
+
+def ema(input):
+    timestamp = input[0]
+    timestamp_index = np.where(data.price_data.index == timestamp)[0]
+    return data.ema_data[timestamp_index]
 
 def price(input):
     timestamp = input[0]
-    return price_data.loc[timestamp,"close_price"]
+    return data.price_data.loc[timestamp,"close_price"]
 
 
 def buy():
@@ -134,40 +152,23 @@ def identity(x):
 
 
 def evaluate_individual(individual):
-    strategy = GeneticTradingStrategy(individual)
+    strategy = GeneticTradingStrategy(individual, data)
     evaluation = strategy.evaluate(start_cash, start_crypto, start_time, end_time, False, False)
     if evaluation.get_num_trades() > 1:
-        if False:
+        if SUPER_VERBOSE:
             orders, _ = strategy.get_orders(start_cash, start_crypto)
-            draw_chart(timestamps, prices, orders)
+            draw_price_chart(data.timestamps, data.prices, orders)
             print(str(individual))
             print(evaluation.get_report())
+            draw_tree(individual)
 
-
-            import matplotlib.pyplot as plt
-            import networkx as nx
-            nodes, edges, labels = gp.graph(individual)
-            g = nx.Graph()
-            g.add_nodes_from(nodes)
-            g.add_edges_from(edges)
-
-            pos = nx.spring_layout(g)
-            nx.draw(g, pos, node_size=1500, node_color='yellow', font_size=8, font_weight='bold')
-            nx.draw_networkx_labels(g, pos, labels)
-
-            plt.tight_layout()
-            plt.show()
-
-
-    return evaluation.get_profit_percent(),
+    return evaluation.get_profit_percent()+(250-len(individual))/20,
 
 
 def combined_mutation(individual, expr, pset):
     if random.random() > 0:
-        #print("Insert")
         return gp.mutInsert(individual, pset)
     else:
-        #print("Ephemeral")
         return gp.mutEphemeral(individual, "one")
 
 
@@ -179,6 +180,7 @@ pset.addPrimitive(operator.gt, [float, float], bool)
 pset.addPrimitive(if_then_else, [bool, types.FunctionType, types.FunctionType], types.FunctionType)
 pset.addPrimitive(rsi, [list], float)
 pset.addPrimitive(sma, [list], float)
+pset.addPrimitive(ema, [list], float)
 pset.addPrimitive(price, [list], float)
 pset.addTerminal(False, bool)
 pset.addTerminal(True, bool)
@@ -208,7 +210,7 @@ TREE_DEPTH = 5
 #evalSymbReg(tree)
 
 
-creator.create("FitnessMax", base.Fitness, weights=(1.0,))
+creator.create("FitnessMax", base.Fitness, weights=(1.0,-1.0))
 creator.create("Individual", gp.PrimitiveTree, fitness=creator.FitnessMax)
 
 toolbox = base.Toolbox()
@@ -227,8 +229,9 @@ toolbox.register("mutate", combined_mutation, expr=toolbox.expr_mut, pset=pset)
 toolbox.decorate("mate", gp.staticLimit(key=operator.attrgetter("height"), max_value=TREE_DEPTH)) #17))
 toolbox.decorate("mutate", gp.staticLimit(key=operator.attrgetter("height"), max_value=TREE_DEPTH))#17))
 
-
-def main():
+#def main():
+if __name__ == "__main__":
+    #global data
     random.seed(318)
 
     pop = toolbox.population(n=500)#0)
@@ -242,18 +245,30 @@ def main():
     mstats.register("min", np.min)
     mstats.register("max", np.max)
 
-    pop, log = algorithms.eaSimple(pop, toolbox, 1, 0.3, 4, stats=mstats,
+    pop, log = algorithms.eaSimple(pop, toolbox, 1, 0.3, 1, stats=mstats,
                                        halloffame=hof, verbose=True)
     # print log
     print(hof[0])
 
     best = hof[0]
-    strat = GeneticTradingStrategy(best)
+    strat = GeneticTradingStrategy(best, data)
     orders, _ = strat.get_orders(start_cash, start_crypto)
-    draw_chart(timestamps, prices, orders)
-
-    return pop, log, hof
+    draw_price_chart(data.timestamps, data.prices, orders)
 
 
-if __name__ == "__main__":
-    main()
+    end = data.start_time
+    start = end - 60 * 60 * 24 * 30
+
+    data = Data(start, end, transaction_currency, counter_currency, resample_period, horizon,
+                start_cash, start_crypto, source)
+    strat = GeneticTradingStrategy(best, data)
+
+
+    evaluation = strat.evaluate(start_cash, start_crypto, start_time, end_time, False, True)
+    orders, _ = strat.get_orders(start_cash, start_crypto)
+    draw_price_chart(data.timestamps, data.prices, orders)
+    draw_tree(best)
+
+#if __name__ == "__main__":
+#    main()
+
