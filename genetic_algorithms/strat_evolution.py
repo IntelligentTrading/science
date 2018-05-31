@@ -11,11 +11,13 @@ import types
 import talib
 import numpy as np
 from backtesting.signals import Signal
-from backtesting.strategies import Strategy, Horizon, Strength
+from backtesting.strategies import Strategy, Horizon, Strength, BuyAndHoldTimebasedStrategy
 from data_sources import get_resampled_prices_in_range
+from chart_plotter import *
+import pandas as pd
 
 
-transaction_currency = "ETH"
+transaction_currency = "OMG"
 counter_currency = "BTC"
 end_time = 1526637600
 start_time = end_time - 60 * 60 * 24 * 30
@@ -23,11 +25,27 @@ horizon = Horizon.short
 resample_period = 60
 start_cash = 1
 start_crypto = 0
+source = 0
+history_size = 100
+
 
 price_data = get_resampled_prices_in_range(start_time, end_time, transaction_currency, counter_currency, resample_period)
-#price_data = np.random.random(1000)
 rsi_data = talib.RSI(np.array(price_data.close_price, dtype=float), timeperiod=14)
 sma_data = talib.SMA(np.array(price_data.close_price, dtype=float), timeperiod=50)
+
+prices = price_data.as_matrix(columns=["close_price"])
+values = price_data.index.values
+timestamps = pd.to_datetime(price_data.index.values, unit='s')
+#timestamps = np.array(price_data.index.to_datetime(unit='s').values)
+assert len(prices) == len(timestamps)
+#draw_chart(timestamps, prices)
+
+start_bah =int(price_data.iloc[history_size].name)
+bah = BuyAndHoldTimebasedStrategy(start_bah, end_time, transaction_currency, counter_currency, source)
+print("Buy and hold baseline: {0:0.2f}%".format(bah.evaluate(start_cash, start_crypto,
+                                                             start_bah, end_time,
+                                                             False, False).get_profit_percent()))
+
 
 class GeneticTradingStrategy(Strategy):
     def __init__(self, tree):
@@ -47,7 +65,7 @@ class GeneticTradingStrategy(Strategy):
     def build_from_gp_tree(self, tree):
         self.signals = []
         func = toolbox.compile(expr=tree)
-        history_size = 100
+
         outcomes = []
         for i, row in enumerate(price_data.itertuples()):
             price = row.close_price
@@ -119,8 +137,27 @@ def evaluate_individual(individual):
     strategy = GeneticTradingStrategy(individual)
     evaluation = strategy.evaluate(start_cash, start_crypto, start_time, end_time, False, False)
     if evaluation.get_num_trades() > 1:
-        print(str(individual))
-        print(evaluation.get_report())
+        if False:
+            orders, _ = strategy.get_orders(start_cash, start_crypto)
+            draw_chart(timestamps, prices, orders)
+            print(str(individual))
+            print(evaluation.get_report())
+
+
+            import matplotlib.pyplot as plt
+            import networkx as nx
+            nodes, edges, labels = gp.graph(individual)
+            g = nx.Graph()
+            g.add_nodes_from(nodes)
+            g.add_edges_from(edges)
+
+            pos = nx.spring_layout(g)
+            nx.draw(g, pos, node_size=1500, node_color='yellow', font_size=8, font_weight='bold')
+            nx.draw_networkx_labels(g, pos, labels)
+
+            plt.tight_layout()
+            plt.show()
+
 
     return evaluation.get_profit_percent(),
 
@@ -154,7 +191,7 @@ pset.addPrimitive(identity, [float], float)
 pset.addEphemeralConstant("rsi_overbought_threshold", lambda: random.uniform(70, 100), float)
 pset.addEphemeralConstant("rsi_oversold_threshold", lambda: random.uniform(0, 30), float)
 
-TREE_DEPTH = 7
+TREE_DEPTH = 5
 
 #expr = gp.genHalfAndHalf(pset, min_=1, max_=5)
 #tree = gp.PrimitiveTree(expr)
@@ -194,7 +231,7 @@ toolbox.decorate("mutate", gp.staticLimit(key=operator.attrgetter("height"), max
 def main():
     random.seed(318)
 
-    pop = toolbox.population(n=50)#0)
+    pop = toolbox.population(n=500)#0)
     hof = tools.HallOfFame(1)
 
     stats_fit = tools.Statistics(lambda ind: ind.fitness.values)
@@ -205,10 +242,15 @@ def main():
     mstats.register("min", np.min)
     mstats.register("max", np.max)
 
-    pop, log = algorithms.eaSimple(pop, toolbox, 1, 0.3, 80, stats=mstats,
+    pop, log = algorithms.eaSimple(pop, toolbox, 1, 0.3, 4, stats=mstats,
                                        halloffame=hof, verbose=True)
     # print log
     print(hof[0])
+
+    best = hof[0]
+    strat = GeneticTradingStrategy(best)
+    orders, _ = strat.get_orders(start_cash, start_crypto)
+    draw_chart(timestamps, prices, orders)
 
     return pop, log, hof
 
