@@ -228,7 +228,7 @@ toolbox.register("mutate", combined_mutation, expr=toolbox.expr_mut, pset=pset)
 toolbox.decorate("mate", gp.staticLimit(key=operator.attrgetter("height"), max_value=TREE_DEPTH)) #17))
 toolbox.decorate("mutate", gp.staticLimit(key=operator.attrgetter("height"), max_value=TREE_DEPTH))#17))
 
-#def main():
+
 if __name__ == "__main__":
     #global data
     random.seed(318) #318 generira dobre
@@ -269,6 +269,5 @@ if __name__ == "__main__":
     draw_price_chart(data.timestamps, data.prices, orders)
     draw_tree(best)
 
-#if __name__ == "__main__":
-#    main()
+
 
