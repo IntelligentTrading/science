@@ -220,7 +220,7 @@ class BuyOnFirstSignalAndHoldStrategy(Strategy):
 
 
 class BuyAndHoldTimebasedStrategy(Strategy):
-    def __init__(self, start_time, end_time, transaction_currency, counter_currency, source, horizon, transaction_cost_percent=0.0025):
+    def __init__(self, start_time, end_time, transaction_currency, counter_currency, source, horizon=Horizon.any, transaction_cost_percent=0.0025):
         self.start_time = start_time
         self.end_time = end_time
         self.transaction_currency = transaction_currency

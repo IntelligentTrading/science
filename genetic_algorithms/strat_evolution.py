@@ -105,12 +105,11 @@ class GeneticTradingStrategy(Strategy):
         return("Strategy: evolved using genetic programming\nRule set: {}".format(str(self.tree)))
 
 
-
 def if_then_else(input, output1, output2):
     try:
         return output1 if input else output2
     except:
-        return output1  # TODO fix this
+        return output1
 
 
 def rsi(input):
@@ -161,12 +160,12 @@ def evaluate_individual(individual):
             print(str(individual))
             print(evaluation.get_report())
             draw_tree(individual)
-
-    return evaluation.get_profit_percent()+(250-len(individual))/20,
+    max_len = 3**TREE_DEPTH
+    return evaluation.get_profit_percent()+(max_len-len(individual))/float(max_len)*20,#10, #20,
 
 
 def combined_mutation(individual, expr, pset):
-    if random.random() > 0:
+    if random.random() > 0.5:
         return gp.mutInsert(individual, pset)
     else:
         return gp.mutEphemeral(individual, "one")
@@ -210,7 +209,7 @@ TREE_DEPTH = 5
 #evalSymbReg(tree)
 
 
-creator.create("FitnessMax", base.Fitness, weights=(1.0,-1.0))
+creator.create("FitnessMax", base.Fitness, weights=(1.0,))
 creator.create("Individual", gp.PrimitiveTree, fitness=creator.FitnessMax)
 
 toolbox = base.Toolbox()
@@ -232,7 +231,8 @@ toolbox.decorate("mutate", gp.staticLimit(key=operator.attrgetter("height"), max
 #def main():
 if __name__ == "__main__":
     #global data
-    random.seed(318)
+    random.seed(318) #318 generira dobre
+    #random.seed(0)
 
     pop = toolbox.population(n=500)#0)
     hof = tools.HallOfFame(1)
@@ -245,7 +245,7 @@ if __name__ == "__main__":
     mstats.register("min", np.min)
     mstats.register("max", np.max)
 
-    pop, log = algorithms.eaSimple(pop, toolbox, 1, 0.3, 1, stats=mstats,
+    pop, log = algorithms.eaSimple(pop, toolbox, 1, 0.3, 50, stats=mstats,
                                        halloffame=hof, verbose=True)
     # print log
     print(hof[0])

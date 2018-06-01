@@ -6,6 +6,9 @@ class OrderType(Enum):
     BUY = "BUY"
     SELL = "SELL"
 
+    def __eq__(self, other):
+        return self.value == other.value
+
 
 class Order:
     def __init__(self, order_type, transaction_currency, counter_currency, timestamp, value, unit_price,
