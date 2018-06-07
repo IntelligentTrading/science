@@ -1,13 +1,15 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
-from backtesting.orders import Order, OrderType
+from backtesting.orders import OrderType
 import pandas as pd
 import networkx as nx
 from deap import gp
 
+
 def price(x):
     return '$%1.2f' % x
+
 
 def plot_orders(ax, orders):
     for order in orders:
@@ -19,6 +21,12 @@ def plot_orders(ax, orders):
         price = order.unit_price
         circle = plt.Circle((timestamp, price), 0.02, color=color)
         ax.add_artist(circle)
+
+
+def draw_chart_from_dataframe(df, data_column_name):
+    timestamps = pd.to_datetime(df.index.values, unit='s')
+    data = df.as_matrix(columns=[data_column_name])
+    draw_price_chart(timestamps, data, None)
 
 
 def draw_price_chart(timestamps, prices, orders):
@@ -36,7 +44,9 @@ def draw_price_chart(timestamps, prices, orders):
     #circle1 = plt.Circle((timestamps[100], prices[100]), 0.02, color='r')
     #ax.add_artist(circle1)
 
-    plot_orders(ax, orders)
+    if orders != None:
+        plot_orders(ax, orders)
+
 
 
     # format the ticks
@@ -64,6 +74,7 @@ def draw_price_chart(timestamps, prices, orders):
     fig.autofmt_xdate()
 
     plt.show()
+
 
 def draw_tree(individual):
     nodes, edges, labels = gp.graph(individual)

@@ -1,5 +1,4 @@
 from deap import base
-from deap import gp
 from deap import algorithms
 from deap import creator
 from deap import tools
@@ -174,8 +173,8 @@ def combined_mutation(individual, expr, pset):
 pset = gp.PrimitiveSetTyped("main", [list], types.FunctionType)
 pset.addPrimitive(operator.lt, [float, float], bool)
 pset.addPrimitive(operator.gt, [float, float], bool)
-#pset.addPrimitive(operator.or_, [bool, bool], bool)
-#pset.addPrimitive(operator.and_, [bool, bool], bool)
+pset.addPrimitive(operator.or_, [bool, bool], bool)
+pset.addPrimitive(operator.and_, [bool, bool], bool)
 pset.addPrimitive(if_then_else, [bool, types.FunctionType, types.FunctionType], types.FunctionType)
 pset.addPrimitive(rsi, [list], float)
 pset.addPrimitive(sma, [list], float)
@@ -230,11 +229,9 @@ toolbox.decorate("mutate", gp.staticLimit(key=operator.attrgetter("height"), max
 
 
 if __name__ == "__main__":
-    #global data
-    random.seed(318) #318 generira dobre
-    #random.seed(0)
+    random.seed(318)
 
-    pop = toolbox.population(n=500)#0)
+    pop = toolbox.population(n=500)
     hof = tools.HallOfFame(1)
 
     stats_fit = tools.Statistics(lambda ind: ind.fitness.values)
@@ -247,7 +244,6 @@ if __name__ == "__main__":
 
     pop, log = algorithms.eaSimple(pop, toolbox, 1, 0.3, 50, stats=mstats,
                                        halloffame=hof, verbose=True)
-    # print log
     print(hof[0])
 
     best = hof[0]
@@ -255,14 +251,12 @@ if __name__ == "__main__":
     orders, _ = strat.get_orders(start_cash, start_crypto)
     draw_price_chart(data.timestamps, data.prices, orders)
 
-
     end = data.start_time
     start = end - 60 * 60 * 24 * 30
 
     data = Data(start, end, transaction_currency, counter_currency, resample_period, horizon,
                 start_cash, start_crypto, source)
     strat = GeneticTradingStrategy(best, data)
-
 
     evaluation = strat.evaluate(start_cash, start_crypto, start_time, end_time, False, True)
     orders, _ = strat.get_orders(start_cash, start_crypto)

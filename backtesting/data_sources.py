@@ -77,6 +77,9 @@ price_in_range_query_desc = """SELECT price, timestamp FROM indicator_price WHER
 price_in_range_query_asc = """SELECT price, timestamp FROM indicator_price WHERE transaction_currency = %s AND counter_currency = %s 
                          AND source = %s AND timestamp >= %s AND timestamp <= %s ORDER BY timestamp ASC"""
 
+volume_in_range_query_asc = """SELECT volume, timestamp FROM indicator_volume WHERE transaction_currency = %s AND counter_currency = %s 
+                         AND source = %s AND timestamp >= %s AND timestamp <= %s ORDER BY timestamp ASC"""
+
 resampled_price_range_query = """SELECT timestamp, close_price
                                  FROM indicator_priceresampl 
                                  WHERE transaction_currency = %s 
@@ -232,6 +235,7 @@ def get_price_nearest_to_timestamp(currency, timestamp, source, counter_currency
               .format(timestamp,(timestamp - history[0][1])/60))
         return history[0][0]
 
+
 def get_prices_in_range(start_time, end_time, transaction_currency, counter_currency, source):
     counter_currency_id = CounterCurrency[counter_currency].value
     connection = mysql.connector.connect(**database_config, pool_name="my_pool", pool_size=32)
@@ -240,6 +244,19 @@ def get_prices_in_range(start_time, end_time, transaction_currency, counter_curr
                                                                                source,
                                                                                start_time,
                                                                                end_time),
+                             index_col="timestamp")
+    connection.close()
+    return price_data
+
+
+def get_volumes_in_range(start_time, end_time, transaction_currency, counter_currency, source):
+    counter_currency_id = CounterCurrency[counter_currency].value
+    connection = mysql.connector.connect(**database_config, pool_name="my_pool", pool_size=32)
+    price_data = pd.read_sql(volume_in_range_query_asc, con=connection, params=(transaction_currency,
+                                                                                counter_currency_id,
+                                                                                source,
+                                                                                start_time,
+                                                                                end_time),
                              index_col="timestamp")
     connection.close()
     return price_data

@@ -14,7 +14,7 @@ def best_performing_signals_of_the_week():
     # for debugging
     # currency_pairs = [("EXP","BTC"),]
 
-    end_time = 1527292800
+    end_time = 1527984000
     start_time = end_time - 60*60*24*7
 
     strategies = StrategyEvaluationSetBuilder.build_from_signal_set(
@@ -29,7 +29,7 @@ def best_performing_signals_of_the_week():
     ComparativeEvaluation(strategy_set=strategies,
                           start_cash=1, start_crypto=0,
                           start_time=start_time, end_time=end_time,
-                          output_file="best_performing_2018_05_27.xlsx"
+                          output_file="best_performing_2018_06_03_.xlsx"
                           )
 
 
