@@ -10,7 +10,7 @@ from signals import SignalType
 
 class Strategy:
     def __init__(self, start_time, end_time, horizon, counter_currency,
-                 transaction_currency=None, strength=Strength.any, source=0, signal_type = None):
+                 transaction_currency=None, strength=Strength.any, source=0, signal_type=None):
         self.signals = get_filtered_signals(start_time=start_time, end_time=end_time, counter_currency=counter_currency,
                                             horizon=horizon, transaction_currency=transaction_currency, strength=strength,
                                             source=source, signal_type=signal_type)
@@ -193,6 +193,9 @@ class SimpleTrendBasedStrategy(Strategy):
         return "Trend-based strategy, signal: {}, strength: {}, horizon: {}".format(self.signal_type,
                                                                                     self.strength.value,
                                                                                     self.horizon)
+
+    def belongs_to_this_strategy(self, signal):
+        return signal.signal_type == self.signal_type
 
 
 class BuyOnFirstSignalAndHoldStrategy(Strategy):
