@@ -64,4 +64,11 @@ ALL_SIGNALS = {
 
     'genetic_up': SignalType('Genetic', 1, 3),
     'genetic_down': SignalType('Genetic', -1, 3),
+
+    'ema_bull_1' : SignalType('EMA', 1, 1),  # price crosses sma50 up
+    'ema_bear_1' : SignalType('EMA', -1, 1),
+    'ema_bull_2' : SignalType('EMA', 1, 2),   # price crosses sma200 up
+    'ema_bear_2' : SignalType('EMA', -1, 2),
+    'ema_bull_3' : SignalType('EMA', 1, 3),    # sma50 crosses sma200 up
+    'ema_bear_3' : SignalType('EMA', -1, 3),
 }

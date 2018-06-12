@@ -3,6 +3,7 @@ from backtesting import find_num_cumulative_outperforms
 from strategies import RandomTradingStrategy
 import numpy as np
 
+
 def best_performing_signals_of_the_week():
     # for John - best performing signals of the week
     counter_currency = "BTC"
@@ -12,25 +13,28 @@ def best_performing_signals_of_the_week():
         currency_pairs.append((transaction_currency, counter_currency))
 
     # for debugging
-    # currency_pairs = [("EXP","BTC"),]
+    #currency_pairs = [("BTC","USDT"),]
 
-    end_time = 1527984000
-    start_time = end_time - 60*60*24*7
+    end_time = 1528588800
+    start_time = end_time - 60*60*24*30*2
 
     strategies = StrategyEvaluationSetBuilder.build_from_signal_set(
-        buy_signals=['rsi_buy_3', 'rsi_buy_2', 'rsi_cumulat_buy_2', 'rsi_cumulat_buy_3'],
-        sell_signals=['rsi_sell_3', 'rsi_sell_2', 'rsi_cumulat_sell_2', 'rsi_cumulat_sell_3'],
+        buy_signals=['rsi_buy_3', 'rsi_buy_2', 'rsi_cumulat_buy_2', 'rsi_cumulat_buy_3', 'ichi_kumo_up', 'ann_simple_bull'],
+        sell_signals=['rsi_sell_3', 'rsi_sell_2', 'rsi_cumulat_sell_2', 'rsi_cumulat_sell_3', 'ichi_kumo_down', 'ann_simple_bear'],
         num_buy=2,
         num_sell=2,
         signal_combination_mode=SignalCombinationMode.SAME_TYPE,
         horizons=(Horizon.short, Horizon.medium, Horizon.long),
         start_time=start_time, end_time=end_time, currency_pairs=currency_pairs)
 
-    ComparativeEvaluation(strategy_set=strategies,
+    comparison = ComparativeEvaluation(strategy_set=strategies,
                           start_cash=1, start_crypto=0,
                           start_time=start_time, end_time=end_time,
-                          output_file="best_performing_2018_06_03_.xlsx"
+                          output_file="best_performing_2018_06_10_full_2mo.xlsx"
                           )
+
+    comparison.write_comparative_summary("description.xlsx")
+
 
 
 def rsi_vs_rsi_cumulative(start_time, end_time, time_delay=0):
@@ -194,7 +198,7 @@ def random_strategy_backtesting(out_path="random_strat_backtesting.txt"):
 # delayed_trading_stats()
 
 # Best performing signals
-# best_performing_signals_of_the_week()
+best_performing_signals_of_the_week()
 
 # RSI vs RSI cumulative
 # start_time = 1518523200  # first instance of RSI_Cumulative signal

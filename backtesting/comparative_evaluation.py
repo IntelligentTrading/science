@@ -104,6 +104,7 @@ class ComparativeEvaluation:
 
         output = pd.DataFrame(evaluation_dicts)
         if len(output) == 0:
+            print("WARNING: No strategies evaluated.")
             return
         #output = output[output.num_trades != 0]  # remove empty trades
         output = output.sort_values(by=['profit_percent'], ascending=False)
@@ -116,6 +117,7 @@ class ComparativeEvaluation:
         # bf.write(best_eval.get_report(include_order_signals=True))
         # bf.close()
         output = output[ordered_columns_condensed]
+        self.dataframe = output
         writer = pd.ExcelWriter(output_file)
         output.to_excel(writer, 'Results')
         writer.save()
@@ -146,3 +148,13 @@ class ComparativeEvaluation:
         evaluation_dict["buy_and_hold_profit_USDT"] = baseline_dict["profit_USDT"]
         evaluation_dict["buy_and_hold_profit_percent_USDT"] = baseline_dict["profit_percent_USDT"]
         return evaluation_dict
+
+
+    def write_comparative_summary(self, summary_path):
+        writer = pd.ExcelWriter(summary_path)
+        summary = self.results
+        # remove empty trades
+        summary = summary[summary.num_trades != 0]
+        summary.groupby(["strategy", "horizon"]).describe().to_excel(writer, 'Results')
+        writer.save()
+
