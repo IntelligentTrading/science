@@ -15,12 +15,12 @@ def best_performing_signals_of_the_week():
     # for debugging
     #currency_pairs = [("BTC","USDT"),]
 
-    end_time = 1528588800
-    start_time = end_time - 60*60*24*30*2
+    end_time = 1529020800
+    start_time = end_time - 60*60*24*7
 
     strategies = StrategyEvaluationSetBuilder.build_from_signal_set(
-        buy_signals=['rsi_buy_3', 'rsi_buy_2', 'rsi_cumulat_buy_2', 'rsi_cumulat_buy_3', 'ichi_kumo_up', 'ann_simple_bull'],
-        sell_signals=['rsi_sell_3', 'rsi_sell_2', 'rsi_cumulat_sell_2', 'rsi_cumulat_sell_3', 'ichi_kumo_down', 'ann_simple_bear'],
+        buy_signals=['rsi_buy_3', 'rsi_buy_2', 'rsi_cumulat_buy_2', 'rsi_cumulat_buy_3'],#,, 'ichi_kumo_up', 'ann_simple_bull'],
+        sell_signals=['rsi_sell_3', 'rsi_sell_2', 'rsi_cumulat_sell_2', 'rsi_cumulat_sell_3'],#, 'ichi_kumo_down', 'ann_simple_bear'],
         num_buy=2,
         num_sell=2,
         signal_combination_mode=SignalCombinationMode.SAME_TYPE,
@@ -30,10 +30,10 @@ def best_performing_signals_of_the_week():
     comparison = ComparativeEvaluation(strategy_set=strategies,
                           start_cash=1, start_crypto=0,
                           start_time=start_time, end_time=end_time,
-                          output_file="best_performing_2018_06_10_full_2mo.xlsx"
+                          output_file="best_performing_2018_06_16.xlsx"
                           )
 
-    comparison.write_comparative_summary("description.xlsx")
+    #comparison.write_comparative_summary("description.xlsx")
 
 
 

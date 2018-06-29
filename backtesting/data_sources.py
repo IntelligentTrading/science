@@ -7,7 +7,8 @@ from signals import Signal
 import pandas as pd
 from signals import SignalType
 from config import output_log
-
+import psycopg2
+import psycopg2.extras
 
 class NoPriceDataException(Exception):
     pass
@@ -89,11 +90,39 @@ resampled_price_range_query = """SELECT timestamp, close_price
                                  AND resample_period = %s
                                  AND close_price is not null"""
 
+class PostgresDatabaseConnection:
+    def __init__(self):
+        conn_string = "host='localhost' dbname='itf-06-25' user='postgres' password='karla'"
+        # print the connection string we will use to connect
+        "Connecting to database\n	->%s" % (conn_string)
+
+        # get a connection, if a connect cannot be made an exception will be raised here
+        self.conn = psycopg2.connect(conn_string)
+
+        # conn.cursor will return a cursor object, you can use this query to perform queries
+        # note that in this example we pass a cursor_factory argument that will
+        # dictionary cursor so COLUMNS will be returned as a dictionary so we
+        # can access columns by their name instead of index.
+        self.cursor = self.conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+
+    def get_cursor(self):
+        return self.cursor
+
+    def get_connection(self):
+        return self.conn
+
+    def execute(self, statement, params):
+        self.cursor.execute(statement, params)
+        return self.cursor
+
+
+dbc = PostgresDatabaseConnection()
+
 
 def get_resampled_prices_in_range(start_time, end_time, transaction_currency, counter_currency, resample_period, source=0,
                                   normalize=True):
     counter_currency_id = CounterCurrency[counter_currency].value
-    connection = mysql.connector.connect(**database_config, pool_name="my_pool", pool_size=32)
+    connection = dbc.get_connection()
     price_data = pd.read_sql(resampled_price_range_query, con=connection, params=(transaction_currency,
                                                                                counter_currency_id,
                                                                                source,
@@ -103,7 +132,6 @@ def get_resampled_prices_in_range(start_time, end_time, transaction_currency, co
                              index_col="timestamp")
     if normalize:
         price_data.loc[:, 'close_price'] /= 1E8
-    connection.close()
     return price_data
 
 def get_filtered_signals(signal_type=None, transaction_currency=None, start_time=None, end_time=None, horizon=Horizon.any,
@@ -141,9 +169,7 @@ def get_filtered_signals(signal_type=None, transaction_currency=None, start_time
         query += "WHERE {}".format(" AND ".join(additions))
         params = tuple(params)
 
-    connection = mysql.connector.connect(**database_config)
-    cursor = connection.cursor()
-    cursor.execute(query, params)
+    cursor = dbc.execute(query, params)
 
     signals = []
 
@@ -154,15 +180,12 @@ def get_filtered_signals(signal_type=None, transaction_currency=None, start_time
         signals.append(Signal(signal_type, trend, horizon, strength_value, strength_max,
                               price/1E8,  price_change, timestamp, rsi_value, transaction_currency,
                               CounterCurrency(counter_currency).name))
-    connection.close()
     return signals
 
 
 def get_signals(signal_type, transaction_currency, start_time, end_time, counter_currency="BTC"):
     counter_currency_id = CounterCurrency[counter_currency].value
-    connection = mysql.connector.connect(**database_config)
-    cursor = connection.cursor()
-    cursor.execute(signal_query, params=(signal_type.value, transaction_currency, counter_currency_id, start_time, end_time))
+    cursor = dbc.execute(signal_query, params=(signal_type.value, transaction_currency, counter_currency_id, start_time, end_time))
     signals = []
     for (trend, horizon, strength_value, strength_max, price, price_change, timestamp, rsi_value) in cursor:
         signals.append(Signal(signal_type, trend, horizon, strength_value, strength_max,
@@ -173,9 +196,7 @@ def get_signals(signal_type, transaction_currency, start_time, end_time, counter
 
 def get_signals_rsi(transaction_currency, start_time, end_time, rsi_overbought, rsi_oversold, counter_currency="BTC"):
     counter_currency_id = CounterCurrency[counter_currency].value
-    connection = mysql.connector.connect(**database_config)
-    cursor = connection.cursor()
-    cursor.execute(rsi_signal_query, params=("RSI", transaction_currency, counter_currency_id, start_time, end_time, rsi_overbought, rsi_oversold))
+    cursor = dbc.execute(rsi_signal_query, params=("RSI", transaction_currency, counter_currency_id, start_time, end_time, rsi_overbought, rsi_oversold))
     signals = []
     for (trend, horizon, strength_value, strength_max, price, price_change, timestamp, rsi_value) in cursor:
         signals.append(Signal(SignalType.RSI, trend, horizon, strength_value, strength_max,
@@ -189,16 +210,12 @@ def get_price(currency, timestamp, source, counter_currency="BTC", normalize=Tru
     if currency == counter_currency:
         return 1
     counter_currency_id = CounterCurrency[counter_currency].value
-    connection = mysql.connector.connect(**database_config, pool_name="my_pool", pool_size=32)
-    cursor = connection.cursor()
-    cursor.execute(price_query, params=(currency, timestamp, source, counter_currency_id))
+    cursor = dbc.execute(price_query, params=(currency, timestamp, source, counter_currency_id))
 
     price = cursor.fetchall()
     if cursor.rowcount == 0:
-        connection.close()
         price = get_price_nearest_to_timestamp(currency, timestamp, source, counter_currency)
     else:
-        connection.close()
         assert cursor.rowcount == 1
         price = price[0][0]
 
@@ -211,15 +228,12 @@ def get_price(currency, timestamp, source, counter_currency="BTC", normalize=Tru
 def get_price_nearest_to_timestamp(currency, timestamp, source, counter_currency, max_delta_seconds_past=60*60,
                                    max_delta_seconds_future=60*5):
     counter_currency_id = CounterCurrency[counter_currency].value
-    connection = mysql.connector.connect(**database_config, pool_name="my_pool", pool_size=32)
-    cursor = connection.cursor()
-    cursor.execute(price_in_range_query_desc, params=(currency, counter_currency_id, source,
+    cursor = dbc.execute(price_in_range_query_desc, params=(currency, counter_currency_id, source,
                                                  timestamp - max_delta_seconds_past, timestamp))
     history = cursor.fetchall()
-    cursor.execute(price_in_range_query_asc, params=(currency, counter_currency_id, source,
+    cursor = dbc.execute(price_in_range_query_asc, params=(currency, counter_currency_id, source,
                                                           timestamp, timestamp + max_delta_seconds_future))
     future = cursor.fetchall()
-    connection.close()
 
     if len(history) == 0:
         output_log("Error: no historical price data in {} minutes before timestamp {}...".format(max_delta_seconds_past/60, timestamp))
@@ -238,27 +252,25 @@ def get_price_nearest_to_timestamp(currency, timestamp, source, counter_currency
 
 def get_prices_in_range(start_time, end_time, transaction_currency, counter_currency, source):
     counter_currency_id = CounterCurrency[counter_currency].value
-    connection = mysql.connector.connect(**database_config, pool_name="my_pool", pool_size=32)
+    connection = dbc.get_connection()
     price_data = pd.read_sql(price_in_range_query_asc, con=connection, params=(transaction_currency,
                                                                                counter_currency_id,
                                                                                source,
                                                                                start_time,
                                                                                end_time),
                              index_col="timestamp")
-    connection.close()
     return price_data
 
 
 def get_volumes_in_range(start_time, end_time, transaction_currency, counter_currency, source):
     counter_currency_id = CounterCurrency[counter_currency].value
-    connection = mysql.connector.connect(**database_config, pool_name="my_pool", pool_size=32)
+    connection = dbc.get_connection()
     price_data = pd.read_sql(volume_in_range_query_asc, con=connection, params=(transaction_currency,
                                                                                 counter_currency_id,
                                                                                 source,
                                                                                 start_time,
                                                                                 end_time),
                              index_col="timestamp")
-    connection.close()
     return price_data
 
 
@@ -283,9 +295,7 @@ def convert_value_to_USDT(value, timestamp, transaction_currency, source):
 
 def get_currencies_trading_against_counter(counter_currency):
     counter_currency_id = CounterCurrency[counter_currency].value
-    connection = mysql.connector.connect(**database_config)
-    cursor = connection.cursor()
-    cursor.execute(trading_against_counter_query, params=(counter_currency_id,))
+    cursor = dbc.execute(trading_against_counter_query, params=(counter_currency_id,))
     data = cursor.fetchall()
     currencies = []
     for currency in data:
@@ -295,9 +305,7 @@ def get_currencies_trading_against_counter(counter_currency):
 
 def get_currencies_for_signal(counter_currency, signal):
     counter_currency_id = CounterCurrency[counter_currency].value
-    connection = mysql.connector.connect(**database_config)
-    cursor = connection.cursor()
-    cursor.execute(trading_against_counter_and_signal_query, params=(counter_currency_id,signal,))
+    cursor = dbc.execute(trading_against_counter_and_signal_query, params=(counter_currency_id,signal,))
     data = cursor.fetchall()
     currencies = []
     for currency in data:
