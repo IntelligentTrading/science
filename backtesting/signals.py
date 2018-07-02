@@ -5,7 +5,7 @@ from collections import namedtuple
 
 class Signal:
     def __init__(self, signal_type, trend, horizon, strength_value, strength_max,
-                 price, price_change, timestamp, rsi_value, transaction_currency, counter_currency):
+                 price, price_change, timestamp, rsi_value, transaction_currency, counter_currency, source, resample_period):
         self.signal_type = signal_type
         self.trend = trend
         self.horizon = horizon
@@ -17,6 +17,8 @@ class Signal:
         self.rsi_value = rsi_value
         self.transaction_currency = transaction_currency
         self.counter_currency = counter_currency
+        self.source = source
+        self.resample_period = resample_period
         if strength_value == None:
             strength_value = 3
         self.signal_signature = get_signal_type(SignalType(signal=signal_type, trend=int(float(trend)), strength=int(strength_value)))
@@ -71,4 +73,6 @@ ALL_SIGNALS = {
     'ema_bear_2' : SignalType('EMA', -1, 2),
     'ema_bull_3' : SignalType('EMA', 1, 3),    # sma50 crosses sma200 up
     'ema_bear_3' : SignalType('EMA', -1, 3),
+
+    'vbi_buy': SignalType('VBI', 1, 3),
 }

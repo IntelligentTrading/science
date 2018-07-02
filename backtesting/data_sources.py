@@ -92,7 +92,7 @@ resampled_price_range_query = """SELECT timestamp, close_price
 
 class PostgresDatabaseConnection:
     def __init__(self):
-        conn_string = "host='localhost' dbname='itf-06-25' user='postgres' password='karla'"
+        conn_string = "host='localhost' dbname='itf_06_29' user='postgres' password='karla'"
         # print the connection string we will use to connect
         "Connecting to database\n	->%s" % (conn_string)
 
@@ -135,9 +135,9 @@ def get_resampled_prices_in_range(start_time, end_time, transaction_currency, co
     return price_data
 
 def get_filtered_signals(signal_type=None, transaction_currency=None, start_time=None, end_time=None, horizon=Horizon.any,
-                         counter_currency=None, strength=Strength.any, source=None):
+                         counter_currency=None, strength=Strength.any, source=None, resample_period=60):
     query = """ SELECT signal_signal.signal, trend, horizon, strength_value, strength_max, price, price_change, 
-                timestamp, rsi_value, transaction_currency, counter_currency FROM signal_signal """
+                timestamp, rsi_value, transaction_currency, counter_currency, source, resample_period FROM signal_signal """
     additions = []
     params = []
     if signal_type is not None:
@@ -164,6 +164,10 @@ def get_filtered_signals(signal_type=None, transaction_currency=None, start_time
     if source is not None:
         additions.append("source = %s")
         params.append(source)
+    if resample_period is not None:
+        additions.append("resample_period = %s")
+        params.append(resample_period)
+
 
     if len(additions) > 0:
         query += "WHERE {}".format(" AND ".join(additions))
@@ -174,12 +178,12 @@ def get_filtered_signals(signal_type=None, transaction_currency=None, start_time
     signals = []
 
     for (signal_type, trend, horizon, strength_value, strength_max, price, price_change, timestamp, rsi_value,
-         transaction_currency, counter_currency) in cursor:
+         transaction_currency, counter_currency, source, resample_period) in cursor:
         if len(trend) > 5:   # hacky solution for one instance of bad data
             continue
         signals.append(Signal(signal_type, trend, horizon, strength_value, strength_max,
                               price/1E8,  price_change, timestamp, rsi_value, transaction_currency,
-                              CounterCurrency(counter_currency).name))
+                              CounterCurrency(counter_currency).name, source, resample_period))
     return signals
 
 
