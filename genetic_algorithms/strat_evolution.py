@@ -1,5 +1,6 @@
 from deap import base
 from deap import algorithms
+from custom_deap_algorithms import eaSimpleCustom
 from deap import creator
 from deap import tools
 import operator
@@ -11,6 +12,9 @@ from backtesting.strategies import Strategy, Horizon, Strength, BuyAndHoldTimeba
 from data_sources import get_resampled_prices_in_range
 from chart_plotter import *
 import pandas as pd
+import os
+import dill as pickle
+import time
 
 SUPER_VERBOSE = False
 
@@ -18,6 +22,8 @@ transaction_currency = "OMG"
 counter_currency = "BTC"
 end_time = 1526637600
 start_time = end_time - 60 * 60 * 24 * 30
+validation_start_time = start_time - 60 * 60 * 24 * 30
+validation_end_time = start_time
 horizon = Horizon.short
 resample_period = 60
 start_cash = 1
@@ -40,15 +46,22 @@ class Data:
 
         self.price_data = get_resampled_prices_in_range(start_time, end_time, transaction_currency, counter_currency, resample_period)
         self.rsi_data = talib.RSI(np.array(self.price_data.close_price, dtype=float), timeperiod=14)
-        self.sma_data = talib.SMA(np.array(self.price_data.close_price, dtype=float), timeperiod=50)
-        self.ema_data = talib.EMA(np.array(self.price_data.close_price, dtype=float), timeperiod=50)
+        self.sma50_data = talib.SMA(np.array(self.price_data.close_price, dtype=float), timeperiod=50)
+        self.ema50_data = talib.EMA(np.array(self.price_data.close_price, dtype=float), timeperiod=50)
+        self.sma200_data = talib.SMA(np.array(self.price_data.close_price, dtype=float), timeperiod=200)
+        self.ema200_data = talib.EMA(np.array(self.price_data.close_price, dtype=float), timeperiod=200)
         self.prices = self.price_data.as_matrix(columns=["close_price"])
         self.timestamps = pd.to_datetime(self.price_data.index.values, unit='s')
         assert len(self.prices) == len(self.timestamps)
 
 
-data = Data(start_time, end_time, transaction_currency, counter_currency, resample_period, horizon, start_cash,
+training_data = Data(start_time, end_time, transaction_currency, counter_currency, resample_period, horizon, start_cash,
             start_crypto, source)
+
+validation_data = Data(validation_start_time, validation_end_time, transaction_currency, counter_currency, resample_period, horizon,
+            start_cash, start_crypto, source)
+
+data = training_data
 
 start_bah = int(data.price_data.iloc[history_size].name)
 bah = BuyAndHoldTimebasedStrategy(start_bah, end_time, transaction_currency, counter_currency, source)
@@ -117,16 +130,29 @@ def rsi(input):
     return data.rsi_data[timestamp_index]
 
 
-def sma(input):
+def sma50(input):
     timestamp = input[0]
     timestamp_index = np.where(data.price_data.index == timestamp)[0]
-    return data.sma_data[timestamp_index]
+    return data.sma50_data[timestamp_index]
 
 
-def ema(input):
+def ema50(input):
     timestamp = input[0]
     timestamp_index = np.where(data.price_data.index == timestamp)[0]
-    return data.ema_data[timestamp_index]
+    return data.ema50_data[timestamp_index]
+
+
+def sma200(input):
+    timestamp = input[0]
+    timestamp_index = np.where(data.price_data.index == timestamp)[0]
+    return data.sma200_data[timestamp_index]
+
+
+def ema200(input):
+    timestamp = input[0]
+    timestamp_index = np.where(data.price_data.index == timestamp)[0]
+    return data.ema200_data[timestamp_index]
+
 
 def price(input):
     timestamp = input[0]
@@ -150,17 +176,24 @@ def identity(x):
 
 
 def evaluate_individual(individual):
+    data = training_data
     strategy = GeneticTradingStrategy(individual, data)
-    evaluation = strategy.evaluate(start_cash, start_crypto, start_time, end_time, False, False)
-    if evaluation.get_num_trades() > 1:
+    training_evaluation = strategy.evaluate(start_cash, start_crypto, start_time, end_time, False, False)
+
+    if training_evaluation.get_num_trades() > 1:
         if SUPER_VERBOSE:
             orders, _ = strategy.get_orders(start_cash, start_crypto)
             draw_price_chart(data.timestamps, data.prices, orders)
             print(str(individual))
-            print(evaluation.get_report())
+            print(training_evaluation.get_report())
             draw_tree(individual)
+
+    data = validation_data  # this pointer switching is very ugly, but I have to do it like this because of the DEAP library
+    strategy = GeneticTradingStrategy(individual, data)
+    validation_evaluation = strategy.evaluate(start_cash, start_crypto, start_time, end_time, False, False)
+
     max_len = 3**TREE_DEPTH
-    return evaluation.get_profit_percent()+(max_len-len(individual))/float(max_len)*20,#10, #20,
+    return training_evaluation.get_profit_percent()+(max_len-len(individual))/float(max_len)*20,
 
 
 def combined_mutation(individual, expr, pset):
@@ -170,6 +203,8 @@ def combined_mutation(individual, expr, pset):
         return gp.mutEphemeral(individual, "one")
 
 
+
+
 pset = gp.PrimitiveSetTyped("main", [list], types.FunctionType)
 pset.addPrimitive(operator.lt, [float, float], bool)
 pset.addPrimitive(operator.gt, [float, float], bool)
@@ -177,8 +212,10 @@ pset.addPrimitive(operator.or_, [bool, bool], bool)
 pset.addPrimitive(operator.and_, [bool, bool], bool)
 pset.addPrimitive(if_then_else, [bool, types.FunctionType, types.FunctionType], types.FunctionType)
 pset.addPrimitive(rsi, [list], float)
-pset.addPrimitive(sma, [list], float)
-pset.addPrimitive(ema, [list], float)
+pset.addPrimitive(sma50, [list], float)
+pset.addPrimitive(ema50, [list], float)
+pset.addPrimitive(sma200, [list], float)
+pset.addPrimitive(ema200, [list], float)
 pset.addPrimitive(price, [list], float)
 pset.addTerminal(False, bool)
 pset.addTerminal(True, bool)
@@ -228,11 +265,71 @@ toolbox.decorate("mate", gp.staticLimit(key=operator.attrgetter("height"), max_v
 toolbox.decorate("mutate", gp.staticLimit(key=operator.attrgetter("height"), max_value=TREE_DEPTH))#17))
 
 
+def go_doge():
+    num_runs = 10000
+    population_size = 1000
+    num_generations = 200
+    hof_size = 10
+    mating_probs = [0.3, 0.5, 0.7, 0.8, 0.9, 1]
+    mutation_probs = [0.3, 0.5, 0.7, 0.8, 0.9, 1]
+    output_folder = "doggienauts"
+    if not os.path.exists(output_folder):
+        os.mkdir(output_folder)
+
+
+    for run in range(num_runs):
+        random.seed(run)
+        start = time.time()
+
+        for mating_prob in mating_probs:
+            for mutation_prob in mutation_probs:
+                pop = toolbox.population(n=population_size)
+                hof = tools.HallOfFame(hof_size)
+
+                stats_fit = tools.Statistics(lambda ind: ind.fitness.values)
+                stats_size = tools.Statistics(len)
+                mstats = tools.MultiStatistics(fitness=stats_fit, size=stats_size)
+                mstats.register("avg", np.mean)
+                mstats.register("std", np.std)
+                mstats.register("min", np.min)
+                mstats.register("max", np.max)
+
+                hof_name = "doge_{}_x-{}_m-{}-hof.p".format(run, mating_prob, mutation_prob)
+                gen_best_name = "doge_{}_x-{}_m-{}-gen_best.p".format(run, mating_prob, mutation_prob)
+                out_path_hof = os.path.join(output_folder, hof_name)
+                out_path_gen_best = os.path.join(output_folder, gen_best_name)
+                if os.path.exists(out_path_hof) and os.path.exists(out_path_gen_best):
+                    print("{} already exists, skipping...".format(hof_name))
+                    continue
+                pop, log, best = eaSimpleCustom(pop, toolbox, mating_prob, mutation_prob, num_generations, stats=mstats,
+                                               halloffame=hof, verbose=True)
+
+                for i in range(len(best)):
+                    print(i, best[i])
+                for i in range(len(hof)):
+                    print(hof[i])
+                pickle.dump(hof, open(out_path_hof,"wb"))
+                pickle.dump(best, open(out_path_gen_best, "wb"))
+        end = time.time()
+        print("Time for one run: {} minutes".format((end-start)/60))
+
+    #hof = pickle.load(open(out_path,"rb"))
+    #best = hof[0]
+    #strat = GeneticTradingStrategy(best, data)
+    #orders, _ = strat.get_orders(start_cash, start_crypto)
+    #draw_price_chart(data.timestamps, data.prices, orders)
+
+
+
+
+
 if __name__ == "__main__":
     random.seed(318)
+    go_doge()
+    exit(0)
 
     pop = toolbox.population(n=500)
-    hof = tools.HallOfFame(1)
+    hof = tools.HallOfFame(10)
 
     stats_fit = tools.Statistics(lambda ind: ind.fitness.values)
     stats_size = tools.Statistics(len)
@@ -244,21 +341,20 @@ if __name__ == "__main__":
 
     pop, log = algorithms.eaSimple(pop, toolbox, 1, 0.3, 50, stats=mstats,
                                        halloffame=hof, verbose=True)
-    print(hof[0])
+    for i in range(len(hof)):
+        print(hof[i])
 
     best = hof[0]
     strat = GeneticTradingStrategy(best, data)
     orders, _ = strat.get_orders(start_cash, start_crypto)
     draw_price_chart(data.timestamps, data.prices, orders)
 
-    end = data.start_time
-    start = end - 60 * 60 * 24 * 30
 
-    data = Data(start, end, transaction_currency, counter_currency, resample_period, horizon,
-                start_cash, start_crypto, source)
+
+    data = validation_data
     strat = GeneticTradingStrategy(best, data)
 
-    evaluation = strat.evaluate(start_cash, start_crypto, start_time, end_time, False, True)
+    evaluation = strat.evaluate(start_cash, start_crypto, validation_start_time, validation_end_time, False, True)
     orders, _ = strat.get_orders(start_cash, start_crypto)
     draw_price_chart(data.timestamps, data.prices, orders)
     draw_tree(best)
