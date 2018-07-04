@@ -63,11 +63,21 @@ validation_data = Data(validation_start_time, validation_end_time, transaction_c
 
 data = training_data
 
-start_bah = int(data.price_data.iloc[history_size].name)
-bah = BuyAndHoldTimebasedStrategy(start_bah, end_time, transaction_currency, counter_currency, source)
-print("Buy and hold baseline: {0:0.2f}%".format(bah.evaluate(start_cash, start_crypto,
-                                                             start_bah, end_time,
-                                                             False, False).get_profit_percent()))
+
+def evaluate_buy_and_hold(data, end_time, history_size, verbose=True):
+    start_bah = int(data.price_data.iloc[history_size].name)
+    bah = BuyAndHoldTimebasedStrategy(start_bah, end_time, transaction_currency, counter_currency, source)
+    evaluation = bah.evaluate(start_cash, start_crypto, start_bah, end_time, False, False)
+    if verbose:
+        print("Start time: {} \tEnd time: {}".format(
+            pd.to_datetime(start_bah, unit='s'),
+            pd.to_datetime(end_time, unit='s')))
+        print("Buy and hold baseline: {0:0.2f}%".format(evaluation.get_profit_percent()))
+    return evaluation
+
+
+
+evaluate_buy_and_hold(data, end_time, history_size)
 
 
 class GeneticTradingStrategy(Strategy):
@@ -92,7 +102,7 @@ class GeneticTradingStrategy(Strategy):
         func = toolbox.compile(expr=tree)
 
         outcomes = []
-        for i, row in enumerate(data.price_data.itertuples()):
+        for i, row in enumerate(self.data.price_data.itertuples()):
             price = row.close_price
             timestamp = row.Index
             if i < history_size:
@@ -105,7 +115,7 @@ class GeneticTradingStrategy(Strategy):
                 trend = -1
             if trend != None:
                 signal = Signal("Genetic", trend, self.horizon, 3, 3, price, 0, timestamp, None, self.transaction_currency,
-                                self.counter_currency)
+                                self.counter_currency, source, resample_period)
                 self.signals.append(signal)
 
             outcomes.append(outcome)
@@ -294,8 +304,8 @@ def go_doge():
                 mstats.register("min", np.min)
                 mstats.register("max", np.max)
 
-                hof_name = "doge_{}_x-{}_m-{}-hof.p".format(run, mating_prob, mutation_prob)
-                gen_best_name = "doge_{}_x-{}_m-{}-gen_best.p".format(run, mating_prob, mutation_prob)
+                hof_name = get_hof_filename(mating_prob, mutation_prob, run)
+                gen_best_name = get_gen_best_filename(mating_prob, mutation_prob, run)
                 out_path_hof = os.path.join(output_folder, hof_name)
                 out_path_gen_best = os.path.join(output_folder, gen_best_name)
                 if os.path.exists(out_path_hof) and os.path.exists(out_path_gen_best):
@@ -320,12 +330,63 @@ def go_doge():
     #draw_price_chart(data.timestamps, data.prices, orders)
 
 
+def get_gen_best_filename(mating_prob, mutation_prob, run):
+    gen_best_name = "doge_{}_x-{}_m-{}-gen_best.p".format(run, mating_prob, mutation_prob)
+    return gen_best_name
+
+
+def get_hof_filename(mating_prob, mutation_prob, run):
+    hof_name = "doge_{}_x-{}_m-{}-hof.p".format(run, mating_prob, mutation_prob)
+    return hof_name
+
+
+def parse_filename(filename):
+    filename = filename.split("_")
+    run = int(filename[1])
+    mating_prob = float(filename[2].split("-")[1])
+    mutation_prob = float(filename[3].split("-")[1])
+    return run, mating_prob, mutation_prob
+
+
+def evaluate_dogenauts_wow(doge_folder):
+    evaluate_buy_and_hold(validation_data, validation_end_time, history_size)
+    for hof_filename in os.listdir(doge_folder):
+        if not hof_filename.endswith("best.p"):
+            continue
+        try:
+            run, mating_prob, mutation_prob = parse_filename(hof_filename)
+        except:
+            print("Error parsing filename {}".format(hof_filename))
+            continue
+        gen_best_filename = get_gen_best_filename(mating_prob, mutation_prob, run)
+        print("Evaluating {}...".format(hof_filename))
+
+        # load the individuals in the hall of fame
+        hof = pickle.load(open(os.path.join(doge_folder, hof_filename),"rb"))
+
+        for individual in hof:
+            print(individual)
+
+            # test on validation data
+            try:
+                data = validation_data
+                #start_time = validation_start_time
+                #end_time = validation_end_time
+                strat = GeneticTradingStrategy(individual, data)
+                orders, _ = strat.get_orders(start_cash, start_crypto)
+                evaluation = strat.evaluate(start_cash, start_crypto, start_time, end_time, False, False)
+                print("Profit: {0:0.02f}%".format(evaluation.get_profit_percent()))
+                draw_price_chart(data.timestamps, data.prices, orders)
+            except:
+                print("Error evaluating individual")
+
 
 
 
 if __name__ == "__main__":
     random.seed(318)
-    go_doge()
+    #go_doge()
+    evaluate_dogenauts_wow(r"d:\development\toptalprojects\intelligenttrading\ittscience\genetic_algorithms\doggienauts")
     exit(0)
 
     pop = toolbox.population(n=500)
