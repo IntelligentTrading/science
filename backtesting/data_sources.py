@@ -1,8 +1,6 @@
 from enum import Enum
 
-import mysql.connector
-
-from config import database_config
+from config import postgres_connection_string
 from signals import Signal
 import pandas as pd
 from signals import SignalType
@@ -92,17 +90,7 @@ resampled_price_range_query = """SELECT timestamp, close_price
 
 class PostgresDatabaseConnection:
     def __init__(self):
-        conn_string = "host='localhost' dbname='itf_06_29' user='postgres' password='karla'"
-        # print the connection string we will use to connect
-        "Connecting to database\n	->%s" % (conn_string)
-
-        # get a connection, if a connect cannot be made an exception will be raised here
-        self.conn = psycopg2.connect(conn_string)
-
-        # conn.cursor will return a cursor object, you can use this query to perform queries
-        # note that in this example we pass a cursor_factory argument that will
-        # dictionary cursor so COLUMNS will be returned as a dictionary so we
-        # can access columns by their name instead of index.
+        self.conn = psycopg2.connect(postgres_connection_string)
         self.cursor = self.conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
     def get_cursor(self):
