@@ -169,7 +169,8 @@ class GeneticProgram:
                 print(evaluation.get_report())
                 draw_tree(individual)
         max_len = 3 ** self.tree_depth
-        return evaluation.get_profit_percent(), #+ (max_len - len(individual)) / float(max_len) * 20,
+        return evaluation.get_profit_percent() + (max_len - len(individual)) / float(max_len) * 20 \
+               + evaluation.num_sells * 5,
 
 
     def build_toolbox(self):
