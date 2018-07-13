@@ -21,7 +21,7 @@ def evaluate_buy_and_hold(data, history_size, verbose=True):
     if verbose:
         print("Start time: {} \tEnd time: {}".format(
             pd.to_datetime(start_bah, unit='s'),
-            pd.to_datetime(end_time, unit='s')))
+            pd.to_datetime(data.end_time, unit='s')))
         print("Buy and hold baseline: {0:0.2f}%".format(evaluation.get_profit_percent()))
     return evaluation
 
@@ -79,11 +79,17 @@ def evaluate_dogenauts_wow(doge_folder, evaluation_data):
                 #start_time = validation_start_time
                 #end_time = validation_end_time
                 strat = GeneticTradingStrategy(individual, evaluation_data, genp)
+                df = strat.get_dataframe_with_outcomes()
+
+                writer = pd.ExcelWriter("tmp.xlsx")
+                df.to_excel(writer, "Results")
+                writer.save()
+
                 orders, _ = strat.get_orders(start_cash, start_crypto)
                 evaluation = strat.evaluate(start_cash, start_crypto, evaluation_data.start_time, evaluation_data.end_time, False, True)
                 profit = evaluation.get_profit_percent()
                 print("Profit: {0:0.02f}%".format(profit))
-                if True: #profit > 0 and not profit in seen_individuals:
+                if profit > 0 and not profit in seen_individuals:
                     draw_price_chart(evaluation_data.timestamps, evaluation_data.prices, orders)
                     print(evaluation.get_report())
                     seen_individuals.append(profit)
@@ -114,6 +120,8 @@ if __name__ == "__main__":
 
     validation_start_time = 1518825600
     validation_end_time = validation_start_time + 60 * 60 * 24 * 30 * 2
+    #validation_start_time = start_time
+    #validation_end_time = end_time
     validation_data = Data(validation_start_time, validation_end_time, "DOGE", counter_currency, resample_period,
                            horizon,
                            start_cash, start_crypto, source)

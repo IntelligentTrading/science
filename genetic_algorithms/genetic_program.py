@@ -43,6 +43,7 @@ class GeneticTradingStrategy(Strategy):
             price = row.close_price
             timestamp = row.Index
             if i < self.history_size:
+                outcomes.append("skipped")
                 continue
             outcome = func([timestamp])
 
@@ -58,13 +59,21 @@ class GeneticTradingStrategy(Strategy):
                                 self.counter_currency, self.source, self.resample_period)
                 self.signals.append(signal)
 
-            outcomes.append(outcome)
+            outcomes.append(outcome.__name__)
+        df = self.data.to_dataframe()
+        df['outcomes'] = pd.Series(outcomes, index=df.index)
+        self.df_data_and_outcomes = df
+
         #print(self.signals)
         #print(str(tree))
         #print(outcomes)
 
     def get_short_summary(self):
         return("Strategy: evolved using genetic programming\nRule set: {}".format(str(self.tree)))
+
+
+    def get_dataframe_with_outcomes(self):
+        return self.df_data_and_outcomes
 
 
 

@@ -27,3 +27,12 @@ class Data:
         self.prices = self.price_data.as_matrix(columns=["close_price"])
         self.timestamps = pd.to_datetime(self.price_data.index.values, unit='s')
         assert len(self.prices) == len(self.timestamps)
+
+    def to_dataframe(self):
+        df = self.price_data.copy(deep=True)
+        df['RSI'] = pd.Series(self.rsi_data, index=df.index)
+        df['SMA50'] = pd.Series(self.sma50_data, index=df.index)
+        df['SMA200'] = pd.Series(self.sma200_data, index=df.index)
+        df['EMA50'] = pd.Series(self.ema50_data, index=df.index)
+        df['EMA200'] = pd.Series(self.ema200_data, index=df.index)
+        return df
