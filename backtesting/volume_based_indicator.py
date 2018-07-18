@@ -71,7 +71,7 @@ def build_strategy(price_volume_df, percent_change_price, percent_change_volume,
     return strategy, all_buy_signals, first_cross_buy_signals
 
 
-def plot_results(price_volume_df, volumes_df, transaction_currency, counter_currency, all_buy_signals,
+def plot_results(price_volume_df, transaction_currency, counter_currency, all_buy_signals,
                  first_cross_buy_signals, orders, include_all_buy=True, include_first_cross=False, include_orders=True):
     ax = price_volume_df.plot(lw=1, title="{} to {}".format(transaction_currency, counter_currency), figsize=(16, 10),
                               secondary_y=['volume', 'average_volume'])
@@ -116,6 +116,7 @@ def plot_results(price_volume_df, volumes_df, transaction_currency, counter_curr
 
     ax.autoscale(enable=True, axis='x', tight=True)
 
+    ax.set_ylim(bottom=0)
     plt.show()
 
 
@@ -186,8 +187,6 @@ def plot_profit_df(profit_df, title="", date_padding=0):
     ax.set_zlabel('Profit [%]')
     ax.dist = 11
 
-
-
     plt.show()
 
 
@@ -201,10 +200,12 @@ def build_resampled_price_volume_df(start_time, end_time, transaction_currency, 
     # Load price and volume data and calculate average prices and volumes
     prices_df = get_resampled_prices_in_range(start_time, end_time, transaction_currency, counter_currency,
                                               resample_period, source,
-                                              normalize=False)
+                                              normalize=True)
     prices_df = prices_df.sort_index()
+    prices_df = prices_df.dropna()
 
     volumes_df = get_volumes_in_range(start_time, end_time, transaction_currency, counter_currency, source)
+    volumes_df = volumes_df.dropna()
     # volumes_df.volume /= 1E4 #5 # scaling for visualization
 
     prices_avg = talib.SMA(np.array(prices_df.close_price, dtype=float), timeperiod=AVERAGING_PERIOD)
@@ -238,5 +239,63 @@ def build_resampled_price_volume_df(start_time, end_time, transaction_currency, 
     return price_volume_df
 
 
-def vbi_core_verification():
-    pass
+def evaluate_vbi(**kwargs):
+    price_volume_df = build_resampled_price_volume_df(kwargs['start_time'],
+                                                      kwargs['end_time'],
+                                                      kwargs['transaction_currency'],
+                                                      kwargs['counter_currency'],
+                                                      kwargs['resample_period'],
+                                                      kwargs['source'])
+    strategy, all_buy_signals, first_cross_buy_signals = build_strategy(price_volume_df, 0.02, 0.02,
+                                                                        buy_only_on_first_cross=True,
+                                                                        sell_strategy=None, **kwargs)
+    orders, _ = strategy.get_orders(kwargs['start_cash'], kwargs['start_crypto'])
+    # Backtest the strategy
+    return strategy.evaluate(kwargs['start_cash'], kwargs['start_crypto'], kwargs['start_time'], kwargs['end_time'],
+                             verbose = kwargs.get('verbose', False))
+
+def backtest_vbi():
+    counter_currency = "BTC"
+    end_time = 1531699200
+    start_time = end_time - 60 * 60 * 24 * 45
+    resample_period = 60
+    source = 0
+
+    kwargs = {}
+    kwargs['source'] = source
+
+    kwargs['counter_currency'] = counter_currency
+    kwargs['start_time'] = start_time
+    kwargs['end_time'] = end_time
+    kwargs['resample_period'] = resample_period
+
+    from backtesting_runs import get_currencies_for_signal, ComparativeEvaluation
+    transaction_currencies = get_currencies_for_signal(counter_currency, "RSI_Cumulative")
+
+    strategies = []
+    for resample_period in [60, 240]:
+        for transaction_currency in transaction_currencies:
+            kwargs['transaction_currency'] = transaction_currency
+            kwargs['horizon'] = Horizon.short if resample_period == 60 else Horizon.medium
+            kwargs['resample_period'] = resample_period
+            print ("Processing {}".format(transaction_currency))
+            try:
+                price_volume_df = build_resampled_price_volume_df(start_time, end_time, transaction_currency,
+                                                                  counter_currency, resample_period, source)
+                strategy, all_buy_signals, first_cross_buy_signals = build_strategy(price_volume_df, 0.02, 0.02,
+                                                                                    buy_only_on_first_cross=True,
+                                                                                    sell_strategy=None, **kwargs)
+                strategies.append(strategy)
+            except Exception as e:
+                print("Error: {}".format(str(e)))
+
+    comparison = ComparativeEvaluation(strategy_set=strategies,
+                                       start_cash=1, start_crypto=0,
+                                       start_time=start_time, end_time=end_time,
+                                       output_file="vbi_backtest_2018_07_17.xlsx"
+                                       )
+
+
+
+if __name__ == "__main__":
+    backtest_vbi()

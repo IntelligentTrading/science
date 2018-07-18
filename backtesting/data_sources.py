@@ -257,13 +257,13 @@ def get_prices_in_range(start_time, end_time, transaction_currency, counter_curr
 def get_volumes_in_range(start_time, end_time, transaction_currency, counter_currency, source):
     counter_currency_id = CounterCurrency[counter_currency].value
     connection = dbc.get_connection()
-    price_data = pd.read_sql(volume_in_range_query_asc, con=connection, params=(transaction_currency,
+    volume_data = pd.read_sql(volume_in_range_query_asc, con=connection, params=(transaction_currency,
                                                                                 counter_currency_id,
                                                                                 source,
                                                                                 start_time,
                                                                                 end_time),
                              index_col="timestamp")
-    return price_data
+    return volume_data
 
 
 def convert_value_to_USDT(value, timestamp, transaction_currency, source):

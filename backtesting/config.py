@@ -6,7 +6,7 @@ mysql_database_config = {
   'raise_on_warnings': True,
 }
 
-postgres_connection_string = "host='localhost' dbname='itf_07_08' user='postgres' password='itfscience'"
+postgres_connection_string = "host='localhost' dbname='itf_07_16' user='postgres' password='itfscience'"
 
 SUPPRESS_ALL_OUTPUT = True
 
