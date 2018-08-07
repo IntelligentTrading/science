@@ -8,13 +8,13 @@ from pyalgotrade.stratanalyzer import drawdown
 from pyalgotrade.stratanalyzer import trades
 from pyalgotrade import plotter
 from pyalgotrade.bar import Frequency
-# from pyalgotrade_itf_db_feed import ITFDatabaseFeed
+from pyalgotrade_itf_db_feed import ITFDatabaseFeed
 
 import pyalgotrade_sample_strat
 
 # Load the feed from ITF database
-# feed = ITFDatabaseFeed(frequency=Frequency.HOUR)
-# feed.addBarsFromCSV("BTC", "sample_data.csv")
+feed = ITFDatabaseFeed(frequency=Frequency.HOUR)
+feed.addBarsFromCSV("BTC")
 
 # Load the feed from a CSV file
 feed = csvfeed.GenericBarFeed(frequency=Frequency.HOUR)
