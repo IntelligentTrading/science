@@ -14,7 +14,7 @@ import pyalgotrade_sample_strat
 
 # Load the feed from ITF database
 feed = ITFDatabaseFeed(frequency=Frequency.HOUR)
-feed.addBarsFromCSV("BTC")
+feed.addBarsFromDB("BTC")
 
 # Load the feed from a CSV file
 feed = csvfeed.GenericBarFeed(frequency=Frequency.HOUR)

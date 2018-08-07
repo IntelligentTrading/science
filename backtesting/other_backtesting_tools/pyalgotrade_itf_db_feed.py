@@ -30,7 +30,7 @@ class ITFDatabaseFeed(csvfeed.GenericBarFeed):
                                  index_col="timestamp")
         return price_data
 
-    def addBarsFromCSV(self, instrument, timezone=None):
+    def addBarsFromDB(self, instrument, timezone=None):
         """Loads bars for a given instrument from a CSV formatted file.
         The instrument gets registered in the bar feed.
 
