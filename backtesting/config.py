@@ -9,6 +9,6 @@ mysql_database_config = {
 }
 '''
 
-postgres_connection_string = "host='localhost' dbname='itf_07_16' user='postgres' password='itfscience'"
+postgres_connection_string = "host='localhost' dbname='itf_08_05' user='postgres' password='itfscience'"
 
 

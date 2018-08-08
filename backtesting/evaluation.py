@@ -23,25 +23,101 @@ backtesting_report_columns = ["strategy",
 
 
 class Evaluation:
-    def __init__(self, strategy, start_crypto_currency, counter_currency,
-                 start_cash, start_crypto, start_time, end_time, evaluate_profit_on_last_order=False, verbose=True,
-                 time_delay=0):
-        self.start_crypto_currency = start_crypto_currency
+    def __init__(self, strategy, transaction_currency, counter_currency,
+                 start_cash, start_crypto, start_time, end_time, source=0, evaluate_profit_on_last_order=False):
+        self.start_crypto_currency = transaction_currency
         self.counter_currency = counter_currency
         self.start_cash = start_cash
         self.start_crypto = start_crypto
         self.start_time = start_time
         self.end_time = end_time
         self.strategy = strategy
-        self.source = self.strategy.source
+        self.source = source
         self.evaluate_profit_on_last_order = evaluate_profit_on_last_order
-        self.orders, self.order_signals = strategy.get_orders(start_cash=start_cash, start_crypto=start_crypto,
-                                                              time_delay=time_delay)
-        self.execute_orders(self.orders)
-        if verbose:
-            print(self.get_report())
-        if self.end_price is None:
-            raise NoPriceDataException()
+        # self.orders, self.order_signals = strategy.get_orders(start_cash=start_cash, start_crypto=start_crypto,
+        #                                                      time_delay=time_delay)
+
+        self.signals = get_filtered_signals(start_time=start_time, end_time=end_time, counter_currency=counter_currency,
+                                            transaction_currency=transaction_currency,
+                                            resample_period=resample_period, source=source, return_df=True)
+        self.price_data = get_resampled_prices_in_range(start_time, end_time, transaction_currency, counter_currency, resample_period)
+
+        # self.execute_orders(self.orders)
+
+        self.simulate_events()
+
+        # TODO: reports
+        # if verbose:
+        #    print(self.get_report())
+        # if self.end_price is None:
+        #   raise NoPriceDataException()
+
+    def simulate_events(self):
+        transaction_cost_percent = 0.02 # TODO move
+
+        # connect prices and signals in time (find signal nearest in time to price tick)
+        orders = []
+        order_signals = []
+        cash = self.start_cash
+        crypto = self.start_crypto
+        prices_df = self.price_data
+        signals_df = self.signals
+
+        # reindex signals_df to match prices
+        prices_df.reset_index(level=0, inplace=True)
+        signals_df.reset_index(level=0, inplace=True)
+        reindexed_signals_df = pd.merge_asof(signals_df, prices_df, direction='nearest')
+
+        trading_df = pd.DataFrame(columns=['close_price', 'signal', 'cash', 'crypto', 'total_value'])
+
+        for i, row in prices_df.iterrows():
+            timestamp = row['timestamp']
+            price = row['close_price']
+            signals_now = reindexed_signals_df[reindexed_signals_df['timestamp'] == timestamp]
+            signals_now = Signal.pandas_to_objects_list(signals_now)
+            decision, order_signal = self.strategy.process_ticker(row, signals_now)
+
+            if decision == "SELL" and crypto > 0:
+                order = Order(OrderType.SELL, self.transaction_currency, self.counter_currency,
+                              timestamp, crypto, price, transaction_cost_percent, 0)
+                orders.append(order)
+                order_signals.append(order_signal)
+                delta_crypto, delta_cash = order.execute()
+                cash = cash + delta_cash
+                crypto = crypto + delta_crypto
+                assert crypto == 0
+
+            elif decision == "BUY" and cash > 0:
+                order = Order(OrderType.BUY, self.transaction_currency, self.counter_currency,
+                              timestamp, cash, price, transaction_cost_percent, 0)
+                orders.append(order)
+                order_signals.append(order_signal)
+                delta_crypto, delta_cash = order.execute()
+                cash = cash + delta_cash
+                crypto = crypto + delta_crypto
+                assert cash == 0
+
+            total_value = crypto * price + cash
+            # compute asset value at this tick, regardless of the signal
+            trading_df.loc[timestamp] = pd.Series({'close_price': price,
+                                               'cash': cash,
+                                               'crypto': crypto,
+                                               'total_value': total_value})
+
+        self.end_cash = cash
+        self.end_crypto = crypto
+        self.orders = orders
+        self.order_signals = order_signals
+        logging.info(trading_df)
+
+        # TODO move plotting outside
+        import matplotlib.pyplot as plt
+        #trading_df.plot()
+        ax1 = trading_df['close_price'].plot()
+        ax2 = trading_df['total'].plot(secondary_y=True)
+
+        plt.show()
+
 
     def get_start_value_USDT(self):
         try:
@@ -292,3 +368,13 @@ class Evaluation:
                 dictionary["profit_percent_USDT"] = "N/A"
         return dictionary
 
+
+if __name__ == '__main__':
+    from strategies import RSITickerStrategy
+    end_time = 1531699200
+    start_time = end_time - 60*60*24*7
+    start_cash = 10000000
+    start_crypto = 0
+    strategy = RSITickerStrategy(start_time, end_time, Horizon.short, None)
+    evaluation = Evaluation(strategy, 'BTC', 'USDT', start_cash, start_crypto, start_time, end_time)
+    #evaluation.simulate_events()

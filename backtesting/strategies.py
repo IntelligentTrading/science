@@ -22,6 +22,7 @@ class Strategy:
         self.start_time = start_time
         self.end_time = end_time
 
+
     def get_orders(self, start_cash, start_crypto, transaction_cost_percent=0.0025, time_delay=0):
         orders = []
         order_signals = []
@@ -119,6 +120,23 @@ class Strategy:
         elif signal_type in (SignalType.kumo_breakout, SignalType.SMA, SignalType.EMA, SignalType.RSI_Cumulative):
             strategy = SimpleTrendBasedStrategy(signals, signal_type, horizon, strength)
         return strategy
+
+
+class RSITickerStrategy(Strategy):
+
+    def process_ticker(self, price_data, signals):
+        for i, signal in enumerate(signals):
+            if not self.belongs_to_this_strategy(signal):
+                continue
+            if self.indicates_sell(signal):
+                return "SELL", signal
+            elif self.indicates_buy(signal):
+                return "BUY", signal
+
+        return None, None
+
+    def belongs_to_this_strategy(self, signal):
+        return signal.signal_type == 'RSI'
 
 
 class SignalSignatureStrategy(Strategy):
