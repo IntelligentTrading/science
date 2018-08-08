@@ -4,13 +4,12 @@ from config import postgres_connection_string
 from signals import Signal
 import pandas as pd
 from signals import SignalType
-from config import output_log
 import psycopg2
 import psycopg2.extras
+import logging
 
 class NoPriceDataException(Exception):
     pass
-
 
 class CounterCurrency(Enum):
     BTC = 0
@@ -228,16 +227,16 @@ def get_price_nearest_to_timestamp(currency, timestamp, source, counter_currency
     future = cursor.fetchall()
 
     if len(history) == 0:
-        output_log("Error: no historical price data in {} minutes before timestamp {}...".format(max_delta_seconds_past/60, timestamp))
+        logging.error("No historical price data in {} minutes before timestamp {}...".format(max_delta_seconds_past/60, timestamp))
         if len(future) == 0:
-            output_log("No future data found.")
+            logging.error("No future data found.")
             raise NoPriceDataException()
         else:
-            output_log("Returning future price...")
+            logging.warning("Returning future price...")
 
             return future[0][0]
     else:
-        output_log("Returning historical price data for timestamp {} (difference of {} minutes)"
+        logging.debug("Returning historical price data for timestamp {} (difference of {} minutes)"
               .format(timestamp,(timestamp - history[0][1])/60))
         return history[0][0]
 

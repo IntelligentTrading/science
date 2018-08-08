@@ -1,7 +1,7 @@
 import itertools
 
 from data_sources import *
-from evaluation import ordered_columns_condensed, Evaluation
+from evaluation import backtesting_report_columns, Evaluation
 from signals import SignalType, ALL_SIGNALS
 from strategies import Strategy, BuyAndHoldTimebasedStrategy, MultiSignalStrategy, BuyOnFirstSignalAndHoldStrategy, SignalSignatureStrategy, SimpleRSIStrategy
 from enum import Enum
@@ -116,7 +116,7 @@ class ComparativeEvaluation:
         # bf = open("best.txt", "w")
         # bf.write(best_eval.get_report(include_order_signals=True))
         # bf.close()
-        output = output[ordered_columns_condensed]
+        output = output[backtesting_report_columns]
         self.dataframe = output
         writer = pd.ExcelWriter(output_file)
         output.to_excel(writer, 'Results')

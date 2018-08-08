@@ -108,6 +108,7 @@ class Strategy:
                           evaluate_profit_on_last_order=evaluate_profit_on_last_order,
                           verbose=verbose, time_delay=time_delay)
 
+    # TODO: obsolete, clean up
     @staticmethod
     def generate_strategy(signal_type, transaction_currency, counter_currency, start_time, end_time, horizon=Horizon.any,
                           strength=Strength.any, rsi_overbought=None, rsi_oversold=None):

@@ -1,3 +1,5 @@
+'''
+Legacy MySql connection
 mysql_database_config = {
   'user': 'root',
   'password': 'itfscience',
@@ -5,11 +7,8 @@ mysql_database_config = {
   'database': 'prodclone_core_2018_06_10',
   'raise_on_warnings': True,
 }
+'''
 
 postgres_connection_string = "host='localhost' dbname='itf_07_16' user='postgres' password='itfscience'"
 
-SUPPRESS_ALL_OUTPUT = True
 
-def output_log(str):
-    if not SUPPRESS_ALL_OUTPUT:
-        print(str)
