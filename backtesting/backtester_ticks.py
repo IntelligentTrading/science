@@ -7,10 +7,8 @@ import pandas as pd
 
 class TickBasedBacktester(Evaluation, TickListener):
 
-    def __init__(self, strategy, transaction_currency, counter_currency,
-                 start_cash, start_crypto, start_time, end_time):
-        super().__init__(strategy, transaction_currency, counter_currency,
-                 start_cash, start_crypto, start_time, end_time)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         self.orders = []
         self.order_signals = []
         self.cash = self.start_cash
@@ -40,8 +38,11 @@ class TickBasedBacktester(Evaluation, TickListener):
             self.cash = self.cash + delta_cash
             self.crypto = self.crypto + delta_crypto
             assert self.cash == 0
-        total_value = self.crypto * price + self.cash
+
         # compute asset value at this tick, regardless of the signal
+        total_value = self.crypto * price + self.cash
+
+        # fill a row in the trading dataframe
         self.trading_df.loc[timestamp] = pd.Series({'close_price': price,
                                                     'cash': self.cash,
                                                     'crypto': self.crypto,
@@ -67,6 +68,8 @@ if __name__ == '__main__':
     transaction_currency = 'BTC'
     counter_currency = 'USDT'
     strategy = RSITickerStrategy(start_time, end_time, Horizon.short, None)
+
+    # create a new tick based backtester
     evaluation = TickBasedBacktester(strategy=strategy,
                                      transaction_currency='BTC',
                                      counter_currency='USDT',
@@ -74,11 +77,13 @@ if __name__ == '__main__':
                                      start_crypto=start_crypto,
                                      start_time=start_time,
                                      end_time=end_time)
+    # supply ticks from the ITF DB
     tick_provider = TickProviderITFDB(transaction_currency, counter_currency, start_time, end_time)
+
+    # connect evaluation to tick provider
     tick_provider.add_listener(evaluation)
+
+    # ingest ticks
     tick_provider.run()
+
     print(evaluation.get_report())
-
-
-
-    #evaluation.simulate_events()

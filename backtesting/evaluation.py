@@ -22,39 +22,6 @@ class Evaluation:
         self.transaction_cost_percent = transaction_cost_percents[source]
         self.verbose = verbose
 
-
-    def simulate_events(self):
-        transaction_cost_percent = 0.02 # TODO move
-
-        # connect prices and signals in time (find signal nearest in time to price tick)
-        self.orders = []
-        self.order_signals = []
-        self.cash = self.start_cash
-        self.crypto = self.start_crypto
-        prices_df = self.price_data
-        signals_df = self.signals
-
-        # reindex signals_df to match prices
-        prices_df.reset_index(level=0, inplace=True)
-        signals_df.reset_index(level=0, inplace=True)
-        reindexed_signals_df = pd.merge_asof(signals_df, prices_df, direction='nearest')
-
-        self.trading_df = pd.DataFrame(columns=['close_price', 'signal', 'cash', 'crypto', 'total_value'])
-
-        for i, row in prices_df.iterrows():
-            signals_now = reindexed_signals_df[reindexed_signals_df['timestamp'] == row['timestamp']]
-            signals_now = Signal.pandas_to_objects_list(signals_now)
-
-            self.process_event(row, signals_now, transaction_cost_percent)
-
-        self.end_cash = self.cash
-        self.end_crypto = self.crypto
-
-        logging.info(self.trading_df)
-        self.plot_portfolio()
-
-
-
     def get_start_value_USDT(self):
         try:
             start_value_USDT = convert_value_to_USDT(self.start_cash, self.start_time,
