@@ -10,15 +10,16 @@ class TickDrivenBacktester(Evaluation, TickListener):
 
     def __init__(self, tick_provider, **kwargs):
         super().__init__(**kwargs)
+        self.tick_provider = tick_provider
         self.trading_df = pd.DataFrame(columns=['close_price', 'signal', 'cash', 'crypto', 'total_value'])
         self.run()
 
     def run(self):
         # register at tick provider
-        tick_provider.add_listener(self)
+        self.tick_provider.add_listener(self)
 
         # ingest ticks
-        tick_provider.run()
+        self.tick_provider.run()
 
         # the provider will call the broadcast_ended() method when no ticks remain
 

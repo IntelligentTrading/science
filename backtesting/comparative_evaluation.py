@@ -1,11 +1,10 @@
 import itertools
 
 from data_sources import *
-from evaluation import Evaluation
 from backtester_signals import SignalDrivenBacktester
 from config import backtesting_report_columns
-from signals import SignalType, ALL_SIGNALS
-from strategies import Strategy, BuyAndHoldTimebasedStrategy, MultiSignalStrategy, BuyOnFirstSignalAndHoldStrategy, SignalSignatureStrategy, SimpleRSIStrategy
+from signals import ALL_SIGNALS
+from strategies import BuyAndHoldTimebasedStrategy, SignalSignatureStrategy, SimpleRSIStrategy
 from enum import Enum
 
 class SignalCombinationMode(Enum):
