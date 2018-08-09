@@ -2,6 +2,7 @@ from data_sources import *
 from orders import *
 from utils import *
 import logging
+from config import transaction_cost_percents
 logging.getLogger().setLevel(logging.INFO)
 
 
@@ -18,23 +19,9 @@ class Evaluation:
         self.end_time = end_time
         self.source = source
         self.evaluate_profit_on_last_order = evaluate_profit_on_last_order
-        # self.orders, self.order_signals = strategy.get_orders(start_cash=start_cash, start_crypto=start_crypto,
-        #                                                      time_delay=time_delay)
+        self.transaction_cost_percent = transaction_cost_percents[source]
+        self.verbose = verbose
 
-        self.signals = get_filtered_signals(start_time=start_time, end_time=end_time, counter_currency=counter_currency,
-                                            transaction_currency=transaction_currency,
-                                            resample_period=resample_period, source=source, return_df=True)
-        self.price_data = get_resampled_prices_in_range(start_time, end_time, transaction_currency, counter_currency, resample_period)
-
-        # self.execute_orders(self.orders)
-
-        self.simulate_events()
-
-        # TODO: reports
-        if verbose:
-            print(self.get_report())
-        if self.end_price is None:
-           raise NoPriceDataException()
 
     def simulate_events(self):
         transaction_cost_percent = 0.02 # TODO move
@@ -66,41 +53,6 @@ class Evaluation:
         logging.info(self.trading_df)
         self.plot_portfolio()
 
-    def process_event(self, row, signals_now, transaction_cost_percent):
-        timestamp = row['timestamp']
-        price = row['close_price'].item()
-        decision, order_signal = self.strategy.process_ticker(row, signals_now)
-        if decision == "SELL" and self.crypto > 0:
-            order = Order(OrderType.SELL, self.transaction_currency, self.counter_currency,
-                          timestamp, self.crypto, price, transaction_cost_percent, 0)
-            self.orders.append(order)
-            self.order_signals.append(order_signal)
-            delta_crypto, delta_cash = order.execute()
-            self.cash = self.cash + delta_cash
-            self.crypto = self.crypto + delta_crypto
-            assert self.crypto == 0
-
-        elif decision == "BUY" and self.cash > 0:
-            order = Order(OrderType.BUY, self.transaction_currency, self.counter_currency,
-                          timestamp, self.cash, price, transaction_cost_percent, 0)
-            self.orders.append(order)
-            self.order_signals.append(order_signal)
-            delta_crypto, delta_cash = order.execute()
-            self.cash = self.cash + delta_cash
-            self.crypto = self.crypto + delta_crypto
-            assert self.cash == 0
-        total_value = self.crypto * price + self.cash
-        # compute asset value at this tick, regardless of the signal
-        self.trading_df.loc[timestamp] = pd.Series({'close_price': price,
-                                                    'cash': self.cash,
-                                                    'crypto': self.crypto,
-                                                    'total_value': total_value})
-
-    def plot_portfolio(self):
-        import matplotlib.pyplot as plt
-        ax1 = self.trading_df['close_price'].plot()
-        ax2 = self.trading_df['total_value'].plot(secondary_y=True)
-        plt.show()
 
 
     def get_start_value_USDT(self):
