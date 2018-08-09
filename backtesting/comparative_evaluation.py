@@ -1,7 +1,8 @@
 import itertools
 
 from data_sources import *
-from evaluation import backtesting_report_columns, Evaluation
+from evaluation import Evaluation
+from config import backtesting_report_columns
 from signals import SignalType, ALL_SIGNALS
 from strategies import Strategy, BuyAndHoldTimebasedStrategy, MultiSignalStrategy, BuyOnFirstSignalAndHoldStrategy, SignalSignatureStrategy, SimpleRSIStrategy
 from enum import Enum

@@ -11,4 +11,19 @@ mysql_database_config = {
 
 postgres_connection_string = "host='localhost' dbname='itf_08_05' user='postgres' password='itfscience'"
 
-
+backtesting_report_columns = ["strategy",
+                              "utilized_signals",
+                              "transaction_currency",
+                              "counter_currency",
+                              "num_trades",
+                              "profit_percent",
+                              "profit_percent_USDT",
+                              "buy_and_hold_profit_percent",
+                              "buy_and_hold_profit_percent_USDT",
+                              "start_time",
+                              "end_time",
+                              "evaluate_profit_on_last_order",
+                              "horizon",
+                              "num_profitable_trades",
+                              "avg_profit_per_trade_pair",
+                              "num_sells"]
