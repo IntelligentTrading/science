@@ -1,8 +1,6 @@
 from comparative_evaluation import *
 from strategies import RandomTradingStrategy
 import numpy as np
-from volume_based_indicator import build_strategy, build_resampled_price_volume_df
-
 
 def best_performing_signals_of_the_week():
     # for John - best performing signals of the week

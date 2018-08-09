@@ -2,6 +2,7 @@ import itertools
 
 from data_sources import *
 from evaluation import Evaluation
+from backtester_signals import SignalDrivenBacktester
 from config import backtesting_report_columns
 from signals import SignalType, ALL_SIGNALS
 from strategies import Strategy, BuyAndHoldTimebasedStrategy, MultiSignalStrategy, BuyOnFirstSignalAndHoldStrategy, SignalSignatureStrategy, SimpleRSIStrategy
@@ -130,14 +131,39 @@ class ComparativeEvaluation:
         print("Evaluating strategy...")
         horizon = strategy.horizon
 
+        params = {}
+        params['start_time'] = self.start_time
+        params['end_time'] = self.end_time
+        params['transaction_currency'] = transaction_currency
+        params['counter_currency'] = counter_currency
+        params['start_cash'] = self.start_cash
+        params['start_crypto'] = self.start_crypto
+        params['evaluate_profit_on_last_order'] = self.evaluate_profit_on_last_order
+        params['verbose'] = False
+        params['source'] = source
+
+
         baseline = BuyAndHoldTimebasedStrategy(self.start_time, self.end_time, transaction_currency,
                                                counter_currency, source, horizon)
-        baseline_evaluation = Evaluation(baseline, transaction_currency, counter_currency, self.start_cash,
-                                         self.start_crypto, self.start_time, self.end_time,
-                                         self.evaluate_profit_on_last_order, verbose=False)
-        evaluation = Evaluation(strategy, transaction_currency, counter_currency, self.start_cash,
-                                self.start_crypto, self.start_time, self.end_time,
-                                self.evaluate_profit_on_last_order, verbose=False, time_delay=self.time_delay)
+        baseline_evaluation = SignalDrivenBacktester(strategy=baseline,
+                                                     transaction_currency=transaction_currency,
+                                                     counter_currency=counter_currency,
+                                                     start_cash=self.start_cash,
+                                                     start_crypto=self.start_crypto,
+                                                     start_time=self.start_time,
+                                                     end_time=self.end_time,
+                                                     evaluate_profit_on_last_order=self.evaluate_profit_on_last_order,
+                                                     verbose=False)
+        evaluation = SignalDrivenBacktester(strategy=strategy,
+                                            transaction_currency=transaction_currency,
+                                            counter_currency=counter_currency,
+                                            start_cash=self.start_cash,
+                                            start_crypto=self.start_crypto,
+                                            start_time=self.start_time,
+                                            end_time=self.end_time,
+                                            evaluate_profit_on_last_order=self.evaluate_profit_on_last_order,
+                                            verbose=False,
+                                            time_delay=self.time_delay)
         return self.get_pandas_row_dict(evaluation, baseline_evaluation)
 
     def get_pandas_row_dict(self, evaluation, baseline):

@@ -10,10 +10,6 @@ class TickDrivenBacktester(Evaluation, TickListener):
 
     def __init__(self, tick_provider, **kwargs):
         super().__init__(**kwargs)
-        self.orders = []
-        self.order_signals = []
-        self.cash = self.start_cash
-        self.crypto = self.start_crypto
         self.trading_df = pd.DataFrame(columns=['close_price', 'signal', 'cash', 'crypto', 'total_value'])
         self.run()
 
