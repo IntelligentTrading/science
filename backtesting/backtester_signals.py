@@ -12,6 +12,7 @@ class SignalDrivenBacktester(Evaluation):
         super().__init__(strategy, transaction_currency, counter_currency,
                  start_cash, start_crypto, start_time, end_time, source,
                  resample_period, evaluate_profit_on_last_order, verbose)
+        self.start_crypto_currency = self.transaction_currency
         self.orders, self.order_signals = self.strategy.get_orders(
             start_cash=self.start_cash,
             start_crypto=self.start_crypto,
