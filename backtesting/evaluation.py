@@ -2,6 +2,7 @@ from data_sources import *
 from orders import *
 from utils import *
 import logging
+logging.getLogger().setLevel(logging.INFO)
 
 
 backtesting_report_columns = ["strategy",
@@ -24,8 +25,9 @@ backtesting_report_columns = ["strategy",
 
 class Evaluation:
     def __init__(self, strategy, transaction_currency, counter_currency,
-                 start_cash, start_crypto, start_time, end_time, source=0, evaluate_profit_on_last_order=False):
-        self.start_crypto_currency = transaction_currency
+                 start_cash, start_crypto, start_time, end_time, source=0,
+                 resample_period=60, evaluate_profit_on_last_order=False):
+        self.transaction_currency = transaction_currency
         self.counter_currency = counter_currency
         self.start_cash = start_cash
         self.start_crypto = start_crypto
@@ -114,7 +116,7 @@ class Evaluation:
         import matplotlib.pyplot as plt
         #trading_df.plot()
         ax1 = trading_df['close_price'].plot()
-        ax2 = trading_df['total'].plot(secondary_y=True)
+        ax2 = trading_df['total_value'].plot(secondary_y=True)
 
         plt.show()
 
