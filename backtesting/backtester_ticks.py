@@ -4,16 +4,27 @@ from orders import Order, OrderType
 from data_sources import Horizon
 from tick_provider_itf_db import TickProviderITFDB
 import pandas as pd
+import logging
 
-class TickBasedBacktester(Evaluation, TickListener):
+class TickDrivenBacktester(Evaluation, TickListener):
 
-    def __init__(self, **kwargs):
+    def __init__(self, tick_provider, **kwargs):
         super().__init__(**kwargs)
         self.orders = []
         self.order_signals = []
         self.cash = self.start_cash
         self.crypto = self.start_crypto
         self.trading_df = pd.DataFrame(columns=['close_price', 'signal', 'cash', 'crypto', 'total_value'])
+        self.run()
+
+    def run(self):
+        # register at tick provider
+        tick_provider.add_listener(self)
+
+        # ingest ticks
+        tick_provider.run()
+
+        # the provider will call the broadcast_ended() method when no ticks remain
 
     def process_event(self, price_data, signals_now):
         timestamp = price_data['timestamp']
@@ -24,20 +35,13 @@ class TickBasedBacktester(Evaluation, TickListener):
                           timestamp, self.crypto, price, self.transaction_cost_percent, 0)
             self.orders.append(order)
             self.order_signals.append(order_signal)
-            delta_crypto, delta_cash = order.execute()
-            self.cash = self.cash + delta_cash
-            self.crypto = self.crypto + delta_crypto
-            assert self.crypto == 0
-
+            self.execute_order(order)
         elif decision == "BUY" and self.cash > 0:
             order = Order(OrderType.BUY, self.transaction_currency, self.counter_currency,
                           timestamp, self.cash, price, self.transaction_cost_percent, 0)
             self.orders.append(order)
             self.order_signals.append(order_signal)
-            delta_crypto, delta_cash = order.execute()
-            self.cash = self.cash + delta_cash
-            self.crypto = self.crypto + delta_crypto
-            assert self.cash == 0
+            self.execute_order(order)
 
         # compute asset value at this tick, regardless of the signal
         total_value = self.crypto * price + self.cash
@@ -51,6 +55,11 @@ class TickBasedBacktester(Evaluation, TickListener):
     def broadcast_ended(self):
         self.end_cash = self.cash
         self.end_crypto = self.crypto
+        self.end_price = self.trading_df.tail(1)['close_price'].item()
+
+        if self.verbose:
+            logging.info(self.get_report())
+
 
     def plot_portfolio(self):
         import matplotlib.pyplot as plt
@@ -69,21 +78,17 @@ if __name__ == '__main__':
     counter_currency = 'USDT'
     strategy = RSITickerStrategy(start_time, end_time, Horizon.short, None)
 
-    # create a new tick based backtester
-    evaluation = TickBasedBacktester(strategy=strategy,
-                                     transaction_currency='BTC',
-                                     counter_currency='USDT',
-                                     start_cash=start_cash,
-                                     start_crypto=start_crypto,
-                                     start_time=start_time,
-                                     end_time=end_time)
     # supply ticks from the ITF DB
     tick_provider = TickProviderITFDB(transaction_currency, counter_currency, start_time, end_time)
 
-    # connect evaluation to tick provider
-    tick_provider.add_listener(evaluation)
+    # create a new tick based backtester
+    evaluation = TickDrivenBacktester(tick_provider=tick_provider,
+                                      strategy=strategy,
+                                      transaction_currency='BTC',
+                                      counter_currency='USDT',
+                                      start_cash=start_cash,
+                                      start_crypto=start_crypto,
+                                      start_time=start_time,
+                                      end_time=end_time)
 
-    # ingest ticks
-    tick_provider.run()
 
-    print(evaluation.get_report())
