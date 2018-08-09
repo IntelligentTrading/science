@@ -62,7 +62,7 @@ class TickBasedBacktester(Evaluation, TickListener):
 if __name__ == '__main__':
     from strategies import RSITickerStrategy
     end_time = 1531699200
-    start_time = end_time - 60*60*24*7
+    start_time = end_time - 60*60*24*70
     start_cash = 10000000
     start_crypto = 0
     transaction_currency = 'BTC'

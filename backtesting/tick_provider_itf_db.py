@@ -21,7 +21,12 @@ class TickProviderITFDB(TickProvider):
         # move timestamp to column
         self.prices_df.reset_index(level=0, inplace=True)
         signals_df.reset_index(level=0, inplace=True)
-        self.reindexed_signals_df = pd.merge_asof(signals_df, self.prices_df, direction='nearest')
+        signals_df = signals_df.dropna()
+        self.prices_df = self.prices_df.dropna()
+
+        self.reindexed_signals_df = pd.merge_asof(signals_df.sort_values('timestamp'),
+                                                  self.prices_df.sort_values('timestamp'),
+                                                  direction='nearest')
 
     def run(self):
         for i, price_data in self.prices_df.iterrows():
