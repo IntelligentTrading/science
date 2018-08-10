@@ -1,8 +1,6 @@
-import logging
 from evaluation import Evaluation
 from tick_listener import TickListener
 from orders import Order, OrderType
-from data_sources import Horizon
 from tick_provider_itf_db import TickProviderITFDB
 
 
@@ -58,14 +56,19 @@ class TickDrivenBacktester(Evaluation, TickListener):
 
 
 if __name__ == '__main__':
-    from strategies import RSITickerStrategy
+    from strategies import TickerStrategy, SignalSignatureStrategy
     end_time = 1531699200
     start_time = end_time - 60*60*24*70
     start_cash = 10000000
     start_crypto = 0
+    source = 0
     transaction_currency = 'BTC'
     counter_currency = 'USDT'
-    strategy = RSITickerStrategy(start_time, end_time, Horizon.short, None)
+    rsi_strategy = SignalSignatureStrategy(
+        source,
+        ['rsi_buy_2', 'rsi_sell_2', 'rsi_buy_1', 'rsi_sell_1', 'rsi_buy_3', 'rsi_sell_3']
+    )
+    strategy = TickerStrategy(rsi_strategy)
 
     # supply ticks from the ITF DB
     tick_provider = TickProviderITFDB(transaction_currency, counter_currency, start_time, end_time)

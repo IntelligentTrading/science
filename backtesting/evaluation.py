@@ -246,8 +246,8 @@ class Evaluation(ABC):
 
         if self._verbose:
             logging.info(self.get_report())
-            logging.info(self.trading_df)
-            self.plot_portfolio()
+            # logging.info(self.trading_df)
+            # self.plot_portfolio()
 
     def _fill_returns(self, df):
         df['return_from_initial_investment'] = (df['total_value'] - self.start_value) / self.start_value

@@ -98,8 +98,8 @@ if __name__ == "__main__":
     kwargs['resample_period'] = 60
     kwargs['time_delay'] = 0
 
-    #evaluate_rsi_signature(**kwargs)
-    #evaluate_rsi(75, 25, **kwargs)
-    #evaluate_trend_based("SMA", **kwargs)
+    evaluate_rsi_signature(**kwargs)
+    evaluate_rsi(75, 25, **kwargs)
+    evaluate_trend_based("SMA", **kwargs)
     find_num_cumulative_outperforms((("BTC","USDT"),("DOGE","BTC")), **kwargs)
 

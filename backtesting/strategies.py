@@ -153,6 +153,12 @@ class TickerStrategy(Strategy):
                 return "BUY", signal
         return None, None
 
+    def belongs_to_this_strategy(self, signal):
+        return self._strategy.belongs_to_this_strategy(signal)
+
+    def get_short_summary(self):
+        return self._strategy.get_short_summary()
+
 
 class SignalSignatureStrategy(Strategy):
     def __init__(self, source, signal_set):
