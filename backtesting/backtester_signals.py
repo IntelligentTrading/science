@@ -15,8 +15,7 @@ class SignalDrivenBacktester(Evaluation):
         self.signals = get_filtered_signals(start_time=start_time, end_time=end_time, counter_currency=counter_currency,
                                             transaction_currency=transaction_currency,
                                             source=source)
-        self._start_crypto_currency = self._transaction_currency
-        self._buy_currency = self._transaction_currency
+        self._buy_currency = self._start_crypto_currency = self._transaction_currency
         self.orders, self.order_signals = self._strategy.get_orders(
             signals = self.signals,
             start_cash=self._start_cash,
@@ -28,7 +27,8 @@ class SignalDrivenBacktester(Evaluation):
     def fill_trading_df(self, orders):
         for i, order in enumerate(orders):
             if i == 0: # first order
-                assert order.order_type == OrderType.BUY and order.transaction_currency == self._start_crypto_currency
+                assert order.order_type == OrderType.BUY
+                self._start_crypto_currency = self._buy_currency = order.transaction_currency
 
             if order.order_type == OrderType.BUY:
                 self._buy_currency = order.transaction_currency

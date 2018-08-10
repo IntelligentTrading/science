@@ -75,12 +75,10 @@ def find_num_cumulative_outperforms(currency_pairs, **kwargs):
     print("RSI cumulative was profitable for {0:0.2f}% of pairs".format(rsi_cumulative_profitable / total_cumulative * 100))
 
 # TODO: look into this
-def evaluate_rsi_any_currency(counter_currency, start_time, end_time,
-                 start_cash, start_crypto, overbought_threshold, oversold_threshold):
-    rsi_strategy = SimpleRSIStrategy(start_time, end_time, Horizon.short, counter_currency, overbought_threshold, oversold_threshold)
-    evaluation = SignalDrivenBacktester(rsi_strategy, "", counter_currency, start_cash, start_crypto, start_time, end_time, False)
-    print(evaluation.get_report())
-    return evaluation
+def evaluate_rsi_any_currency(overbought_threshold, oversold_threshold, **kwargs):
+    rsi_strategy = SimpleRSIStrategy(kwargs['source'], overbought_threshold, oversold_threshold)
+    kwargs['transaction_currency'] = None
+    return SignalDrivenBacktester(strategy=rsi_strategy, **kwargs)
 
 
 if __name__ == "__main__":
@@ -98,6 +96,7 @@ if __name__ == "__main__":
     kwargs['resample_period'] = 60
     kwargs['time_delay'] = 0
 
+    evaluate_rsi_any_currency(75, 25, **kwargs)
     evaluate_rsi_signature(**kwargs)
     evaluate_rsi(75, 25, **kwargs)
     evaluate_trend_based("SMA", **kwargs)
