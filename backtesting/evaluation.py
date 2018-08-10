@@ -176,11 +176,15 @@ class Evaluation(ABC):
 
     @property
     def percent_profitable_trades(self):
-        return (len(self._buy_sell_pair_gains) / self.num_buy_sell_pairs) if self.num_buy_sell_pairs != 0 else 0
+        num_gains = len(self._buy_sell_pair_gains) \
+            if not (len(self._buy_sell_pair_gains) == 1 and np.isnan(self._buy_sell_pair_gains[0])) else 0
+        return (num_gains / self.num_buy_sell_pairs) if self.num_buy_sell_pairs != 0 else 0
 
     @property
     def percent_unprofitable_trades(self):
-        return (len(self._buy_sell_pair_losses) / self.num_buy_sell_pairs) if self.num_buy_sell_pairs != 0 else 0
+        num_losses = len(self._buy_sell_pair_losses) \
+            if not (len(self._buy_sell_pair_losses) == 1 and np.isnan(self._buy_sell_pair_losses[0])) else 0
+        return (num_losses / self.num_buy_sell_pairs) if self.num_buy_sell_pairs != 0 else 0
 
     #@property
     #def num_trades(self):
