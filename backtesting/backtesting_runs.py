@@ -117,10 +117,10 @@ def delayed_trading_stats():
                     evaluation_rsi_delayed = rsi.evaluate(start_cash, start_crypto, start, end, time_delay=time_delay)
                     if evaluation_rsi.get_num_trades() == 0 or evaluation_rsi_delayed.get_num_trades() == 0:
                         continue
-                    deltas.append(evaluation_rsi_delayed.get_profit_percent() - evaluation_rsi.get_profit_percent())
+                    deltas.append(evaluation_rsi_delayed.profit_percent() - evaluation_rsi.profit_percent())
                     per_trade_deltas.append(evaluation_rsi_delayed.avg_profit_per_trade_pair - evaluation_rsi.avg_profit_per_trade_pair)
-                    profits.append(evaluation_rsi.get_profit_percent())
-                    profits_delayed.append(evaluation_rsi_delayed.get_profit_percent())
+                    profits.append(evaluation_rsi.profit_percent())
+                    profits_delayed.append(evaluation_rsi_delayed.profit_percent())
                 except NoPriceDataException:
                     print("Price data not found!")
                     continue
@@ -154,8 +154,8 @@ def random_strategy_backtesting(out_path="random_strat_backtesting.txt"):
             if evaluation.num_trades == 0:
                 continue
             num_evaluations += 1
-            profit_percent += evaluation.get_profit_percent()
-            profits.append(evaluation.get_profit_percent())
+            profit_percent += evaluation.profit_percent()
+            profits.append(evaluation.profit_percent())
 
         results_random.append({"max_num_signals": max_num_signals, "avg_profit_percent" : np.mean(profits), "std_profit_percent": np.std(profits)})
         print("Average profit percent: {0:0.2f}%".format(profit_percent / num_evaluations))
@@ -167,8 +167,8 @@ def random_strategy_backtesting(out_path="random_strat_backtesting.txt"):
     out.write("\n\n")
     bah = BuyAndHoldTimebasedStrategy(start, end, transaction_currency, counter_currency, 0, Horizon.any)
     bah_eval = bah.evaluate(1, 0, start, end, False, True)
-    print("Buy and hold performance: {0:0.2f}%".format(bah_eval.get_profit_percent()))
-    out.write("Buy and hold performance: {0:0.2f}%\n".format(bah_eval.get_profit_percent()))
+    print("Buy and hold performance: {0:0.2f}%".format(bah_eval.profit_percent()))
+    out.write("Buy and hold performance: {0:0.2f}%\n".format(bah_eval.profit_percent()))
     out.write("\n")
 
     results_rsi = []
@@ -177,11 +177,11 @@ def random_strategy_backtesting(out_path="random_strat_backtesting.txt"):
             rsi = SimpleRSIStrategy(start, end, Horizon.short, counter_currency, overbought_threshold, oversold_threshold, transaction_currency)
             rsi_eval = rsi.evaluate(1, 0, start, end, False, True)
             print("RSI (overbought = {}, oversold = {}) performance: {:0.2f}".format(overbought_threshold,
-                                                                                      oversold_threshold,
-                                                                                      rsi_eval.get_profit_percent()))
+                                                                                     oversold_threshold,
+                                                                                     rsi_eval.profit_percent()))
             results_rsi.append({"overbought_threshold": overbought_threshold,
                                 "oversold_threshold" : oversold_threshold,
-                                "profit_percent": rsi_eval.get_profit_percent()})
+                                "profit_percent": rsi_eval.profit_percent()})
 
     df = pd.DataFrame(results_rsi)
     out.write(str(df))

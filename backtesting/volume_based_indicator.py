@@ -140,7 +140,7 @@ def calculate_profits(price_volume_df, start_cash, start_crypto, sell_strategy=N
             evaluation = strategy.evaluate(start_cash, start_crypto, start_time, end_time, verbose=False)
             volume_change_percents.append(percent_change_volume)
             price_change_percents.append(percent_change_price)
-            profits.append(evaluation.get_profit_percent())
+            profits.append(evaluation.profit_percent())
     profit_df = pd.DataFrame.from_items(zip(["Volume change percent", "Price change percent", "Profit percent"],
                                             [volume_change_percents, price_change_percents, profits]))
     return profit_df

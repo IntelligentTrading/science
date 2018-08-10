@@ -54,8 +54,8 @@ def evaluate_rsi_comparatively(transaction_currency, counter_currency, start_tim
             rsi_evaluation = Evaluation(rsi_strategy, transaction_currency, counter_currency, start_cash,
                                         start_crypto, start_time, end_time, False)
             print("RSI overbought = {}, oversold = {}".format(overbought_threshold, oversold_threshold))
-            print("  Profit - RSI buy and hold: {0:.2f}%".format(baseline_evaluation.get_profit_percent()))
-            print("  Profit - RSI trading: {0:.2f}% ({1} trades)\n".format(rsi_evaluation.get_profit_percent(), rsi_evaluation.num_trades))
+            print("  Profit - RSI buy and hold: {0:.2f}%".format(baseline_evaluation.profit_percent()))
+            print("  Profit - RSI trading: {0:.2f}% ({1} trades)\n".format(rsi_evaluation.profit_percent(), rsi_evaluation.num_trades))
 
 
 def evaluate_multi(transaction_currency, counter_currency, start_time, end_time,
@@ -129,8 +129,8 @@ def find_num_cumulative_outperforms(start_time, end_time, currency_pairs):
                                                                   counter_currency,
                                                                   horizon)
 
-                profit_rsi_cumulative = evaluation_cumulative.get_profit_percent()
-                profit_rsi = evaluation_rsi.get_profit_percent()
+                profit_rsi_cumulative = evaluation_cumulative.profit_percent()
+                profit_rsi = evaluation_rsi.profit_percent()
 
                 if evaluation_cumulative.get_num_trades() == 0 and evaluation_rsi.get_num_trades() == 0:
                     continue

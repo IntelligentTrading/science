@@ -28,28 +28,28 @@ class TickDrivenBacktester(Evaluation, TickListener):
     def process_event(self, price_data, signals_now):
         timestamp = price_data['timestamp']
         price = price_data['close_price'].item()
-        decision, order_signal = self.strategy.process_ticker(price_data, signals_now)
+        decision, order_signal = self._strategy.process_ticker(price_data, signals_now)
         order = None
-        if decision == "SELL" and self.crypto > 0:
-            order = Order(OrderType.SELL, self.transaction_currency, self.counter_currency,
-                          timestamp, self.crypto, price, self.transaction_cost_percent, 0)
+        if decision == "SELL" and self._crypto > 0:
+            order = Order(OrderType.SELL, self._transaction_currency, self._counter_currency,
+                          timestamp, self._crypto, price, self._transaction_cost_percent, 0)
             self.orders.append(order)
             self.order_signals.append(order_signal)
             self.execute_order(order)
-        elif decision == "BUY" and self.cash > 0:
-            order = Order(OrderType.BUY, self.transaction_currency, self.counter_currency,
-                          timestamp, self.cash, price, self.transaction_cost_percent, 0)
+        elif decision == "BUY" and self._cash > 0:
+            order = Order(OrderType.BUY, self._transaction_currency, self._counter_currency,
+                          timestamp, self._cash, price, self._transaction_cost_percent, 0)
             self.orders.append(order)
             self.order_signals.append(order_signal)
             self.execute_order(order)
 
         # compute asset value at this tick, regardless of the signal
-        total_value = self.crypto * price + self.cash
+        total_value = self._crypto * price + self._cash
 
         # fill a row in the trading dataframe
         self.trading_df.loc[timestamp] = pd.Series({'close_price': price,
-                                                    'cash': self.cash,
-                                                    'crypto': self.crypto,
+                                                    'cash': self._cash,
+                                                    'crypto': self._crypto,
                                                     'total_value': total_value,
                                                     'order': "" if order is None else order.order_type.value,
                                                     'signal': "" if order is None else order_signal.signal_type})
@@ -57,15 +57,15 @@ class TickDrivenBacktester(Evaluation, TickListener):
     def broadcast_ended(self):
         self.finalize_backtesting()
 
-        if self.verbose:
+        if self._verbose:
             logging.info(self.get_report())
             logging.info(self.trading_df)
 
     def finalize_backtesting(self):
         # set finishing variable values
-        self.end_cash = self.cash
-        self.end_crypto = self.crypto
-        self.end_price = self.trading_df.tail(1)['close_price'].item()
+        self._end_cash = self._cash
+        self._end_crypto = self._crypto
+        self._end_price = self.trading_df.tail(1)['close_price'].item()
 
         # compute returns for stats
         self.trading_df = self._fill_returns(self.trading_df)
@@ -95,7 +95,7 @@ class TickDrivenBacktester(Evaluation, TickListener):
 
 
     def _fill_returns(self, df):
-        df['return_from_initial_investment'] = (df['total_value'] - self.get_start_value()) / self.get_start_value()
+        df['return_from_initial_investment'] = (df['total_value'] - self.start_value) / self.start_value
         df['return_relative_to_past_tick'] = df['total_value'].diff() / df['total_value'].shift(1)
         return df
 
@@ -108,29 +108,29 @@ class TickDrivenBacktester(Evaluation, TickListener):
     # override to show all our new stats
     def get_report(self, include_order_signals=True):
         Evaluation.get_report(self, include_order_signals)
-        logging.info("\nHere are our new stats:\n\n")
-        logging.info("Max drawdown: {}".format(self.max_drawdown))
-        logging.info("Sharpe ratio: {}".format(self.sharpe_ratio))
-        logging.info("Buy-sell pair gains - overall stats")
-        logging.info("   min = {}, max = {}, mean = {}, stdev = {}".format(
+        logging.info("\nHere are our new stats:")
+        logging.info("  Max drawdown: {}".format(self.max_drawdown))
+        logging.info("  Sharpe ratio: {}".format(self.sharpe_ratio))
+        logging.info("  Buy-sell pair gains - overall stats")
+        logging.info("     min = {}, max = {}, mean = {}, stdev = {}".format(
             self.min_buy_sell_pair_gain,
             self.max_buy_sell_pair_gain,
             self.mean_buy_sell_pair_gain,
             self.std_buy_sell_pair_gain
         ))
 
-        logging.info("Buy-sell pair losses - overall stats")
-        logging.info("   min = {}, max = {}, mean = {}, stdev = {}".format(
+        logging.info("  Buy-sell pair losses - overall stats")
+        logging.info("     min = {}, max = {}, mean = {}, stdev = {}".format(
             self.min_buy_sell_pair_loss,
             self.max_buy_sell_pair_loss,
             self.mean_buy_sell_pair_loss,
             self.std_buy_sell_pair_loss
         ))
 
-        logging.info("Total buy-sell pairs: {}".format(self.num_buy_sell_pairs))
-        logging.info("Total profitable trades: {}".format(self.num_profitable_trades))
-        logging.info("Percent profitable trades: {}".format(self.percent_profitable_trades))
-        logging.info("Percent unprofitable trades: {}".format(self.percent_unprofitable_trades))
+        logging.info("  Total buy-sell pairs: {}".format(self.num_buy_sell_pairs))
+        logging.info("  Total profitable trades: {}".format(self.num_profitable_trades))
+        logging.info("  Percent profitable trades: {}".format(self.percent_profitable_trades))
+        logging.info("  Percent unprofitable trades: {}".format(self.percent_unprofitable_trades))
 
     @property
     def max_drawdown(self):

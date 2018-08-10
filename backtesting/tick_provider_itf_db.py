@@ -24,6 +24,7 @@ class TickProviderITFDB(TickProvider):
         signals_df = signals_df.dropna()
         self.prices_df = self.prices_df.dropna()
 
+        # need to merge signal and price timestamps, as they don't match in the database
         self.reindexed_signals_df = pd.merge_asof(signals_df.sort_values('timestamp'),
                                                   self.prices_df.sort_values('timestamp'),
                                                   direction='nearest')

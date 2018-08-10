@@ -22,7 +22,7 @@ def evaluate_buy_and_hold(data, history_size, verbose=True):
         print("Start time: {} \tEnd time: {}".format(
             pd.to_datetime(start_bah, unit='s'),
             pd.to_datetime(data.end_time, unit='s')))
-        print("Buy and hold baseline: {0:0.2f}%".format(evaluation.get_profit_percent()))
+        print("Buy and hold baseline: {0:0.2f}%".format(evaluation.profit_percent()))
     return evaluation
 
 
@@ -87,7 +87,7 @@ def evaluate_dogenauts_wow(doge_folder, evaluation_data):
 
                 orders, _ = strat.get_orders(start_cash, start_crypto)
                 evaluation = strat.evaluate(start_cash, start_crypto, evaluation_data.start_time, evaluation_data.end_time, False, True)
-                profit = evaluation.get_profit_percent()
+                profit = evaluation.profit_percent()
                 print("Profit: {0:0.02f}%".format(profit))
                 if profit > 0 and not profit in seen_individuals:
                     draw_price_chart(evaluation_data.timestamps, evaluation_data.prices, orders)
