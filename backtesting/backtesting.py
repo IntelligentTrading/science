@@ -1,13 +1,13 @@
-from evaluation import *
+from backtester_signals import SignalDrivenBacktester
 from strategies import *
 
 ### Various sample backtesting runs
 
 def evaluate_rsi_signature(transaction_currency, counter_currency, start_time, end_time,
-                 start_cash, start_crypto, horizon=Horizon.any, time_delay=0):
+                 start_cash, start_crypto, source=0, resample_period=60, horizon=Horizon.any, time_delay=0):
     rsi_strategy = SignalSignatureStrategy(['rsi_buy_2', 'rsi_sell_2'], start_time, end_time, horizon, counter_currency, transaction_currency)
-    evaluation = Evaluation(rsi_strategy, transaction_currency, counter_currency,
-                            start_cash, start_crypto, start_time, end_time, False, False, time_delay)
+    evaluation = SignalDrivenBacktester(rsi_strategy, transaction_currency, counter_currency,
+                            start_cash, start_crypto, start_time, end_time, source, resample_period, False, False, time_delay)
     print(evaluation.get_report())
     return evaluation
 
@@ -23,7 +23,7 @@ def evaluate_rsi(transaction_currency, counter_currency, start_time, end_time,
 def evaluate_rsi_any_currency(counter_currency, start_time, end_time,
                  start_cash, start_crypto, overbought_threshold, oversold_threshold):
     rsi_strategy = SimpleRSIStrategy(start_time, end_time, Horizon.short, counter_currency, overbought_threshold, oversold_threshold)
-    evaluation = Evaluation(rsi_strategy, "", counter_currency, start_cash, start_crypto, start_time, end_time, False)
+    evaluation = SignalDrivenBacktester(rsi_strategy, "", counter_currency, start_cash, start_crypto, start_time, end_time, False)
     print(evaluation.get_report())
     return evaluation
 
@@ -31,7 +31,7 @@ def evaluate_rsi_any_currency(counter_currency, start_time, end_time,
 def evaluate_trend_based(signal_type, transaction_currency, counter_currency, start_time, end_time,
                  start_cash, start_crypto, horizon=Horizon.any, strength=Strength.short):
     strategy = SimpleTrendBasedStrategy(signal_type, start_time, end_time, horizon, counter_currency, transaction_currency, strength)
-    evaluation = Evaluation(strategy, transaction_currency, counter_currency, start_cash, start_crypto, start_time, end_time, False, False)
+    evaluation = SignalDrivenBacktester(strategy, transaction_currency, counter_currency, start_cash, start_crypto, start_time, end_time, False, False)
     return evaluation
 
 
@@ -49,9 +49,9 @@ def evaluate_rsi_comparatively(transaction_currency, counter_currency, start_tim
             rsi_strategy = SimpleRSIStrategy(start_time, end_time, Horizon.short, counter_currency,
                                              overbought_threshold, oversold_threshold, transaction_currency)
             baseline = BuyOnFirstSignalAndHoldStrategy(rsi_strategy)
-            baseline_evaluation = Evaluation(baseline, transaction_currency, counter_currency, start_cash,
+            baseline_evaluation = SignalDrivenBacktester(baseline, transaction_currency, counter_currency, start_cash,
                                              start_crypto, start_time, end_time, False)
-            rsi_evaluation = Evaluation(rsi_strategy, transaction_currency, counter_currency, start_cash,
+            rsi_evaluation = SignalDrivenBacktester(rsi_strategy, transaction_currency, counter_currency, start_cash,
                                         start_crypto, start_time, end_time, False)
             print("RSI overbought = {}, oversold = {}".format(overbought_threshold, oversold_threshold))
             print("  Profit - RSI buy and hold: {0:.2f}%".format(baseline_evaluation.profit_percent()))
@@ -75,10 +75,10 @@ def evaluate_multi(transaction_currency, counter_currency, start_time, end_time,
 
     multi_strat = MultiSignalStrategy(buy, sell, horizon)
     buy_and_hold = BuyOnFirstSignalAndHoldStrategy(multi_strat)
-    evaluation = Evaluation(multi_strat, transaction_currency, counter_currency, start_cash, start_crypto,
+    evaluation = SignalDrivenBacktester(multi_strat, transaction_currency, counter_currency, start_cash, start_crypto,
                             start_time,
                             end_time, False, True)
-    baseline = Evaluation(buy_and_hold, transaction_currency, counter_currency, start_cash, start_crypto,
+    baseline = SignalDrivenBacktester(buy_and_hold, transaction_currency, counter_currency, start_cash, start_crypto,
                           start_time,
                           end_time, False, True)
 
@@ -168,3 +168,9 @@ def evaluate_multi_any_currency(counter_currency, start_time, end_time,
                  start_cash, overbought_threshold, oversold_threshold):
     return evaluate_multi(None, counter_currency, start_time, end_time,
                  1000, 0, overbought_threshold, oversold_threshold)
+
+
+if __name__ == "__main__":
+    end_time = 1531699200
+    start_time = end_time - 60*60*24*7
+    evaluate_rsi_signature("BTC", "USDT", start_time, end_time, 1000, 0)
