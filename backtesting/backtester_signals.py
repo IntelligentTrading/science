@@ -2,6 +2,7 @@ from evaluation import Evaluation
 from orders import OrderType
 import logging
 from data_sources import get_price, NoPriceDataException
+import pandas as pd
 
 
 class SignalDrivenBacktester(Evaluation):
@@ -18,6 +19,19 @@ class SignalDrivenBacktester(Evaluation):
             start_crypto=self._start_crypto,
             time_delay=0)
         self.run()
+
+
+    def fill_trading_df(self, orders):
+        for i, order in enumerate(orders):
+            if i == 0: # first order
+                assert order.order_type == OrderType.BUY
+            self.execute_order(order)
+            self._current_timestamp = order.timestamp
+            self._current_price = order.unit_price
+            self._current_order = order
+            self._current_signal = None
+            self._write_to_trading_df()
+
 
     def execute_orders(self, orders):
         for i, order in enumerate(orders):
@@ -51,10 +65,11 @@ class SignalDrivenBacktester(Evaluation):
 
         end_crypto_currency = self._buy_currency if self.num_trades > 0 else self.start_crypto_currency
 
-        self._end_cash = self._cash
-        self._end_crypto = self._crypto
-        self._end_price = end_price
+        #self._end_cash = self._cash
+        #self._end_crypto = self._crypto
+        #self._end_price = end_price
         self._end_crypto_currency = end_crypto_currency
+        self._finalize_backtesting()
 
     def run(self):
         self.execute_orders(self.orders)

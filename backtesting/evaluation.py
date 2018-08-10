@@ -5,6 +5,8 @@ import logging
 from config import transaction_cost_percents
 logging.getLogger().setLevel(logging.INFO)
 from abc import ABC, abstractmethod
+import empyrical
+import numpy as np
 
 
 class Evaluation(ABC):
@@ -27,6 +29,9 @@ class Evaluation(ABC):
         # Init backtesting variables
         self._cash = start_cash
         self._crypto = start_crypto
+        self.orders = []
+        self.order_signals = []
+        self.trading_df = pd.DataFrame(columns=['close_price', 'signal', 'order', 'cash', 'crypto', 'total_value'])
 
         # TODO: this goes out
         self.num_trades = 0
@@ -34,8 +39,7 @@ class Evaluation(ABC):
         self.invested_on_buy = 0
         self.avg_profit_per_trade_pair = 0
         self.num_sells = 0
-        self.orders = []
-        self.order_signals = []
+
 
     @abstractmethod
     def run(self):
@@ -101,7 +105,14 @@ class Evaluation(ABC):
     @property
     def end_value(self):
         try:
-            return self.end_cash + self._end_price * self.end_crypto
+            return self.end_cash + self.end_price * self.end_crypto
+        except:
+            return None
+
+    @property
+    def end_price(self):
+        try:
+            return get_price(self._transaction_currency, self._end_time, self._source, self._counter_currency)
         except:
             return None
 
@@ -119,6 +130,58 @@ class Evaluation(ABC):
         else:
             return self.profit/self.start_value*100
 
+    @property
+    def max_drawdown(self):
+        return self._max_drawdown
+
+    @property
+    def sharpe_ratio(self):
+        return self._sharpe_ratio
+
+    @property
+    def min_buy_sell_pair_gain(self):
+        return self._buy_sell_pair_gains.min()
+
+    @property
+    def max_buy_sell_pair_gain(self):
+        return self._buy_sell_pair_gains.max()
+
+    @property
+    def mean_buy_sell_pair_gain(self):
+        return self._buy_sell_pair_gains.mean()
+
+    @property
+    def std_buy_sell_pair_gain(self):
+        return self._buy_sell_pair_gains.std()
+
+    @property
+    def min_buy_sell_pair_loss(self):
+        return self._buy_sell_pair_losses.min()
+
+    @property
+    def max_buy_sell_pair_loss(self):
+        return self._buy_sell_pair_losses.max()
+
+    @property
+    def mean_buy_sell_pair_loss(self):
+        return self._buy_sell_pair_losses.mean()
+
+    @property
+    def std_buy_sell_pair_loss(self):
+        return self._buy_sell_pair_losses.std()
+
+    @property
+    def num_buy_sell_pairs(self):
+        return self.num_sells
+
+    @property
+    def percent_profitable_trades(self):
+        return (len(self._buy_sell_pair_gains) / self.num_buy_sell_pairs) if self.num_buy_sell_pairs != 0 else 0
+
+    @property
+    def percent_unprofitable_trades(self):
+        return (len(self._buy_sell_pair_losses) / self.num_buy_sell_pairs) if self.num_buy_sell_pairs != 0 else 0
+
     #@property
     #def num_trades(self):
     #    return len(self.orders)
@@ -126,6 +189,55 @@ class Evaluation(ABC):
     #@property
     #def end_price(self):
     #    return self.trading_df.tail(1)['close_price'].item()
+
+    def _write_to_trading_df(self):
+        total_value = self._crypto * self._current_price + self._cash
+
+        # fill a row in the trading dataframe
+        self.trading_df.loc[self._current_timestamp] = pd.Series({
+            'close_price': self._current_price,
+            'cash': self._cash,
+            'crypto': self._crypto,
+            'total_value': total_value,
+            'order': "" if self._current_order is None else self._current_order.order_type.value,
+            'signal': "" if self._current_order is None else self._current_signal.signal_type})
+
+    def _finalize_backtesting(self):
+        # set finishing variable values
+        self._end_cash = self._cash
+        self._end_crypto = self._crypto
+
+        # compute returns for stats
+        self.trading_df = self._fill_returns(self.trading_df)
+        returns = np.array(self.trading_df['return_relative_to_past_tick'])
+        self._max_drawdown = empyrical.max_drawdown(np.array(returns))
+        self._sharpe_ratio = empyrical.sharpe_ratio(returns)
+
+        # extract only rows that have orders
+        orders_df = self.trading_df[self.trading_df['order'] != ""]
+        # recalculate returns
+        orders_df = self._fill_returns(orders_df)
+        # get profits on sell
+        orders_sell_df = orders_df[orders_df['order'] == "SELL"]
+        self._buy_sell_pair_returns = np.array(orders_sell_df['return_relative_to_past_tick'])
+        self._buy_sell_pair_gains = self._buy_sell_pair_returns[np.where(self._buy_sell_pair_returns > 0)]
+        self._buy_sell_pair_losses = self._buy_sell_pair_returns[np.where(self._buy_sell_pair_returns < 0)]
+
+        # if no returns, no gains or no losses, stat functions will return nan
+        if len(self._buy_sell_pair_returns) == 0:
+            self._buy_sell_pair_returns = np.array([np.nan])
+
+        if len(self._buy_sell_pair_gains) == 0:
+            self._buy_sell_pair_gains = np.array([np.nan])
+
+        if len(self._buy_sell_pair_losses) == 0:
+            self._buy_sell_pair_losses = np.array([np.nan])
+
+    def _fill_returns(self, df):
+        df['return_from_initial_investment'] = (df['total_value'] - self.start_value) / self.start_value
+        df['return_relative_to_past_tick'] = df['total_value'].diff() / df['total_value'].shift(1)
+        return df
+
 
     def get_orders(self):
         return self._orders
@@ -187,6 +299,30 @@ class Evaluation(ABC):
             output.append("Profit: {0:.2f} {1}".format(self._format_price_dependent_value(self.profit_usdt),
                                                        "USDT"))
 
+        output.append("\nAdditional stats:")
+        output.append("  Max drawdown: {}".format(self.max_drawdown))
+        output.append("  Sharpe ratio: {}".format(self.sharpe_ratio))
+        output.append("  Buy-sell pair gains - overall stats")
+        output.append("     min = {}, max = {}, mean = {}, stdev = {}".format(
+            self.min_buy_sell_pair_gain,
+            self.max_buy_sell_pair_gain,
+            self.mean_buy_sell_pair_gain,
+            self.std_buy_sell_pair_gain
+        ))
+
+        output.append("  Buy-sell pair losses - overall stats")
+        output.append("     min = {}, max = {}, mean = {}, stdev = {}".format(
+            self.min_buy_sell_pair_loss,
+            self.max_buy_sell_pair_loss,
+            self.mean_buy_sell_pair_loss,
+            self.std_buy_sell_pair_loss
+        ))
+
+        output.append("  Total buy-sell pairs: {}".format(self.num_buy_sell_pairs))
+        output.append("  Total profitable trades: {}".format(self.num_profitable_trades))
+        output.append("  Percent profitable trades: {}".format(self.percent_profitable_trades))
+        output.append("  Percent unprofitable trades: {}".format(self.percent_unprofitable_trades))
+        
         return "\n".join(output)
 
     def get_short_summary(self):
@@ -232,7 +368,7 @@ class Evaluation(ABC):
         else:
             dictionary["horizon"] = self._strategy.horizon.name
 
-        if self._end_price == None:
+        if self.end_price == None:
             dictionary["profit"] = "N/A"
             dictionary["profit_percent"] = "N/A"
             dictionary["profit_USDT"] = "N/A"

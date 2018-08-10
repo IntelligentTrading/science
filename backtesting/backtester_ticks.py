@@ -13,7 +13,6 @@ class TickDrivenBacktester(Evaluation, TickListener):
     def __init__(self, tick_provider, **kwargs):
         super().__init__(**kwargs)
         self.tick_provider = tick_provider
-        self.trading_df = pd.DataFrame(columns=['close_price', 'signal', 'order', 'cash', 'crypto', 'total_value'])
         self.run()
 
     def run(self):
@@ -26,78 +25,48 @@ class TickDrivenBacktester(Evaluation, TickListener):
         # the provider will call the broadcast_ended() method when no ticks remain
 
     def process_event(self, price_data, signals_now):
-        timestamp = price_data['timestamp']
-        price = price_data['close_price'].item()
+        self._current_timestamp = price_data['timestamp']
+        self._current_price = price_data['close_price'].item()
         decision, order_signal = self._strategy.process_ticker(price_data, signals_now)
         order = None
         if decision == "SELL" and self._crypto > 0:
             order = Order(OrderType.SELL, self._transaction_currency, self._counter_currency,
-                          timestamp, self._crypto, price, self._transaction_cost_percent, 0)
+                          self._current_timestamp, self._crypto, self._current_price, self._transaction_cost_percent, 0)
             self.orders.append(order)
             self.order_signals.append(order_signal)
             self.execute_order(order)
         elif decision == "BUY" and self._cash > 0:
             order = Order(OrderType.BUY, self._transaction_currency, self._counter_currency,
-                          timestamp, self._cash, price, self._transaction_cost_percent, 0)
+                          self._current_timestamp, self._cash, self._current_price, self._transaction_cost_percent, 0)
             self.orders.append(order)
             self.order_signals.append(order_signal)
             self.execute_order(order)
 
+        self._current_order = order
+        self._current_signal = order_signal
+
+        self._write_to_trading_df()
+
+        """
         # compute asset value at this tick, regardless of the signal
-        total_value = self._crypto * price + self._cash
+        total_value = self._crypto * self._current_price + self._cash
 
         # fill a row in the trading dataframe
-        self.trading_df.loc[timestamp] = pd.Series({'close_price': price,
+        self.trading_df.loc[timestamp] = pd.Series({'close_price': self._current_price,
                                                     'cash': self._cash,
                                                     'crypto': self._crypto,
                                                     'total_value': total_value,
                                                     'order': "" if order is None else order.order_type.value,
                                                     'signal': "" if order is None else order_signal.signal_type})
+        """
 
     def broadcast_ended(self):
-        self.finalize_backtesting()
+        self._finalize_backtesting()
 
         if self._verbose:
             logging.info(self.get_report())
             logging.info(self.trading_df)
 
-    def finalize_backtesting(self):
-        # set finishing variable values
-        self._end_cash = self._cash
-        self._end_crypto = self._crypto
-        self._end_price = self.trading_df.tail(1)['close_price'].item()
-
-        # compute returns for stats
-        self.trading_df = self._fill_returns(self.trading_df)
-        returns = np.array(self.trading_df['return_relative_to_past_tick'])
-        self._max_drawdown = empyrical.max_drawdown(np.array(returns))
-        self._sharpe_ratio = empyrical.sharpe_ratio(returns)
-
-        # extract only rows that have orders
-        orders_df = self.trading_df[self.trading_df['order'] != ""]
-        # recalculate returns
-        orders_df = self._fill_returns(orders_df)
-        # get profits on sell
-        orders_sell_df = orders_df[orders_df['order'] == "SELL"]
-        self._buy_sell_pair_returns = np.array(orders_sell_df['return_relative_to_past_tick'])
-        self._buy_sell_pair_gains = self._buy_sell_pair_returns[np.where(self._buy_sell_pair_returns > 0)]
-        self._buy_sell_pair_losses = self._buy_sell_pair_returns[np.where(self._buy_sell_pair_returns < 0)]
-
-        # if no returns, no gains or no losses, stat functions will return nan
-        if len(self._buy_sell_pair_returns) == 0:
-            self._buy_sell_pair_returns = np.array([np.nan])
-
-        if len(self._buy_sell_pair_returns) == 0:
-            self._buy_sell_pair_losses = np.array([np.nan])
-
-        if len(self._buy_sell_pair_returns) == 0:
-            self._buy_sell_pair_losses = np.array([np.nan])
-
-
-    def _fill_returns(self, df):
-        df['return_from_initial_investment'] = (df['total_value'] - self.start_value) / self.start_value
-        df['return_relative_to_past_tick'] = df['total_value'].diff() / df['total_value'].shift(1)
-        return df
 
     def plot_portfolio(self):
         import matplotlib.pyplot as plt
@@ -107,7 +76,7 @@ class TickDrivenBacktester(Evaluation, TickListener):
 
     # override to show all our new stats
     def get_report(self, include_order_signals=True):
-        Evaluation.get_report(self, include_order_signals)
+        logging.info(Evaluation.get_report(self, include_order_signals))
         logging.info("\nHere are our new stats:")
         logging.info("  Max drawdown: {}".format(self.max_drawdown))
         logging.info("  Sharpe ratio: {}".format(self.sharpe_ratio))
@@ -133,56 +102,11 @@ class TickDrivenBacktester(Evaluation, TickListener):
         logging.info("  Percent unprofitable trades: {}".format(self.percent_unprofitable_trades))
 
     @property
-    def max_drawdown(self):
-        return self._max_drawdown
-
-    @property
-    def sharpe_ratio(self):
-        return self._sharpe_ratio
-
-    @property
-    def min_buy_sell_pair_gain(self):
-        return self._buy_sell_pair_gains.min()
-
-    @property
-    def max_buy_sell_pair_gain(self):
-        return self._buy_sell_pair_gains.max()
-
-    @property
-    def mean_buy_sell_pair_gain(self):
-        return self._buy_sell_pair_gains.mean()
-
-    @property
-    def std_buy_sell_pair_gain(self):
-        return self._buy_sell_pair_gains.std()
-
-    @property
-    def min_buy_sell_pair_loss(self):
-        return self._buy_sell_pair_losses.min()
-
-    @property
-    def max_buy_sell_pair_loss(self):
-        return self._buy_sell_pair_losses.max()
-
-    @property
-    def mean_buy_sell_pair_loss(self):
-        return self._buy_sell_pair_losses.mean()
-
-    @property
-    def std_buy_sell_pair_loss(self):
-        return self._buy_sell_pair_losses.std()
-
-    @property
-    def num_buy_sell_pairs(self):
-        return self.num_sells
-
-    @property
-    def percent_profitable_trades(self):
-        return len(self._buy_sell_pair_gains) / self.num_buy_sell_pairs
-
-    @property
-    def percent_unprofitable_trades(self):
-        return len(self._buy_sell_pair_losses) / self.num_buy_sell_pairs
+    def end_price(self):
+        #if not self.trading_df.empty:
+        #    return self.trading_df.tail(1)['close_price'].item()
+        #else:
+        return Evaluation.end_price.fget(self)
 
 
 if __name__ == '__main__':
