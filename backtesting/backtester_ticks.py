@@ -5,6 +5,8 @@ from data_sources import Horizon
 from tick_provider_itf_db import TickProviderITFDB
 import pandas as pd
 import logging
+import empyrical
+import numpy as np
 
 class TickDrivenBacktester(Evaluation, TickListener):
 
@@ -54,8 +56,14 @@ class TickDrivenBacktester(Evaluation, TickListener):
         self.end_crypto = self.crypto
         self.end_price = self.trading_df.tail(1)['close_price'].item()
 
+        self.trading_df['return_from_initial_investment'] = (self.trading_df['total_value'] - self.get_start_value()) / self.get_start_value()
+        self.trading_df['return_relative_to_past_tick'] = self.trading_df.diff()['total_value'] / self.trading_df.shift(1)['total_value']
+        maxd = empyrical.max_drawdown(np.array(self.trading_df['return_relative_to_past_tick']))
+        logging.info(maxd)
+
         if self.verbose:
             logging.info(self.get_report())
+            logging.info(self.trading_df)
 
 
     def plot_portfolio(self):
