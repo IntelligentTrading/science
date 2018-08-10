@@ -13,7 +13,7 @@ class TickDrivenBacktester(Evaluation, TickListener):
     def __init__(self, tick_provider, **kwargs):
         super().__init__(**kwargs)
         self.tick_provider = tick_provider
-        self.trading_df = pd.DataFrame(columns=['close_price', 'signal', 'cash', 'crypto', 'total_value'])
+        self.trading_df = pd.DataFrame(columns=['close_price', 'signal', 'order', 'cash', 'crypto', 'total_value'])
         self.run()
 
     def run(self):
@@ -29,6 +29,7 @@ class TickDrivenBacktester(Evaluation, TickListener):
         timestamp = price_data['timestamp']
         price = price_data['close_price'].item()
         decision, order_signal = self.strategy.process_ticker(price_data, signals_now)
+        order = None
         if decision == "SELL" and self.crypto > 0:
             order = Order(OrderType.SELL, self.transaction_currency, self.counter_currency,
                           timestamp, self.crypto, price, self.transaction_cost_percent, 0)
@@ -49,28 +50,114 @@ class TickDrivenBacktester(Evaluation, TickListener):
         self.trading_df.loc[timestamp] = pd.Series({'close_price': price,
                                                     'cash': self.cash,
                                                     'crypto': self.crypto,
-                                                    'total_value': total_value})
+                                                    'total_value': total_value,
+                                                    'order': "" if order is None else order.order_type.value,
+                                                    'signal': "" if order is None else order_signal.signal_type})
 
     def broadcast_ended(self):
-        self.end_cash = self.cash
-        self.end_crypto = self.crypto
-        self.end_price = self.trading_df.tail(1)['close_price'].item()
-
-        self.trading_df['return_from_initial_investment'] = (self.trading_df['total_value'] - self.get_start_value()) / self.get_start_value()
-        self.trading_df['return_relative_to_past_tick'] = self.trading_df.diff()['total_value'] / self.trading_df.shift(1)['total_value']
-        maxd = empyrical.max_drawdown(np.array(self.trading_df['return_relative_to_past_tick']))
-        logging.info(maxd)
+        self.finalize_backtesting()
 
         if self.verbose:
             logging.info(self.get_report())
             logging.info(self.trading_df)
 
+    def finalize_backtesting(self):
+        # set finishing variable values
+        self.end_cash = self.cash
+        self.end_crypto = self.crypto
+        self.end_price = self.trading_df.tail(1)['close_price'].item()
+
+        # compute returns for stats
+        self.trading_df = self._fill_returns(self.trading_df)
+        returns = np.array(self.trading_df['return_relative_to_past_tick'])
+        self._max_drawdown = empyrical.max_drawdown(np.array(returns))
+        self._sharpe_ratio = empyrical.sharpe_ratio(returns)
+
+        # extract only rows that have orders
+        orders_df = self.trading_df[self.trading_df['order'] != ""]
+        # recalculate returns
+        orders_df = self._fill_returns(orders_df)
+        # get profits on sell
+        orders_sell_df = orders_df[orders_df['order'] == "SELL"]
+        self._buy_sell_pair_returns = np.array(orders_sell_df['return_relative_to_past_tick'])
+        self._buy_sell_pair_gains = self._buy_sell_pair_returns[np.where(self._buy_sell_pair_returns > 0)]
+        self._buy_sell_pair_losses = self._buy_sell_pair_returns[np.where(self._buy_sell_pair_returns < 0)]
+
+        # if no returns, no gains or no losses, stat functions will return nan
+        if len(self._buy_sell_pair_returns) == 0:
+            self._buy_sell_pair_returns = np.array([np.nan])
+
+        if len(self._buy_sell_pair_returns) == 0:
+            self._buy_sell_pair_losses = np.array([np.nan])
+
+        if len(self._buy_sell_pair_returns) == 0:
+            self._buy_sell_pair_losses = np.array([np.nan])
+
+
+    def _fill_returns(self, df):
+        df['return_from_initial_investment'] = (df['total_value'] - self.get_start_value()) / self.get_start_value()
+        df['return_relative_to_past_tick'] = df['total_value'].diff() / df['total_value'].shift(1)
+        return df
 
     def plot_portfolio(self):
         import matplotlib.pyplot as plt
         self.trading_df['close_price'].plot()
         self.trading_df['total_value'].plot(secondary_y=True)
         plt.show()
+
+    @property
+    def max_drawdown(self):
+        return self._max_drawdown
+
+    @property
+    def sharpe_ratio(self):
+        return self._sharpe_ratio
+
+    @property
+    def min_buy_sell_pair_gain(self):
+        return self._buy_sell_pair_gains.min()
+
+    @property
+    def max_buy_sell_pair_gain(self):
+        return self._buy_sell_pair_gains.max()
+
+    @property
+    def mean_buy_sell_pair_gain(self):
+        return self._buy_sell_pair_gains.mean()
+
+    @property
+    def std_buy_sell_pair_gain(self):
+        return self._buy_sell_pair_gains.std()
+
+    @property
+    def min_buy_sell_pair_loss(self):
+        return self._buy_sell_pair_losses.min()
+
+    @property
+    def max_buy_sell_pair_loss(self):
+        return self._buy_sell_pair_losses.max()
+
+    @property
+    def mean_buy_sell_pair_loss(self):
+        return self._buy_sell_pair_losses.mean()
+
+    @property
+    def std_buy_sell_pair_loss(self):
+        return self._buy_sell_pair_losses.std()
+
+    @property
+    def num_buy_sell_pairs(self):
+        return self.num_sells
+
+    @property
+    def percent_profitable_trades(self):
+        return len(self._buy_sell_pair_gains) / self.num_buy_sell_pairs
+
+    @property
+    def percent_unprofitable_trades(self):
+        return len(self._buy_sell_pair_gains) / self.num_buy_sell_pairs
+
+
 
 
 if __name__ == '__main__':
