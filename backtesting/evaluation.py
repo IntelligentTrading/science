@@ -58,30 +58,24 @@ class Evaluation(ABC):
     def end_value_usdt(self):
         try:
             end_value_USDT = convert_value_to_USDT(self.end_cash, self._end_time, self._counter_currency, self._source) + \
-                             convert_value_to_USDT(self.end_crypto, self._end_time, self.end_crypto_currency, self._source)
+                             convert_value_to_USDT(self.end_crypto, self._end_time, self._end_crypto_currency, self._source)
             return end_value_USDT
         except NoPriceDataException:
             return None
 
     @property
     def profit_usdt(self):
-        end_value = self.end_value_usdt()
-        start_value = self.start_value_usdt()
-
-        if start_value is None or end_value is None:
+        if self.start_value_usdt is None or self.end_value_usdt is None:
             return None
         else:
-            return end_value - start_value
+            return self.end_value_usdt - self.start_value_usdt
 
     @property
     def profit_percent_usdt(self):
-        profit = self.profit_usdt()
-        start_value = self.start_value_usdt()
-
-        if profit is None or start_value is None:
+        if self.profit_usdt is None or self.start_value_usdt is None:
             return None
         else:
-            return profit / start_value * 100
+            return self.profit_usdt / self.start_value_usdt * 100
 
     @property
     def start_value(self):
@@ -180,7 +174,7 @@ class Evaluation(ABC):
         output.append("Profit: {0:.2f} {1}".format(self._format_price_dependent_value(self.profit), self._counter_currency))
 
         if self._counter_currency != "USDT":
-            sign = "+" if self.profit_usdt() is not None and self.profit_usdt() >= 0 else ""
+            sign = "+" if self.profit_usdt is not None and self.profit_usdt >= 0 else ""
             output.append("Total value invested: {:.2f} {} (conversion on {})".format(
                 self._format_price_dependent_value(self.start_value_usdt),
                 "USDT",
@@ -223,19 +217,22 @@ class Evaluation(ABC):
 
     def to_dictionary(self):
         dictionary = vars(self).copy()
+        # remove trailing underscores
+        tmp = {(k[1:] if k.startswith("_") else k): dictionary[k] for k in dictionary.keys()}
+        dictionary = tmp
         del dictionary["orders"]
         dictionary["strategy"] = dictionary["strategy"].get_short_summary()
         dictionary["utilized_signals"] = ", ".join(get_distinct_signal_types(self.order_signals))
         dictionary["start_time"] = datetime_from_timestamp(dictionary["start_time"])
         dictionary["end_time"] = datetime_from_timestamp(dictionary["end_time"])
 
-        dictionary["transaction_currency"] = self.end_crypto_currency
+        dictionary["transaction_currency"] = self._end_crypto_currency
         if "horizon" not in vars(self._strategy):
             dictionary["horizon"] = "N/A"
         else:
             dictionary["horizon"] = self._strategy.horizon.name
 
-        if self.end_price == None:
+        if self._end_price == None:
             dictionary["profit"] = "N/A"
             dictionary["profit_percent"] = "N/A"
             dictionary["profit_USDT"] = "N/A"

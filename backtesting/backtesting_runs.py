@@ -28,11 +28,10 @@ def best_performing_signals_of_the_week():
     comparison = ComparativeEvaluation(strategy_set=strategies,
                           start_cash=1, start_crypto=0,
                           start_time=start_time, end_time=end_time,
-                          output_file="best_performing_2018_07_16.xlsx"
+                          output_file="best_performing_2018_07_16_refactor.xlsx"
                           )
 
     #comparison.write_comparative_summary("description.xlsx")
-
 
 
 def rsi_vs_rsi_cumulative(start_time, end_time, time_delay=0):
