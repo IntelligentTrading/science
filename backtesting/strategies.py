@@ -213,8 +213,6 @@ class SimpleTrendBasedStrategy(Strategy):
         output.append("Strategy: trend-based strategy ({})".format(self.signal_type))
         output.append(
             "  description: selling when trend = -1, buying when trend = 1 ")
-        output.append("Strategy settings:")
-        output.append("  horizon = {}".format(self.horizon.name))
         return "\n".join(output)
 
     def get_short_summary(self):

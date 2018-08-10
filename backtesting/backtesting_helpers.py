@@ -12,28 +12,17 @@ def evaluate_rsi_signature(**kwargs):
 
 def evaluate_rsi(overbought_threshold, oversold_threshold, signal_type="RSI", **kwargs):
     rsi_strategy = SimpleRSIStrategy(kwargs['source'], overbought_threshold, oversold_threshold, signal_type)
-    return rsi_strategy.evaluate(**kwargs)
+    return SignalDrivenBacktester(strategy=rsi_strategy, **kwargs)
 
 
 def evaluate_trend_based(signal_type, **kwargs):
     strategy = SimpleTrendBasedStrategy(kwargs['source'], signal_type)
     return SignalDrivenBacktester(strategy=strategy, **kwargs)
 
-
-# TODO: look into this
-def evaluate_rsi_any_currency(counter_currency, start_time, end_time,
-                 start_cash, start_crypto, overbought_threshold, oversold_threshold):
-    rsi_strategy = SimpleRSIStrategy(start_time, end_time, Horizon.short, counter_currency, overbought_threshold, oversold_threshold)
-    evaluation = SignalDrivenBacktester(rsi_strategy, "", counter_currency, start_cash, start_crypto, start_time, end_time, False)
-    print(evaluation.get_report())
-    return evaluation
-
-
 def evaluate_rsi_cumulative_compare(overbought_threshold, oversold_threshold, **kwargs):
     evaluation_rsi = evaluate_rsi(overbought_threshold, oversold_threshold, "RSI", **kwargs)
     evaluation_rsi_cumulative = evaluate_rsi(overbought_threshold, overbought_threshold, "RSI_Cumulative", **kwargs)
     return evaluation_rsi_cumulative, evaluation_rsi
-
 
 def find_num_cumulative_outperforms(currency_pairs, **kwargs):
     resample_periods = (60, 240, 1440)
@@ -85,6 +74,13 @@ def find_num_cumulative_outperforms(currency_pairs, **kwargs):
     print("RSI was profitable for {0:0.2f}% of pairs".format(rsi_profitable / total_rsi * 100))
     print("RSI cumulative was profitable for {0:0.2f}% of pairs".format(rsi_cumulative_profitable / total_cumulative * 100))
 
+# TODO: look into this
+def evaluate_rsi_any_currency(counter_currency, start_time, end_time,
+                 start_cash, start_crypto, overbought_threshold, oversold_threshold):
+    rsi_strategy = SimpleRSIStrategy(start_time, end_time, Horizon.short, counter_currency, overbought_threshold, oversold_threshold)
+    evaluation = SignalDrivenBacktester(rsi_strategy, "", counter_currency, start_cash, start_crypto, start_time, end_time, False)
+    print(evaluation.get_report())
+    return evaluation
 
 
 if __name__ == "__main__":
@@ -102,4 +98,8 @@ if __name__ == "__main__":
     kwargs['resample_period'] = 60
     kwargs['time_delay'] = 0
 
-    evaluate_rsi_signature(**kwargs)
+    #evaluate_rsi_signature(**kwargs)
+    #evaluate_rsi(75, 25, **kwargs)
+    #evaluate_trend_based("SMA", **kwargs)
+    find_num_cumulative_outperforms((("BTC","USDT"),("DOGE","BTC")), **kwargs)
+

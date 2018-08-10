@@ -15,7 +15,8 @@ class SignalDrivenBacktester(Evaluation):
         self.signals = get_filtered_signals(start_time=start_time, end_time=end_time, counter_currency=counter_currency,
                                             transaction_currency=transaction_currency,
                                             source=source)
-        self.start_crypto_currency = self._transaction_currency
+        self._start_crypto_currency = self._transaction_currency
+        self._buy_currency = self._transaction_currency
         self.orders, self.order_signals = self._strategy.get_orders(
             signals = self.signals,
             start_cash=self._start_cash,
@@ -27,13 +28,19 @@ class SignalDrivenBacktester(Evaluation):
     def fill_trading_df(self, orders):
         for i, order in enumerate(orders):
             if i == 0: # first order
-                assert order.order_type == OrderType.BUY
+                assert order.order_type == OrderType.BUY and order.transaction_currency == self._start_crypto_currency
+
+            if order.order_type == OrderType.BUY:
+                self._buy_currency = order.transaction_currency
+            elif order.order_type == OrderType.SELL:
+                assert order.transaction_currency == self._buy_currency
             self.execute_order(order)
             self._current_timestamp = order.timestamp
             self._current_price = order.unit_price
             self._current_order = order
             self._current_signal = self.order_signals[i]
             self._write_to_trading_df()
+        self._end_crypto_currency = self._buy_currency
         self._finalize_backtesting()
 
 
@@ -67,12 +74,8 @@ class SignalDrivenBacktester(Evaluation):
         if self.num_sells != 0:
             self.avg_profit_per_trade_pair /= self.num_sells
 
-        end_crypto_currency = self._buy_currency if self.num_trades > 0 else self.start_crypto_currency
+        self._end_crypto_currency = self._buy_currency if self.num_trades > 0 else self._transaction_currency
 
-        #self._end_cash = self._cash
-        #self._end_crypto = self._crypto
-        #self._end_price = end_price
-        self._end_crypto_currency = end_crypto_currency
         self._finalize_backtesting()
 
     def run(self):

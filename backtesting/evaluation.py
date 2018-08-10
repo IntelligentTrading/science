@@ -410,6 +410,8 @@ class Evaluation(ABC):
         self.trading_df['total_value'].plot(secondary_y=True)
         plt.show()
         """
+        if self.trading_df.empty:
+            return
         from charting import BacktestingChart
         chart = BacktestingChart(self.trading_df, self.orders)
         #chart.draw_price_chart()
