@@ -12,7 +12,7 @@ import numpy as np
 class Evaluation(ABC):
     def __init__(self, strategy, transaction_currency, counter_currency,
                  start_cash, start_crypto, start_time, end_time, source=0,
-                 resample_period=60, evaluate_profit_on_last_order=False, verbose=True):
+                 resample_period=60, evaluate_profit_on_last_order=True, verbose=True):
         self._strategy = strategy
         self._transaction_currency = transaction_currency
         self._counter_currency = counter_currency
@@ -188,6 +188,10 @@ class Evaluation(ABC):
         num_losses = len(self._buy_sell_pair_losses) \
             if not (len(self._buy_sell_pair_losses) == 1 and np.isnan(self._buy_sell_pair_losses[0])) else 0
         return (num_losses / self.num_buy_sell_pairs) if self.num_buy_sell_pairs != 0 else 0
+
+    @property
+    def num_orders(self):
+        return len(self.orders)
 
     #@property
     #def num_trades(self):

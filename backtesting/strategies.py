@@ -88,16 +88,18 @@ class Strategy(ABC):
                 output.append("{} {}".format("BUY" if self.indicates_buy(signal) else "SELL", str(signal)))
         return "\n".join(output)
 
-    def evaluate(self, start_cash, start_crypto, start_time, end_time,
-                 evaluate_profit_on_last_order=False, verbose=True, time_delay=0):
+    def evaluate(self, transaction_currency, counter_currency, start_cash, start_crypto, start_time, end_time,
+                 resample_period, evaluate_profit_on_last_order=False, verbose=True, time_delay=0):
         return SignalDrivenBacktester(
             strategy=self,
-            start_crypto_currency=self.transaction_currency,
-            counter_currency=self.counter_currency,
+            transaction_currency=transaction_currency,
+            counter_currency=counter_currency,
             start_cash=start_cash,
             start_crypto=start_crypto,
             start_time=start_time,
             end_time=end_time,
+            source=self.source,
+            resample_period=resample_period,
             evaluate_profit_on_last_order=evaluate_profit_on_last_order,
             verbose=verbose,
             time_delay=time_delay
