@@ -1,8 +1,7 @@
 from evaluation import Evaluation
 from orders import OrderType
 import logging
-from data_sources import get_price, NoPriceDataException
-import pandas as pd
+from data_sources import get_price, get_filtered_signals, NoPriceDataException
 
 
 class SignalDrivenBacktester(Evaluation):
@@ -13,8 +12,12 @@ class SignalDrivenBacktester(Evaluation):
         super().__init__(strategy, transaction_currency, counter_currency,
                  start_cash, start_crypto, start_time, end_time, source,
                  resample_period, evaluate_profit_on_last_order, verbose)
+        self.signals = get_filtered_signals(start_time=start_time, end_time=end_time, counter_currency=counter_currency,
+                                            transaction_currency=transaction_currency,
+                                            source=source)
         self.start_crypto_currency = self._transaction_currency
         self.orders, self.order_signals = self._strategy.get_orders(
+            signals = self.signals,
             start_cash=self._start_cash,
             start_crypto=self._start_crypto,
             time_delay=0)

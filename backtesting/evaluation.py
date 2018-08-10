@@ -409,7 +409,6 @@ class Evaluation(ABC):
         chart.test_pyfolio()
 
 
-
 if __name__ == '__main__':
     from strategies import RSITickerStrategy
     end_time = 1531699200
