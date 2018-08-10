@@ -236,10 +236,11 @@ class Evaluation(ABC):
 
         if len(self._buy_sell_pair_losses) == 0:
             self._buy_sell_pair_losses = np.array([np.nan])
-            
+
         if self._verbose:
             logging.info(self.get_report())
             logging.info(self.trading_df)
+            self.plot_portfolio()
 
     def _fill_returns(self, df):
         df['return_from_initial_investment'] = (df['total_value'] - self.start_value) / self.start_value
@@ -396,10 +397,16 @@ class Evaluation(ABC):
         return dictionary
 
     def plot_portfolio(self):
+        """
         import matplotlib.pyplot as plt
         self.trading_df['close_price'].plot()
         self.trading_df['total_value'].plot(secondary_y=True)
         plt.show()
+        """
+        from charting import BacktestingChart
+        chart = BacktestingChart(self.trading_df, self.orders)
+        #chart.draw_price_chart()
+        chart.test_pyfolio()
 
 
 

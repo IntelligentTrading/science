@@ -1,6 +1,9 @@
+import matplotlib
+matplotlib.use('Agg')
+import pyfolio as pf
 import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
+#import matplotlib.pyplot as plt
+#import matplotlib.dates as mdates
 from orders import OrderType
 import pandas as pd
 
@@ -15,6 +18,11 @@ class BacktestingChart:
     @staticmethod
     def price(x):
         return '$%1.2f' % x
+
+    def test_pyfolio(self):
+        #self.trading_df.return_relative_to_past_tick = self.trading_df.return_relative_to_past_tick.astype(float)
+        f = pf.create_returns_tear_sheet(self.trading_df['return_relative_to_past_tick'], return_fig=True) #, live_start_date=self.trading_df.index.values.min())
+        f.savefig('pyfolio_returns_tear_sheet.png')
 
     def plot_orders(self, ax, orders):
         for order in orders:
@@ -45,7 +53,6 @@ class BacktestingChart:
 
         ax1 = self.trading_df['close_price'].plot()
         ax2 = self.trading_df['total_value'].plot(secondary_y=True)
-
 
 
         if orders != None:
