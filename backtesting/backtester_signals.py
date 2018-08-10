@@ -29,8 +29,9 @@ class SignalDrivenBacktester(Evaluation):
             self._current_timestamp = order.timestamp
             self._current_price = order.unit_price
             self._current_order = order
-            self._current_signal = None
+            self._current_signal = self.order_signals[i]
             self._write_to_trading_df()
+        self._finalize_backtesting()
 
 
     def execute_orders(self, orders):
@@ -72,4 +73,5 @@ class SignalDrivenBacktester(Evaluation):
         self._finalize_backtesting()
 
     def run(self):
+        #self.fill_trading_df(self.orders)
         self.execute_orders(self.orders)

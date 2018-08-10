@@ -5,7 +5,7 @@ from strategies import *
 
 def evaluate_rsi_signature(transaction_currency, counter_currency, start_time, end_time,
                  start_cash, start_crypto, source=0, resample_period=60, horizon=Horizon.any, time_delay=0):
-    rsi_strategy = SignalSignatureStrategy(['rsi_buy_2', 'rsi_sell_2'], start_time, end_time, horizon, counter_currency, transaction_currency)
+    rsi_strategy = SignalSignatureStrategy(['rsi_buy_2', 'rsi_sell_2','rsi_buy_1', 'rsi_sell_1','rsi_buy_3', 'rsi_sell_3'], start_time, end_time, horizon, counter_currency, transaction_currency)
     evaluation = SignalDrivenBacktester(rsi_strategy, transaction_currency, counter_currency,
                             start_cash, start_crypto, start_time, end_time, source, resample_period, False, False, time_delay)
     print(evaluation.get_report())
@@ -172,5 +172,5 @@ def evaluate_multi_any_currency(counter_currency, start_time, end_time,
 
 if __name__ == "__main__":
     end_time = 1531699200
-    start_time = end_time - 60*60*24*7
+    start_time = end_time - 60*60*24*70
     evaluate_rsi_signature("BTC", "USDT", start_time, end_time, 1000, 0)
