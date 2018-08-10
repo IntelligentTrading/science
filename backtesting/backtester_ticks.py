@@ -105,6 +105,33 @@ class TickDrivenBacktester(Evaluation, TickListener):
         self.trading_df['total_value'].plot(secondary_y=True)
         plt.show()
 
+    # override to show all our new stats
+    def get_report(self, include_order_signals=True):
+        Evaluation.get_report(self, include_order_signals)
+        logging.info("\nHere are our new stats:\n\n")
+        logging.info("Max drawdown: {}".format(self.max_drawdown))
+        logging.info("Sharpe ratio: {}".format(self.sharpe_ratio))
+        logging.info("Buy-sell pair gains - overall stats")
+        logging.info("   min = {}, max = {}, mean = {}, stdev = {}".format(
+            self.min_buy_sell_pair_gain,
+            self.max_buy_sell_pair_gain,
+            self.mean_buy_sell_pair_gain,
+            self.std_buy_sell_pair_gain
+        ))
+
+        logging.info("Buy-sell pair losses - overall stats")
+        logging.info("   min = {}, max = {}, mean = {}, stdev = {}".format(
+            self.min_buy_sell_pair_loss,
+            self.max_buy_sell_pair_loss,
+            self.mean_buy_sell_pair_loss,
+            self.std_buy_sell_pair_loss
+        ))
+
+        logging.info("Total buy-sell pairs: {}".format(self.num_buy_sell_pairs))
+        logging.info("Total profitable trades: {}".format(self.num_profitable_trades))
+        logging.info("Percent profitable trades: {}".format(self.percent_profitable_trades))
+        logging.info("Percent unprofitable trades: {}".format(self.percent_unprofitable_trades))
+
     @property
     def max_drawdown(self):
         return self._max_drawdown
@@ -155,9 +182,7 @@ class TickDrivenBacktester(Evaluation, TickListener):
 
     @property
     def percent_unprofitable_trades(self):
-        return len(self._buy_sell_pair_gains) / self.num_buy_sell_pairs
-
-
+        return len(self._buy_sell_pair_losses) / self.num_buy_sell_pairs
 
 
 if __name__ == '__main__':
