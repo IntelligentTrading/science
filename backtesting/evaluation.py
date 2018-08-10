@@ -111,10 +111,13 @@ class Evaluation(ABC):
 
     @property
     def end_price(self):
-        try:
-            return get_price(self._transaction_currency, self._end_time, self._source, self._counter_currency)
-        except:
-            return None
+        if self._evaluate_profit_on_last_order and not self.trading_df.empty:
+            return self.trading_df.tail(1)['close_price'].item()
+        else:
+            try:
+                return get_price(self._transaction_currency, self._end_time, self._source, self._counter_currency)
+            except:
+                return None
 
     @property
     def profit(self):

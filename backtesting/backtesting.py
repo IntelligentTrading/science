@@ -4,11 +4,9 @@ from strategies import *
 ### Various sample backtesting runs
 
 def evaluate_rsi_signature(transaction_currency, counter_currency, start_time, end_time,
-                 start_cash, start_crypto, source=0, resample_period=60, horizon=Horizon.any, time_delay=0):
-    rsi_strategy = SignalSignatureStrategy(['rsi_buy_2', 'rsi_sell_2','rsi_buy_1', 'rsi_sell_1','rsi_buy_3', 'rsi_sell_3'],
-                                           transaction_currency, counter_currency)
-    evaluation = SignalDrivenBacktester(rsi_strategy, transaction_currency, counter_currency,
-                            start_cash, start_crypto, start_time, end_time, source, resample_period, False, False, time_delay)
+                 start_cash, start_crypto, source=0, resample_period=60, time_delay=0):
+    rsi_strategy = SignalSignatureStrategy(source, ['rsi_buy_2', 'rsi_sell_2','rsi_buy_1', 'rsi_sell_1','rsi_buy_3', 'rsi_sell_3'])
+    evaluation = SignalDrivenBacktester(rsi_strategy, transaction_currency, counter_currency, start_cash, start_crypto, start_time, end_time, source, resample_period, True, False, time_delay)
     print(evaluation.get_report())
     return evaluation
 

@@ -3,16 +3,14 @@ from data_sources import *
 from signals import *
 import operator
 import random
-from evaluation import Evaluation
 from backtester_signals import SignalDrivenBacktester
 
 from signals import SignalType
 from abc import ABC, abstractmethod
 
 class Strategy(ABC):
-    def __init__(self, transaction_currency, counter_currency):
-        self.transaction_currency = transaction_currency
-        self.counter_currency = counter_currency
+    def __init__(self, source):
+        self.source = source
 
     def get_orders(self, signals, start_cash, start_crypto, transaction_cost_percent=0.0025, time_delay=0):
         orders = []
@@ -90,17 +88,20 @@ class Strategy(ABC):
                 output.append("{} {}".format("BUY" if self.indicates_buy(signal) else "SELL", str(signal)))
         return "\n".join(output)
 
-    def evaluate(self, start_cash, start_crypto, start_time, end_time, evaluate_profit_on_last_order=False, verbose=True,
-                 time_delay=0):
-        return SignalDrivenBacktester(strategy=self,
-                          start_crypto_currency=self.transaction_currency,
-                          counter_currency=self.counter_currency,
-                          start_cash=start_cash,
-                          start_crypto=start_crypto,
-                          start_time=start_time,
-                          end_time=end_time,
-                          evaluate_profit_on_last_order=evaluate_profit_on_last_order,
-                          verbose=verbose, time_delay=time_delay)
+    def evaluate(self, start_cash, start_crypto, start_time, end_time,
+                 evaluate_profit_on_last_order=False, verbose=True, time_delay=0):
+        return SignalDrivenBacktester(
+            strategy=self,
+            start_crypto_currency=self.transaction_currency,
+            counter_currency=self.counter_currency,
+            start_cash=start_cash,
+            start_crypto=start_crypto,
+            start_time=start_time,
+            end_time=end_time,
+            evaluate_profit_on_last_order=evaluate_profit_on_last_order,
+            verbose=verbose,
+            time_delay=time_delay
+        )
 
     # TODO: obsolete, clean up
     @staticmethod
@@ -152,8 +153,8 @@ class TickerStrategy(Strategy):
 
 
 class SignalSignatureStrategy(Strategy):
-    def __init__(self, signal_set, transaction_currency, counter_currency):
-        Strategy.__init__(self, transaction_currency, counter_currency)
+    def __init__(self, source, signal_set):
+        super().__init__(source)
         self.signal_set = signal_set
 
     def belongs_to_this_strategy(self, signal):
@@ -170,8 +171,8 @@ class SignalSignatureStrategy(Strategy):
 
 
 class SimpleRSIStrategy(Strategy):
-    def __init__(self, start_time, overbought_threshold=80, oversold_threshold=25, signal_type="RSI", transaction_currency=None, counter_currency=None):
-        Strategy.__init__(self, transaction_currency, counter_currency)
+    def __init__(self, source, overbought_threshold=80, oversold_threshold=25, signal_type="RSI"):
+        super().__init__(source)
         self.overbought_threshold = overbought_threshold
         self.oversold_threshold = oversold_threshold
         self.signal_type = signal_type
@@ -192,8 +193,6 @@ class SimpleRSIStrategy(Strategy):
         output.append("Strategy settings:")
         output.append("  overbought_threshold = {}".format(self.overbought_threshold))
         output.append("  oversold_threshold = {}".format(self.oversold_threshold))
-        output.append("  horizon = {}".format(self.horizon.name))
-
         return "\n".join(output)
 
     def get_short_summary(self):
@@ -203,8 +202,8 @@ class SimpleRSIStrategy(Strategy):
 
 
 class SimpleTrendBasedStrategy(Strategy):
-    def __init__(self, signal_type, transaction_currency, counter_currency):
-        Strategy.__init__(self, transaction_currency, counter_currency)
+    def __init__(self, source, signal_type):
+        super().__init__(source)
         self.signal_type = signal_type
 
     def __str__(self):
@@ -226,9 +225,9 @@ class SimpleTrendBasedStrategy(Strategy):
 
 
 class BuyOnFirstSignalAndHoldStrategy(Strategy):
-    def __init__(self, strategy):
+    def __init__(self, source, strategy):
+        super().__init__(source)
         self.strategy = strategy
-        self.source = strategy.source
 
     def get_orders(self, start_cash, start_crypto, time_delay=0):
         orders, order_signals = self.strategy.get_orders(start_cash=start_cash,
@@ -251,11 +250,11 @@ class BuyOnFirstSignalAndHoldStrategy(Strategy):
 
 class BuyAndHoldTimebasedStrategy(Strategy):
     def __init__(self, start_time, end_time, transaction_currency, counter_currency, source, transaction_cost_percent=0.0025):
+        super().__init__(source)
         self.start_time = start_time
         self.end_time = end_time
         self.transaction_currency = transaction_currency
         self.counter_currency = counter_currency
-        self.source = source
         self.transaction_cost_percent = transaction_cost_percent
 
     def get_orders(self, start_cash, start_crypto, time_delay=0, signals=None):
@@ -281,7 +280,9 @@ class BuyAndHoldTimebasedStrategy(Strategy):
 class RandomTradingStrategy(SimpleTrendBasedStrategy):
 
     def __init__(self, max_num_signals, start_time, end_time, transaction_currency, counter_currency, source=0):
-        Strategy.__init__(self, transaction_currency, counter_currency)
+        super().__init__(source)
+        self.transaction_currency = transaction_currency
+        self.counter_currency = counter_currency
         self.max_num_signals = max_num_signals
         self.signals = self.build_signals()
         self.signal_type = "Random"

@@ -76,5 +76,5 @@ class SignalDrivenBacktester(Evaluation):
         self._finalize_backtesting()
 
     def run(self):
-        #self.fill_trading_df(self.orders)
-        self.execute_orders(self.orders)
+        self.fill_trading_df(self.orders)
+        #self.execute_orders(self.orders)
