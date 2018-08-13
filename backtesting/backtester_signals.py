@@ -9,6 +9,22 @@ class SignalDrivenBacktester(Evaluation):
     def __init__(self, strategy, transaction_currency, counter_currency,
                  start_cash, start_crypto, start_time, end_time, source=0,
                  resample_period=60, evaluate_profit_on_last_order=False, verbose=True, time_delay=0):
+        """
+        :param strategy: Backtested strategy (instance of SignalStrategy).        
+        :param transaction_currency: Transaction currency for which we're backtesting.
+        :param counter_currency: Counter currency for which we're backtesting.
+        :param start_cash: Starting amount of counter_currency.
+        :param start_crypto: Starting amount of transaction_currency.
+        :param start_time: Beginning of timeframe for which signals are fetched (UTC timestamp).
+        :param end_time: End of timeframe for which signals are fetched (UTC timestamp).
+        :param source: ITF exchange code.
+        :param resample_period: Duration of 1 candle (minutes).
+        :param evaluate_profit_on_last_order: Evaluate gains at the time of the last order (vs. at end_time).
+        :param verbose: Produce verbose output.
+        :param time_delay: Parameter specifying the delay applied when fetching price info (in seconds).
+        """
+
+
         super().__init__(strategy, transaction_currency, counter_currency,
                  start_cash, start_crypto, start_time, end_time, source,
                  resample_period, evaluate_profit_on_last_order, verbose)
@@ -21,7 +37,7 @@ class SignalDrivenBacktester(Evaluation):
             start_cash=self._start_cash,
             start_crypto=self._start_crypto,
             source=self._source,
-            time_delay=0)
+            time_delay=time_delay)
         self.run()
 
 

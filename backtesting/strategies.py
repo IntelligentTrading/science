@@ -27,8 +27,20 @@ class Strategy(ABC):
 
 
 class SignalStrategy(Strategy):
+    """
+    Base class for trading strategies that build orders based on a given list of signals.
+    """
 
     def get_orders(self, signals, start_cash, start_crypto, source, time_delay=0):
+        """
+        Produces a list of buy-sell orders based on input signals.
+        :param signals: A list of input signals.
+        :param start_cash: Starting amount of counter_currency (counter_currency is read from first signal).
+        :param start_crypto: Starting amount of transaction_currency (transaction_currency is read from first signal).
+        :param source: ITF exchange code.
+        :param time_delay: Parameter specifying the delay applied when fetching price info (in seconds).
+        :return: A list of orders produced by the strategy.
+        """
         orders = []
         order_signals = []
         cash = start_cash
@@ -64,7 +76,12 @@ class SignalStrategy(Strategy):
         return orders, order_signals
 
     def evaluate(self, transaction_currency, counter_currency, start_cash, start_crypto, start_time, end_time,
-                 resample_period, evaluate_profit_on_last_order=False, verbose=True, time_delay=0):
+                 source, resample_period, evaluate_profit_on_last_order=False, verbose=True, time_delay=0):
+        """
+        Builds a signal-based backtester using this strategy.
+        See full documentation in SignalDrivenBacktester.
+        :return: A SignalDrivenBacktester object.
+        """
         return SignalDrivenBacktester(
             strategy=self,
             transaction_currency=transaction_currency,
@@ -73,88 +90,34 @@ class SignalStrategy(Strategy):
             start_crypto=start_crypto,
             start_time=start_time,
             end_time=end_time,
-            source=self.source,
+            source=source,
             resample_period=resample_period,
             evaluate_profit_on_last_order=evaluate_profit_on_last_order,
             verbose=verbose,
             time_delay=time_delay
         )
 
-    def get_buy_signals(self):
-        buy_signals = []
-        for signal in self.signals:
-            if self.belongs_to_this_strategy(signal) and self.indicates_buy(signal):
-                buy_signals.append(signal)
-        return buy_signals
+    # TODO: test and clean this
+    @staticmethod
+    def get_buy_signals(signals):
+        return [signal for signal in signals
+                if SignalStrategy.belongs_to_this_strategy(signal) and SignalStrategy.indicates_buy(signal)]
 
-    def get_sell_signals(self):
-        sell_signals = []
-        for signal in self.signals:
-            if self.belongs_to_this_strategy(signal) and self.indicates_sell(signal):
-                sell_signals.append(signal)
-        return sell_signals
-
-
-
-class TickerStrategy(Strategy):
-    '''
-    A wrapper class that converts signal-based strategies to ticker-based.
-    '''
-
-    def __init__(self, strategy):
-        self._strategy = strategy
-
-    def process_ticker(self, price_data, signals):
-        for i, signal in enumerate(signals):
-            if not self._strategy.belongs_to_this_strategy(signal):
-                continue
-            if self._strategy.indicates_sell(signal):
-                return "SELL", signal
-            elif self._strategy.indicates_buy(signal):
-                return "BUY", signal
-        return None, None
-
-    def belongs_to_this_strategy(self, signal):
-        return self._strategy.belongs_to_this_strategy(signal)
-
-    def get_short_summary(self):
-        return self._strategy.get_short_summary()
-
-
-class TickerBuyAndHold(TickerStrategy):
-    '''
-    Ticker-based buy & hold strategy.
-    '''
-
-    def __init__(self, start_time, end_time):
-        self._start_time = start_time
-        self._end_time = end_time
-        self._bought = False
-        self._sold = False
-
-    def process_ticker(self, price_data, signals):
-        timestamp = price_data['timestamp']
-        if timestamp >= self._start_time and timestamp <= self._end_time and not self._bought:
-            if abs(timestamp - self._start_time) > 120:
-                logging.warning("Buy and hold BUY: ticker more than 2 mins after start time ({:.2f} mins)!"
-                                .format(abs(timestamp - self._start_time)/60))
-            self._bought = True
-            return "BUY", None
-        elif timestamp >= self._end_time and not self._sold:
-            logging.warning("Buy and hold SELL: ticker more than 2 mins after end time ({:.2f} mins)!"
-                            .format(abs(timestamp - self._end_time) / 60))
-            self._sold = True
-            return "SELL", None
-        else:
-            return None, None
-
-    def get_short_summary(self):
-        return "Ticker-based buy and hold strategy"
+    def get_sell_signals(signals):
+        return [signal for signal in signals
+                if SignalStrategy.belongs_to_this_strategy(signal) and SignalStrategy.indicates_sell(signal)]
 
 
 
 class SignalSignatureStrategy(SignalStrategy):
+    """
+    A strategy based on ITF signal signatures (see a list of signatures in the field ALL_SIGNALS).
+    """
     def __init__(self, signal_set):
+        """
+        Builds the signal signature strategy.
+        :param signal_set: A list of ITF signal signatures to be used in the strategy.
+        """
         self.signal_set = signal_set
 
     def belongs_to_this_strategy(self, signal):
@@ -171,7 +134,16 @@ class SignalSignatureStrategy(SignalStrategy):
 
 
 class SimpleRSIStrategy(SignalStrategy):
+    """
+    A strategy based on RSI thresholds.
+    """
     def __init__(self, overbought_threshold=80, oversold_threshold=25, signal_type="RSI"):
+        """
+        Builds the RSI strategy.
+        :param overbought_threshold: The RSI overbought threshold.
+        :param oversold_threshold: The RSI oversold threshold.
+        :param signal_type: signal type: Set to "RSI" or "RSI_Cumulative".
+        """
         self.overbought_threshold = overbought_threshold
         self.oversold_threshold = oversold_threshold
         self.signal_type = signal_type
@@ -201,7 +173,14 @@ class SimpleRSIStrategy(SignalStrategy):
 
 
 class SimpleTrendBasedStrategy(SignalStrategy):
+    """
+    A strategy that decides on buys and sells based on signal trend information.
+    """
     def __init__(self, signal_type):
+        """
+        Builds the trend-based strategy.
+        :param signal_type: The underlying signal type to use with the strategy (e.g. "SMA", "RSI", "ANN").
+        """
         self.signal_type = signal_type
 
     def __str__(self):
@@ -221,7 +200,14 @@ class SimpleTrendBasedStrategy(SignalStrategy):
 
 
 class BuyOnFirstSignalAndHoldStrategy(SignalStrategy):
+    """
+    A wrapper class for SignalStrategies. Buys on first signal, then holds.
+    """
     def __init__(self, strategy):
+        """
+        Builds the strategy.
+        :param strategy: The wrapped SignalStrategy.
+        """
         self.strategy = strategy
 
     def get_orders(self, start_cash, start_crypto, time_delay=0):
@@ -244,7 +230,18 @@ class BuyOnFirstSignalAndHoldStrategy(SignalStrategy):
 
 
 class BuyAndHoldTimebasedStrategy(SignalStrategy):
+    """
+    Standard buy & hold strategy (signal-driven).
+    """
     def __init__(self, start_time, end_time, transaction_currency, counter_currency, source):
+        """
+        Builds the buy and hold strategy.
+        :param start_time: When to buy transaction_currency.
+        :param end_time: When to sell transaction_currency.
+        :param transaction_currency: Transaction currency.
+        :param counter_currency: Counter currency.
+        :param source: ITF exchange code.
+        """
         self.start_time = start_time
         self.end_time = end_time
         self.transaction_currency = transaction_currency
@@ -271,6 +268,98 @@ class BuyAndHoldTimebasedStrategy(SignalStrategy):
         return self.strategy.get_signal_report()
 
 
+class StrategyDecision:
+    BUY = "BUY"
+    SELL = "SELL"
+    IGNORE = None
+
+class TickerStrategy(Strategy):
+    """
+    A wrapper class that converts signal-based strategies to ticker-based.
+    Ticker-based strategies are used by TickDrivenBacktester.
+    """
+
+    @abstractmethod
+    def process_ticker(self, price_data, signals):
+        """
+
+        :param price_data: Pandas row with OHLC data and timestamp.
+        :param signals: ITF signals co-ocurring with price tick.
+        :return: StrategyDecision.BUY or StrategyDecision.SELL or StrategyDecision.IGNORE
+        """
+        pass
+
+
+class TickerWrapperStrategy(TickerStrategy):
+
+    def __init__(self, strategy):
+        """
+        Builds a ticker-driven strategy out of a regular SignalStrategy.
+        :param strategy: The wrapped SignalStrategy.
+        """
+        self._strategy = strategy
+
+    def process_ticker(self, price_data, signals):
+        for i, signal in enumerate(signals):
+            if not self._strategy.belongs_to_this_strategy(signal):
+                continue
+            if self._strategy.indicates_sell(signal):
+                return StrategyDecision.SELL, signal
+            elif self._strategy.indicates_buy(signal):
+                return StrategyDecision.BUY, signal
+        return StrategyDecision.IGNORE, None
+
+    def belongs_to_this_strategy(self, signal):
+        return self._strategy.belongs_to_this_strategy(signal)
+
+    def get_short_summary(self):
+        return self._strategy.get_short_summary()
+
+
+class TickerBuyAndHold(TickerWrapperStrategy):
+    """
+    Ticker-based buy & hold strategy (used as baseline for benchmark stats calculation).
+    """
+
+    def __init__(self, start_time, end_time):
+        """
+        Builds the ticker-based but
+        :param start_time:
+        :param end_time:
+        """
+        self._start_time = start_time
+        self._end_time = end_time
+        self._bought = False
+        self._sold = False
+
+    def process_ticker(self, price_data, signals):
+        """
+        Process incoming price data.
+        :param price_data: Pandas row with OHLC information and timestamp. Assumed to be pre-filtered so this method
+        always receives only one transaction and counter currency
+        :param signals: ITF signals, ignored.
+        :return: StrategyDecision.BUY or StrategyDecision.SELL or StrategyDecision.IGNORE
+        """
+        timestamp = price_data['timestamp']
+        if timestamp >= self._start_time and timestamp <= self._end_time and not self._bought:
+            if abs(timestamp - self._start_time) > 120:
+                logging.warning("Buy and hold BUY: ticker more than 2 mins after start time ({:.2f} mins)!"
+                                .format(abs(timestamp - self._start_time)/60))
+            self._bought = True
+            return StrategyDecision.BUY, None
+        elif timestamp >= self._end_time and not self._sold:
+            logging.warning("Buy and hold SELL: ticker more than 2 mins after end time ({:.2f} mins)!"
+                            .format(abs(timestamp - self._end_time) / 60))
+            self._sold = True
+            return StrategyDecision.SELL, None
+        else:
+            return StrategyDecision.IGNORE, None
+
+    def get_short_summary(self):
+        return "Ticker-based buy and hold strategy"
+
+
+# TODO: obsolete, clean
 class RandomTradingStrategy(SimpleTrendBasedStrategy):
 
     def __init__(self, max_num_signals, start_time, end_time, transaction_currency, counter_currency, source=0):
@@ -300,4 +389,3 @@ class RandomTradingStrategy(SimpleTrendBasedStrategy):
 
     def belongs_to_this_strategy(self, signal):
         return True
-

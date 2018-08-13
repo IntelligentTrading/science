@@ -56,7 +56,7 @@ class TickDrivenBacktester(Evaluation, TickListener):
 
 
 if __name__ == '__main__':
-    from strategies import SignalSignatureStrategy, TickerStrategy, TickerBuyAndHold
+    from strategies import SignalSignatureStrategy, TickerWrapperStrategy, TickerBuyAndHold
     # from ticker_strategies import TickerStrategy, TickerBuyAndHold
     end_time = 1531699200
     start_time = end_time - 60*60*24*70
@@ -93,7 +93,7 @@ if __name__ == '__main__':
             verbose=False
         )
 
-    strategy = TickerStrategy(rsi_strategy)
+    strategy = TickerWrapperStrategy(rsi_strategy)
     #strategy = TickerBuyAndHold(start_time, end_time)
 
     # supply ticks from the ITF DB
