@@ -167,6 +167,19 @@ class Evaluation(ABC):
         return self._max_drawdown
 
     @property
+    def max_drawdown_duration(self):
+        return self._max_drawdown_duration
+
+    def _compute_max_drawdown(self):
+        returns = self.noncumulative_returns
+        r = returns.add(1).cumprod()
+        dd = r.div(r.cummax()).sub(1)
+        mdd = dd.min()
+        end = dd.argmin()
+        start = r.loc[:end].argmax()
+        return mdd, start, end
+
+    @property
     def sharpe_ratio(self):
         return self._sharpe_ratio
 
@@ -226,7 +239,6 @@ class Evaluation(ABC):
             if not (len(self._buy_sell_pair_losses) == 1 and np.isnan(self._buy_sell_pair_losses[0])) else 0
         return (num_losses / self.num_buy_sell_pairs) if self.num_buy_sell_pairs != 0 else 0
 
-
     def _write_to_trading_df(self):
         total_value = self._crypto * self._current_price + self._cash
 
@@ -247,7 +259,9 @@ class Evaluation(ABC):
         # compute returns for stats
         self.trading_df = self._fill_returns(self.trading_df)
         returns = np.array(self.trading_df['return_relative_to_past_tick'])
-        self._max_drawdown = empyrical.max_drawdown(np.array(returns))
+        # self._max_drawdown = empyrical.max_drawdown(np.array(returns))
+        self._max_drawdown, start_dd, end_dd = self._compute_max_drawdown()
+        self._max_drawdown_duration = end_dd - start_dd
         self._sharpe_ratio = empyrical.sharpe_ratio(returns)
 
         # extract only rows that have orders
@@ -349,6 +363,7 @@ class Evaluation(ABC):
 
         output.append("\nAdditional stats:")
         output.append("  Max drawdown: {}".format(self.max_drawdown))
+        output.append("  Max drawdown duration: {}".format(self.max_drawdown_duration))
         output.append("  Sharpe ratio: {}".format(self.sharpe_ratio))
         output.append("  Alpha: {}".format(self.alpha))
         output.append("  Beta: {}".format(self.beta))
