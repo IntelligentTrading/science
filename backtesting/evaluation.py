@@ -7,6 +7,7 @@ logging.getLogger().setLevel(logging.INFO)
 from abc import ABC, abstractmethod
 import empyrical
 import numpy as np
+from charting import BacktestingChart
 
 
 class Evaluation(ABC):
@@ -287,7 +288,7 @@ class Evaluation(ABC):
 
 
     def get_orders(self):
-        return self._orders
+        return self.orders
 
     def _format_price_dependent_value(self, value):
         if value is None:
@@ -438,19 +439,19 @@ class Evaluation(ABC):
                 dictionary["profit_percent_USDT"] = "N/A"
         return dictionary
 
-    def plot_portfolio(self):
-        """
-        import matplotlib.pyplot as plt
-        self.trading_df['close_price'].plot()
-        self.trading_df['total_value'].plot(secondary_y=True)
-        plt.show()
-        """
+    def plot_cumulative_returns(self):
         if self.trading_df.empty:
             return
-        from charting import BacktestingChart
-        chart = BacktestingChart(self.trading_df, self.orders)
-        #chart.draw_price_chart()
-        chart.test_pyfolio()
+        chart = BacktestingChart(self, self._benchmark_backtest)
+        chart.draw_returns_tear_sheet()
+
+    def plot_returns_tear_sheet(self):
+        if self.trading_df.empty:
+            return
+        chart = BacktestingChart(self, self._benchmark_backtest)
+        chart.draw_returns_tear_sheet()
+
+
 
 
 if __name__ == '__main__':

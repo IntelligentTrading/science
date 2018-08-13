@@ -71,23 +71,27 @@ if __name__ == '__main__':
         ['rsi_buy_2', 'rsi_sell_2', 'rsi_buy_1', 'rsi_sell_1', 'rsi_buy_3', 'rsi_sell_3']
     )
 
-    benchmark_transaction_currency, benchmark_counter_currency = "BTC", "USDT"
-    benchmark_tick_provider = TickProviderITFDB(benchmark_transaction_currency, benchmark_counter_currency, start_time,
-                                                end_time)
-    benchmark_strategy = TickerBuyAndHold(start_time, end_time)
-    benchmark = TickDrivenBacktester(
-        tick_provider=benchmark_tick_provider,
-        strategy=benchmark_strategy,
-        transaction_currency=benchmark_transaction_currency,
-        counter_currency=benchmark_counter_currency,
-        start_cash=start_cash,
-        start_crypto=start_crypto,
-        start_time=start_time,
-        end_time=end_time,
-        source=source,
-        resample_period=60,
-        verbose=False
-    )
+    benchmark = None
+    build_benchmark = True
+
+    if build_benchmark:
+        benchmark_transaction_currency, benchmark_counter_currency = "BTC", "USDT"
+        benchmark_tick_provider = TickProviderITFDB(benchmark_transaction_currency, benchmark_counter_currency, start_time,
+                                                    end_time)
+        benchmark_strategy = TickerBuyAndHold(start_time, end_time)
+        benchmark = TickDrivenBacktester(
+            tick_provider=benchmark_tick_provider,
+            strategy=benchmark_strategy,
+            transaction_currency=benchmark_transaction_currency,
+            counter_currency=benchmark_counter_currency,
+            start_cash=start_cash,
+            start_crypto=start_crypto,
+            start_time=start_time,
+            end_time=end_time,
+            source=source,
+            resample_period=60,
+            verbose=False
+        )
 
     strategy = TickerStrategy(rsi_strategy)
     #strategy = TickerBuyAndHold(start_time, end_time)
@@ -105,6 +109,8 @@ if __name__ == '__main__':
                                       start_time=start_time,
                                       end_time=end_time,
                                       benchmark_backtest=benchmark)
+
+    evaluation.plot_cumulative_returns()
 
 
 

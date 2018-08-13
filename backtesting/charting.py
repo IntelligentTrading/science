@@ -1,28 +1,35 @@
-import matplotlib
-matplotlib.use('Agg')
 import pyfolio as pf
-import numpy as np
-#import matplotlib.pyplot as plt
-#import matplotlib.dates as mdates
 from orders import OrderType
 import pandas as pd
 
 
 class BacktestingChart:
 
-    def __init__(self, trading_df, orders):
-        trading_df.index = pd.to_datetime(trading_df.index, unit='s', utc=True)
-        self.trading_df = trading_df
-        self.orders = orders
+    def __init__(self, backtest, benchmark=None):
+        self.backtest = backtest
+        self.trading_df = backtest.trading_df.copy()
+        self.trading_df.index = pd.to_datetime(self.trading_df.index, unit='s', utc=True)
+        if benchmark is not None:
+            self.benchmark_trading_df = benchmark.trading_df.copy()
+            self.benchmark_trading_df.index = pd.to_datetime(self.benchmark_trading_df.index, unit='s', utc=True)
+        self.benchmark = benchmark
+        self.draw_price_and_cumulative_returns()
 
     @staticmethod
     def price(x):
         return '$%1.2f' % x
 
-    def test_pyfolio(self):
-        #self.trading_df.return_relative_to_past_tick = self.trading_df.return_relative_to_past_tick.astype(float)
-        f = pf.create_returns_tear_sheet(self.trading_df['return_relative_to_past_tick'], return_fig=True) #, live_start_date=self.trading_df.index.values.min())
-        f.savefig('pyfolio_returns_tear_sheet.png')
+    def draw_returns_tear_sheet(self, save_file=True, out_filename='pyfolio_returns_tear_sheet.png'):
+        import matplotlib
+        if save_file:
+            matplotlib.use('Agg')
+
+        f = pf.create_returns_tear_sheet(returns=self.trading_df['return_relative_to_past_tick'],
+                                         return_fig=True)
+                                         # benchmark_rets=
+                                         #   self.benchmark_trading_df['return_relative_to_past_tick']
+                                         #   if self.benchmark is not None else None)
+        f.savefig(out_filename)
 
     def plot_orders(self, ax, orders):
         for order in orders:
@@ -31,57 +38,22 @@ class BacktestingChart:
             else:
                 color = "r"
             timestamp = pd.to_datetime(order.timestamp, unit="s")
-            price = order.unit_price
             ax.axvline(timestamp, color=color, lw=1, zorder=-1)
-            #circle = plt.Circle((timestamp, price), 2, color=color)
-            #ax.add_artist(circle)
 
-    def draw_chart_from_dataframe(self, df, data_column_name):
-        timestamps = pd.to_datetime(df.index.values, unit='s')
-        data = df.as_matrix(columns=[data_column_name])
-        self.draw_price_chart(timestamps, data, None)
+    def draw_price_and_cumulative_returns(self):
+        import matplotlib.pyplot as plt
 
-    def draw_price_chart(self):
-        years = mdates.YearLocator()  # every year
-        months = mdates.MonthLocator()  # every month
-        weeks = mdates.WeekdayLocator()
-        days = mdates.DayLocator()  # every day
-        daysFmt = mdates.DateFormatter('%m/%d')
-        monthsFmt = mdates.DateFormatter('%m')
-
-        orders = self.orders
-
+        orders = self.backtest.get_orders()
         ax1 = self.trading_df['close_price'].plot()
         ax2 = self.trading_df['total_value'].plot(secondary_y=True)
-
+        ax1.set_ylabel('Price')
+        ax2.set_ylabel('Total value')
 
         if orders != None:
             self.plot_orders(ax1, orders)
 
-        plt.show()
-        return
-
-        # format the ticks
-        ax1.xaxis.set_major_locator(years)
-        ax1.xaxis.set_minor_locator(days)
-        ax1.xaxis.set_minor_formatter(daysFmt)
-        plt.setp(ax1.xaxis.get_minorticklabels(), rotation=90)
-
-
-        datemin = np.datetime64(int(self.trading_df.index.values.min()), 's')
-        datemax = np.datetime64(int(self.trading_df.index.values.max()), 's')
-        ax1.set_xlim(datemin, datemax)
-
-        # format the coords message box
-        ax1.format_xdata = daysFmt
-        #ax1.format_ydata = self.price
+        ax1.format_ydata = self.price
         ax1.grid(False)
-
-        plt.ylabel("Price", fontsize=14)
-
-        # rotates and right aligns the x labels, and moves the bottom of the
-        # axes up to make room for them
-        # fig.autofmt_xdate()
 
         plt.show()
 
