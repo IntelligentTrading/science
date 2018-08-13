@@ -12,7 +12,8 @@ import numpy as np
 class Evaluation(ABC):
     def __init__(self, strategy, transaction_currency, counter_currency,
                  start_cash, start_crypto, start_time, end_time, source=0,
-                 resample_period=60, evaluate_profit_on_last_order=True, verbose=True):
+                 resample_period=60, evaluate_profit_on_last_order=True, verbose=True,
+                 benchmark_currency_pair=None):
         self._strategy = strategy
         self._transaction_currency = transaction_currency
         self._counter_currency = counter_currency
@@ -25,26 +26,56 @@ class Evaluation(ABC):
         self._evaluate_profit_on_last_order = evaluate_profit_on_last_order
         self._transaction_cost_percent = transaction_cost_percents[source]
         self._verbose = verbose
+        self._benchmark_currency_pair = benchmark_currency_pair
 
         # Init backtesting variables
         self._cash = start_cash
         self._crypto = start_crypto
+        self._num_trades = 0
+        self._num_buys = 0
+        self._num_sells = 0
         self.orders = []
         self.order_signals = []
         self.trading_df = pd.DataFrame(columns=['close_price', 'signal', 'order', 'cash', 'crypto', 'total_value'])
 
         # TODO: this goes out
-        self.num_trades = 0
+
         self.num_profitable_trades = 0
         self.invested_on_buy = 0
         self.avg_profit_per_trade_pair = 0
-        self.num_sells = 0
+
+
+    def _build_benchmark(self):
+        if self._benchmark_currency_pair is None:
+            self._benchmark_backtest = None
+        benchmark_transaction_currency, benchmark_counter_currency = self._benchmark_currency_pair
+        #benchmark_strategy = TickerBuyAndHold
+
+
+    @property
+    def noncumulative_returns(self):
+        return self._trading_df['return_relative_to_past_tick']
 
 
     @abstractmethod
     def run(self):
         pass
 
+    @property
+    def num_buys(self):
+        return self._num_buys
+
+    @property
+    def num_sells(self):
+        return self._num_sells
+
+    @property
+    def num_orders(self):
+        return len(self.orders)
+
+    @property
+    def num_trades(self):
+        return self._num_trades
 
     @property
     def start_value_usdt(self):
@@ -175,7 +206,7 @@ class Evaluation(ABC):
 
     @property
     def num_buy_sell_pairs(self):
-        return self.num_sells
+        return self._num_sells
 
     @property
     def percent_profitable_trades(self):
@@ -189,17 +220,6 @@ class Evaluation(ABC):
             if not (len(self._buy_sell_pair_losses) == 1 and np.isnan(self._buy_sell_pair_losses[0])) else 0
         return (num_losses / self.num_buy_sell_pairs) if self.num_buy_sell_pairs != 0 else 0
 
-    @property
-    def num_orders(self):
-        return len(self.orders)
-
-    #@property
-    #def num_trades(self):
-    #    return len(self.orders)
-
-    #@property
-    #def end_price(self):
-    #    return self.trading_df.tail(1)['close_price'].item()
 
     def _write_to_trading_df(self):
         total_value = self._crypto * self._current_price + self._cash
@@ -211,7 +231,7 @@ class Evaluation(ABC):
             'crypto': self._crypto,
             'total_value': total_value,
             'order': "" if self._current_order is None else self._current_order.order_type.value,
-            'signal': "" if self._current_order is None else self._current_signal.signal_type})
+            'signal': "" if self._current_order is None or self._current_signal is None else self._current_signal.signal_type})
 
     def _finalize_backtesting(self):
         # set finishing variable values
@@ -287,7 +307,7 @@ class Evaluation(ABC):
         output.append("End time: {}".format(datetime_from_timestamp(self._end_time)))
         output.append("\nSummary")
         output.append("--")
-        output.append("Number of trades: {}".format(self.num_trades))
+        output.append("Number of trades: {}".format(self._num_trades))
         output.append("End cash: {0:.2f} {1}".format(self.end_cash, self._counter_currency))
         output.append("End crypto: {0:.6f} {1}".format(self.end_crypto, self._transaction_currency))
 
@@ -353,14 +373,15 @@ class Evaluation(ABC):
         delta_crypto, delta_cash = order.execute()
         self._cash += delta_cash
         self._crypto += delta_crypto
-        self.num_trades += 1
+        self._num_trades += 1
         if order.order_type == OrderType.BUY:
             self.invested_on_buy = -delta_cash
             self._buy_currency = order.transaction_currency
-        else:
+            self._num_buys += 1
+        elif order.order_type == OrderType.SELL:
             # the currency we're selling must match the bought currency
             assert order.transaction_currency == self._buy_currency
-            self.num_sells += 1
+            self._num_sells += 1
             buy_sell_pair_profit_percent = (delta_cash - self.invested_on_buy) / self.invested_on_buy * 100
             self.avg_profit_per_trade_pair += buy_sell_pair_profit_percent
             if buy_sell_pair_profit_percent > 0:

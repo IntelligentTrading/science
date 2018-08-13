@@ -100,4 +100,5 @@ ALL_SIGNALS = {
     'ema_bear_3' : SignalType('EMA', -1, 3),
 
     'vbi_buy': SignalType('VBI', 1, 3),
+
 }

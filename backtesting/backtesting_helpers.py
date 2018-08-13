@@ -19,10 +19,12 @@ def evaluate_trend_based(signal_type, **kwargs):
     strategy = SimpleTrendBasedStrategy(kwargs['source'], signal_type)
     return SignalDrivenBacktester(strategy=strategy, **kwargs)
 
+
 def evaluate_rsi_cumulative_compare(overbought_threshold, oversold_threshold, **kwargs):
     evaluation_rsi = evaluate_rsi(overbought_threshold, oversold_threshold, "RSI", **kwargs)
     evaluation_rsi_cumulative = evaluate_rsi(overbought_threshold, overbought_threshold, "RSI_Cumulative", **kwargs)
     return evaluation_rsi_cumulative, evaluation_rsi
+
 
 def find_num_cumulative_outperforms(currency_pairs, **kwargs):
     resample_periods = (60, 240, 1440)
@@ -58,9 +60,9 @@ def find_num_cumulative_outperforms(currency_pairs, **kwargs):
                 if profit_rsi > 0:
                     rsi_profitable += 1
 
-                if evaluation_rsi.num_trades > 0:
+                if evaluation_rsi._num_trades > 0:
                     total_rsi += 1
-                if evaluation_cumulative.num_trades > 0:
+                if evaluation_cumulative._num_trades > 0:
                     total_cumulative += 1
 
                 total_evaluated_pairs += 1
@@ -74,7 +76,7 @@ def find_num_cumulative_outperforms(currency_pairs, **kwargs):
     print("RSI was profitable for {0:0.2f}% of pairs".format(rsi_profitable / total_rsi * 100))
     print("RSI cumulative was profitable for {0:0.2f}% of pairs".format(rsi_cumulative_profitable / total_cumulative * 100))
 
-# TODO: look into this
+
 def evaluate_rsi_any_currency(overbought_threshold, oversold_threshold, **kwargs):
     rsi_strategy = SimpleRSIStrategy(kwargs['source'], overbought_threshold, oversold_threshold)
     kwargs['transaction_currency'] = None
@@ -100,5 +102,5 @@ if __name__ == "__main__":
     evaluate_rsi_signature(**kwargs)
     evaluate_rsi(75, 25, **kwargs)
     evaluate_trend_based("SMA", **kwargs)
-    find_num_cumulative_outperforms((("BTC","USDT"),("DOGE","BTC")), **kwargs)
+    find_num_cumulative_outperforms((("BTC", "USDT"), ("DOGE"," BTC")), **kwargs)
 

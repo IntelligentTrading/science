@@ -4,6 +4,7 @@ from signals import *
 import operator
 import random
 from backtester_signals import SignalDrivenBacktester
+from tick_listener import TickListener
 
 from signals import SignalType
 from abc import ABC, abstractmethod
@@ -105,6 +106,9 @@ class Strategy(ABC):
             time_delay=time_delay
         )
 
+    def benchmark(self):
+        pass
+
     # TODO: obsolete, clean up
     @staticmethod
     def generate_strategy(signal_type, transaction_currency, counter_currency, start_time, end_time, horizon=Horizon.any,
@@ -135,29 +139,7 @@ class RSITickerStrategy(Strategy):
         return signal.signal_type == 'RSI'
 
 
-class TickerStrategy(Strategy):
-    '''
-    A wrapper class that converts all existing strategies to ticker-based.
-    '''
 
-    def __init__(self, strategy):
-        self._strategy = strategy
-
-    def process_ticker(self, price_data, signals):
-        for i, signal in enumerate(signals):
-            if not self._strategy.belongs_to_this_strategy(signal):
-                continue
-            if self._strategy.indicates_sell(signal):
-                return "SELL", signal
-            elif self._strategy.indicates_buy(signal):
-                return "BUY", signal
-        return None, None
-
-    def belongs_to_this_strategy(self, signal):
-        return self._strategy.belongs_to_this_strategy(signal)
-
-    def get_short_summary(self):
-        return self._strategy.get_short_summary()
 
 
 class SignalSignatureStrategy(Strategy):
