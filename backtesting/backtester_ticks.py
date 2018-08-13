@@ -56,21 +56,41 @@ class TickDrivenBacktester(Evaluation, TickListener):
 
 
 if __name__ == '__main__':
-    from strategies import SignalSignatureStrategy
-    from ticker_strategies import TickerStrategy, TickerBuyAndHold
+    from strategies import SignalSignatureStrategy, TickerStrategy, TickerBuyAndHold
+    # from ticker_strategies import TickerStrategy, TickerBuyAndHold
     end_time = 1531699200
     start_time = end_time - 60*60*24*70
     start_cash = 10000000
     start_crypto = 0
     source = 0
+    resample_period = 60
     transaction_currency = 'BTC'
     counter_currency = 'USDT'
     rsi_strategy = SignalSignatureStrategy(
         source,
         ['rsi_buy_2', 'rsi_sell_2', 'rsi_buy_1', 'rsi_sell_1', 'rsi_buy_3', 'rsi_sell_3']
     )
+
+    benchmark_transaction_currency, benchmark_counter_currency = "BTC", "USDT"
+    benchmark_tick_provider = TickProviderITFDB(benchmark_transaction_currency, benchmark_counter_currency, start_time,
+                                                end_time)
+    benchmark_strategy = TickerBuyAndHold(start_time, end_time)
+    benchmark = TickDrivenBacktester(
+        tick_provider=benchmark_tick_provider,
+        strategy=benchmark_strategy,
+        transaction_currency=benchmark_transaction_currency,
+        counter_currency=benchmark_counter_currency,
+        start_cash=start_cash,
+        start_crypto=start_crypto,
+        start_time=start_time,
+        end_time=end_time,
+        source=source,
+        resample_period=60,
+        verbose=False
+    )
+
     strategy = TickerStrategy(rsi_strategy)
-    strategy = TickerBuyAndHold(start_time, end_time)
+    #strategy = TickerBuyAndHold(start_time, end_time)
 
     # supply ticks from the ITF DB
     tick_provider = TickProviderITFDB(transaction_currency, counter_currency, start_time, end_time)
@@ -83,6 +103,9 @@ if __name__ == '__main__':
                                       start_cash=start_cash,
                                       start_crypto=start_crypto,
                                       start_time=start_time,
-                                      end_time=end_time)
+                                      end_time=end_time,
+                                      benchmark_backtest=benchmark)
+
+
 
 

@@ -13,7 +13,7 @@ class Evaluation(ABC):
     def __init__(self, strategy, transaction_currency, counter_currency,
                  start_cash, start_crypto, start_time, end_time, source=0,
                  resample_period=60, evaluate_profit_on_last_order=True, verbose=True,
-                 benchmark_currency_pair=None):
+                 benchmark_backtest=None):
         self._strategy = strategy
         self._transaction_currency = transaction_currency
         self._counter_currency = counter_currency
@@ -26,7 +26,11 @@ class Evaluation(ABC):
         self._evaluate_profit_on_last_order = evaluate_profit_on_last_order
         self._transaction_cost_percent = transaction_cost_percents[source]
         self._verbose = verbose
-        self._benchmark_currency_pair = benchmark_currency_pair
+        self._benchmark_backtest = benchmark_backtest
+
+        if benchmark_backtest is not None:
+            assert benchmark_backtest._start_time == self._start_time
+            assert benchmark_backtest._end_time == self._end_time
 
         # Init backtesting variables
         self._cash = start_cash
@@ -45,16 +49,9 @@ class Evaluation(ABC):
         self.avg_profit_per_trade_pair = 0
 
 
-    def _build_benchmark(self):
-        if self._benchmark_currency_pair is None:
-            self._benchmark_backtest = None
-        benchmark_transaction_currency, benchmark_counter_currency = self._benchmark_currency_pair
-        #benchmark_strategy = TickerBuyAndHold
-
-
     @property
     def noncumulative_returns(self):
-        return self._trading_df['return_relative_to_past_tick']
+        return self.trading_df['return_relative_to_past_tick']
 
 
     @abstractmethod
@@ -173,6 +170,14 @@ class Evaluation(ABC):
         return self._sharpe_ratio
 
     @property
+    def alpha(self):
+        return self._alpha
+
+    @property
+    def beta(self):
+        return self._beta
+
+    @property
     def min_buy_sell_pair_gain(self):
         return self._buy_sell_pair_gains.min()
 
@@ -264,6 +269,12 @@ class Evaluation(ABC):
         if len(self._buy_sell_pair_losses) == 0:
             self._buy_sell_pair_losses = np.array([np.nan])
 
+        if self._benchmark_backtest is not None:
+            self._alpha, self._beta = \
+                empyrical.alpha_beta(self.noncumulative_returns, self._benchmark_backtest.noncumulative_returns)
+        else:
+            self._alpha = self._beta = np.nan
+
         if self._verbose:
             logging.info(self.get_report())
             # logging.info(self.trading_df)
@@ -338,6 +349,9 @@ class Evaluation(ABC):
         output.append("\nAdditional stats:")
         output.append("  Max drawdown: {}".format(self.max_drawdown))
         output.append("  Sharpe ratio: {}".format(self.sharpe_ratio))
+        output.append("  Alpha: {}".format(self.alpha))
+        output.append("  Beta: {}".format(self.beta))
+
         output.append("  Buy-sell pair gains - overall stats")
         output.append("     min = {}, max = {}, mean = {}, stdev = {}".format(
             self.min_buy_sell_pair_gain,
