@@ -4,19 +4,17 @@ from strategies import *
 ### Various sample backtesting runs
 
 def evaluate_rsi_signature(**kwargs):
-    rsi_strategy = SignalSignatureStrategy(
-        kwargs['source'],
-        ['rsi_buy_2', 'rsi_sell_2','rsi_buy_1', 'rsi_sell_1','rsi_buy_3', 'rsi_sell_3'])
+    rsi_strategy = SignalSignatureStrategy(['rsi_buy_2', 'rsi_sell_2','rsi_buy_1', 'rsi_sell_1','rsi_buy_3', 'rsi_sell_3'])
     return SignalDrivenBacktester(strategy=rsi_strategy, **kwargs)
 
 
 def evaluate_rsi(overbought_threshold, oversold_threshold, signal_type="RSI", **kwargs):
-    rsi_strategy = SimpleRSIStrategy(kwargs['source'], overbought_threshold, oversold_threshold, signal_type)
+    rsi_strategy = SimpleRSIStrategy(overbought_threshold, oversold_threshold, signal_type)
     return SignalDrivenBacktester(strategy=rsi_strategy, **kwargs)
 
 
 def evaluate_trend_based(signal_type, **kwargs):
-    strategy = SimpleTrendBasedStrategy(kwargs['source'], signal_type)
+    strategy = SimpleTrendBasedStrategy(signal_type)
     return SignalDrivenBacktester(strategy=strategy, **kwargs)
 
 
@@ -78,7 +76,7 @@ def find_num_cumulative_outperforms(currency_pairs, **kwargs):
 
 
 def evaluate_rsi_any_currency(overbought_threshold, oversold_threshold, **kwargs):
-    rsi_strategy = SimpleRSIStrategy(kwargs['source'], overbought_threshold, oversold_threshold)
+    rsi_strategy = SimpleRSIStrategy(overbought_threshold, oversold_threshold)
     kwargs['transaction_currency'] = None
     return SignalDrivenBacktester(strategy=rsi_strategy, **kwargs)
 
@@ -102,5 +100,5 @@ if __name__ == "__main__":
     evaluate_rsi_signature(**kwargs)
     evaluate_rsi(75, 25, **kwargs)
     evaluate_trend_based("SMA", **kwargs)
-    find_num_cumulative_outperforms((("BTC", "USDT"), ("DOGE"," BTC")), **kwargs)
+    find_num_cumulative_outperforms((("BTC", "USDT"), ("DOGE","BTC")), **kwargs)
 

@@ -165,6 +165,8 @@ class Evaluation(ABC):
 
     def _compute_max_drawdown(self):
         returns = self.noncumulative_returns
+        if len(returns) == 0:
+            return np.nan, np.nan, np.nan
         r = returns.add(1).cumprod()
         dd = r.div(r.cummax()).sub(1)
         mdd = dd.min()
@@ -246,11 +248,11 @@ class Evaluation(ABC):
 
     @property
     def percent_profitable_trades(self):
-        return self.num_profitable_trades / self.num_buy_sell_pairs
+        return self.num_profitable_trades / self.num_buy_sell_pairs if self.num_buy_sell_pairs !=0 else np.nan
 
     @property
     def percent_unprofitable_trades(self):
-        self.num_unprofitable_trades / self.num_buy_sell_pairs
+        self.num_unprofitable_trades / self.num_buy_sell_pairs if self.num_buy_sell_pairs !=0 else np.nan
 
     def _write_to_trading_df(self):
         total_value = self._crypto * self._current_price + self._cash

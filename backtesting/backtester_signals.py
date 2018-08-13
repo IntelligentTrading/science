@@ -20,6 +20,7 @@ class SignalDrivenBacktester(Evaluation):
             signals = self.signals,
             start_cash=self._start_cash,
             start_crypto=self._start_crypto,
+            source=self._source,
             time_delay=0)
         self.run()
 

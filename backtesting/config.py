@@ -29,6 +29,6 @@ backtesting_report_columns = ["strategy",
                               "num_sells"]
 
 transaction_cost_percents = {
-    0: 0.02,    # Poloniex
+    0: 0.002,    # Poloniex
                 # TODO: add the rest
 }
