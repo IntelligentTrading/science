@@ -11,24 +11,26 @@ mysql_database_config = {
 
 postgres_connection_string = "host='localhost' dbname='itf_08_05' user='postgres' password='itfscience'"
 
-backtesting_report_columns = ["strategy",
-                              "utilized_signals",
-                              "transaction_currency",
-                              "counter_currency",
-                              "num_trades",
-                              "profit_percent",
-                              "profit_percent_USDT",
-                              "buy_and_hold_profit_percent",
-                              "buy_and_hold_profit_percent_USDT",
-                              "start_time",
-                              "end_time",
-                              "evaluate_profit_on_last_order",
-                              "horizon",
-                              "num_profitable_trades",
-                              "avg_profit_per_trade_pair",
-                              "num_sells"]
+backtesting_report_columns = [
+    "strategy",
+    "utilized_signals",
+    "transaction_currency",
+    "counter_currency",
+    "profit_percent",
+    "profit_percent_USDT",
+    "buy_and_hold_profit_percent",
+    "buy_and_hold_profit_percent_USDT",
+    "num_trades",
+    "num_buys",
+    "num_sells",
+    "mean_buy_sell_pair_return",
+    "start_time",
+    "end_time",
+    "evaluate_profit_on_last_order",
+    "resample_period"
+]
 
 transaction_cost_percents = {
-    0: 0.002,    # Poloniex
+    0: 0.002,   # Poloniex
                 # TODO: add the rest
 }

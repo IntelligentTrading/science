@@ -229,36 +229,34 @@ class BuyOnFirstSignalAndHoldStrategy(SignalStrategy):
     def get_signal_report(self):
         return self.strategy.get_signal_report()
 
-
 class BuyAndHoldTimebasedStrategy(SignalStrategy):
     """
     Standard buy & hold strategy (signal-driven).
     """
-    def __init__(self, start_time, end_time, transaction_currency, counter_currency, source):
+    def __init__(self, start_time, end_time, transaction_currency, counter_currency):
         """
         Builds the buy and hold strategy.
         :param start_time: When to buy transaction_currency.
         :param end_time: When to sell transaction_currency.
         :param transaction_currency: Transaction currency.
         :param counter_currency: Counter currency.
-        :param source: ITF exchange code.
         """
         self.start_time = start_time
         self.end_time = end_time
         self.transaction_currency = transaction_currency
         self.counter_currency = counter_currency
-        self.transaction_cost_percent = transaction_cost_percents[source]
 
-    def get_orders(self, start_cash, start_crypto, time_delay=0, signals=None):
+    def get_orders(self, signals, start_cash, start_crypto, source, time_delay=0):
+        transaction_cost_percent = transaction_cost_percents[source]
         orders = []
-        start_price = get_price(self.transaction_currency, self.start_time, self.source, self.counter_currency)
-        end_price = get_price(self.transaction_currency, self.end_time, self.source, self.counter_currency)
+        start_price = get_price(self.transaction_currency, self.start_time, source, self.counter_currency)
+        end_price = get_price(self.transaction_currency, self.end_time, source, self.counter_currency)
         order = Order(OrderType.BUY, self.transaction_currency, self.counter_currency,
-                      self.start_time, start_cash, start_price, self.transaction_cost_percent)
+                      self.start_time, start_cash, start_price, transaction_cost_percent)
         orders.append(order)
         delta_crypto, delta_cash = order.execute()
         order = Order(OrderType.SELL, self.transaction_currency, self.counter_currency,
-                      self.end_time, delta_crypto, end_price, self.transaction_cost_percent)
+                      self.end_time, delta_crypto, end_price, transaction_cost_percent)
         orders.append(order)
         return orders, []
 
@@ -267,6 +265,9 @@ class BuyAndHoldTimebasedStrategy(SignalStrategy):
 
     def get_signal_report(self):
         return self.strategy.get_signal_report()
+
+    def belongs_to_this_strategy(self, signal):
+        return False
 
 
 class StrategyDecision:

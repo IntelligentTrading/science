@@ -446,10 +446,12 @@ class Evaluation(ABC):
         tmp = {(k[1:] if k.startswith("_") else k): dictionary[k] for k in dictionary.keys()}
         dictionary = tmp
         del dictionary["orders"]
+        del dictionary["signals"]
         dictionary["strategy"] = dictionary["strategy"].get_short_summary()
         dictionary["utilized_signals"] = ", ".join(get_distinct_signal_types(self.order_signals))
         dictionary["start_time"] = datetime_from_timestamp(dictionary["start_time"])
         dictionary["end_time"] = datetime_from_timestamp(dictionary["end_time"])
+        dictionary["mean_buy_sell_pair_return"] = self.mean_buy_sell_pair_return
 
         dictionary["transaction_currency"] = self._end_crypto_currency
         if "horizon" not in vars(self._strategy):

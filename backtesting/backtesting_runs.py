@@ -11,7 +11,7 @@ def best_performing_signals_of_the_week():
         currency_pairs.append((transaction_currency, counter_currency))
 
     # for debugging
-    #currency_pairs = [("BTC","USDT"),]
+    currency_pairs = [("BTC","USDT"),]
 
     end_time = 1531699200
     start_time = end_time - 60*60*24*7
@@ -21,14 +21,15 @@ def best_performing_signals_of_the_week():
         sell_signals=['rsi_sell_3', 'rsi_sell_2', 'rsi_cumulat_sell_2', 'rsi_cumulat_sell_3', 'ichi_kumo_down'], #, 'ann_simple_bear'],
         num_buy=2,
         num_sell=2,
-        signal_combination_mode=SignalCombinationMode.SAME_TYPE,
-        horizons=(Horizon.short, Horizon.medium, Horizon.long),
-        start_time=start_time, end_time=end_time, currency_pairs=currency_pairs)
+        signal_combination_mode=SignalCombinationMode.SAME_TYPE)
 
     comparison = ComparativeEvaluation(strategy_set=strategies,
+                                       currency_pairs=currency_pairs,
+                                       resample_periods=[60,240,1440],
+                                       source=0,
                           start_cash=1, start_crypto=0,
                           start_time=start_time, end_time=end_time,
-                          output_file="best_performing_2018_07_16_refactor.xlsx"
+                          output_file="best_performing_2018_07_16_refactor2.xlsx"
                           )
 
     #comparison.write_comparative_summary("description.xlsx")

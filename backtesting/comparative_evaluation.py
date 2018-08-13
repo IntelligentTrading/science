@@ -16,8 +16,7 @@ class SignalCombinationMode(Enum):
 class StrategyEvaluationSetBuilder:
 
     @staticmethod
-    def build_from_signal_set(buy_signals, sell_signals, num_buy, num_sell, signal_combination_mode,
-                              horizons, start_time, end_time, currency_pairs):
+    def build_from_signal_set(buy_signals, sell_signals, num_buy, num_sell, signal_combination_mode):
         strategies = []
 
         buy_combinations = []
@@ -40,11 +39,8 @@ class StrategyEvaluationSetBuilder:
             if len(signal_set) == 0:
                 continue
 
-            for horizon in horizons:
-                for transaction_currency, counter_currency in currency_pairs:
-                    strategy = SignalSignatureStrategy(signal_set, start_time, end_time, horizon, counter_currency,
-                                                       transaction_currency)
-                    strategies.append(strategy)
+            strategy = SignalSignatureStrategy(signal_set)
+            strategies.append(strategy)
 
         return strategies
 
@@ -70,19 +66,20 @@ class StrategyEvaluationSetBuilder:
         strategies = []
         for overbought in overbought_thresholds:
             for oversold in oversold_thresholds:
-                for transaction_currency, counter_currency in currency_pairs:
-                    for horizon in horizons:
-                        strategy = SimpleRSIStrategy(start_time, end_time, horizon, counter_currency,
-                                                     overbought, oversold, transaction_currency, signal_type)
-                        strategies.append(strategy)
+                strategy = SimpleRSIStrategy(overbought, oversold, signal_type)
+                strategies.append(strategy)
         return strategies
 
 
 class ComparativeEvaluation:
 
-    def __init__(self, strategy_set, start_cash, start_crypto, start_time, end_time, output_file, time_delay=0):
+    def __init__(self, strategy_set, currency_pairs, resample_periods, source,
+                 start_cash, start_crypto, start_time, end_time, output_file, time_delay=0):
 
         self.strategy_set = strategy_set
+        self.currency_pairs = currency_pairs
+        self.resample_periods = resample_periods
+        self.source = source
         self.start_time = start_time
         self.end_time = end_time
         self.start_cash = start_cash
@@ -96,12 +93,14 @@ class ComparativeEvaluation:
 
     def build_dataframe(self, strategy_set, output_file):
         evaluation_dicts = []
-        for strategy in strategy_set:
-            try:
-                dict = self.evaluate(strategy)
-            except NoPriceDataException:
-                continue
-            evaluation_dicts.append(dict)
+        for transaction_currency, counter_currency in self.currency_pairs:
+            for resample_period in self.resample_periods:
+                for strategy in strategy_set:
+                    try:
+                        dict = self.evaluate(strategy, transaction_currency, counter_currency, resample_period)
+                        evaluation_dicts.append(dict)
+                    except NoPriceDataException:
+                        continue
 
         output = pd.DataFrame(evaluation_dicts)
         if len(output) == 0:
@@ -123,27 +122,26 @@ class ComparativeEvaluation:
         output.to_excel(writer, 'Results')
         writer.save()
 
-    def evaluate(self, strategy):
-        source = strategy.source
-        transaction_currency = strategy.transaction_currency
-        counter_currency = strategy.counter_currency
+    def evaluate(self, strategy, transaction_currency, counter_currency, resample_period):
         print("Evaluating strategy...")
-        horizon = strategy.horizon
 
         params = {}
         params['start_time'] = self.start_time
         params['end_time'] = self.end_time
         params['transaction_currency'] = transaction_currency
         params['counter_currency'] = counter_currency
+        params['resample_period'] = resample_period
         params['start_cash'] = self.start_cash
         params['start_crypto'] = self.start_crypto
         params['evaluate_profit_on_last_order'] = self.evaluate_profit_on_last_order
         params['verbose'] = False
-        params['source'] = source
+        params['source'] = self.source
+
 
 
         baseline = BuyAndHoldTimebasedStrategy(self.start_time, self.end_time, transaction_currency,
-                                               counter_currency, source, horizon)
+                                               counter_currency)
+        """
         baseline_evaluation = SignalDrivenBacktester(strategy=baseline,
                                                      transaction_currency=transaction_currency,
                                                      counter_currency=counter_currency,
@@ -163,6 +161,10 @@ class ComparativeEvaluation:
                                             evaluate_profit_on_last_order=self.evaluate_profit_on_last_order,
                                             verbose=False,
                                             time_delay=self.time_delay)
+        """
+        baseline_evaluation = SignalDrivenBacktester(strategy=baseline, **params)
+        evaluation = SignalDrivenBacktester(strategy=strategy, **params)
+
         return self.get_pandas_row_dict(evaluation, baseline_evaluation)
 
     def get_pandas_row_dict(self, evaluation, baseline):
