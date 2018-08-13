@@ -6,6 +6,7 @@ from backtester_signals import SignalDrivenBacktester
 from abc import ABC, abstractmethod
 from config import transaction_cost_percents
 
+
 class Strategy(ABC):
     """
     Base class for trading strategies.
@@ -269,9 +270,13 @@ class BuyAndHoldTimebasedStrategy(SignalStrategy):
 
 
 class StrategyDecision:
+    """
+    Strategy decisions used by TickerStrategies.
+    """
     BUY = "BUY"
     SELL = "SELL"
     IGNORE = None
+
 
 class TickerStrategy(Strategy):
     """

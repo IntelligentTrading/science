@@ -2,6 +2,7 @@ from evaluation import Evaluation
 from tick_listener import TickListener
 from orders import Order, OrderType
 from tick_provider_itf_db import TickProviderITFDB
+from strategies import StrategyDecision
 
 
 class TickDrivenBacktester(Evaluation, TickListener):
@@ -25,13 +26,13 @@ class TickDrivenBacktester(Evaluation, TickListener):
         self._current_price = price_data['close_price'].item()
         decision, order_signal = self._strategy.process_ticker(price_data, signals_now)
         order = None
-        if decision == "SELL" and self._crypto > 0:
+        if decision == StrategyDecision.SELL and self._crypto > 0:
             order = Order(OrderType.SELL, self._transaction_currency, self._counter_currency,
                           self._current_timestamp, self._crypto, self._current_price, self._transaction_cost_percent, 0)
             self.orders.append(order)
             self.order_signals.append(order_signal)
             self.execute_order(order)
-        elif decision == "BUY" and self._cash > 0:
+        elif decision == StrategyDecision.BUY and self._cash > 0:
             order = Order(OrderType.BUY, self._transaction_currency, self._counter_currency,
                           self._current_timestamp, self._cash, self._current_price, self._transaction_cost_percent, 0)
             self.orders.append(order)
@@ -67,7 +68,6 @@ if __name__ == '__main__':
     transaction_currency = 'BTC'
     counter_currency = 'USDT'
     rsi_strategy = SignalSignatureStrategy(
-        source,
         ['rsi_buy_2', 'rsi_sell_2', 'rsi_buy_1', 'rsi_sell_1', 'rsi_buy_3', 'rsi_sell_3']
     )
 

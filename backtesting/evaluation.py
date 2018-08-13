@@ -489,6 +489,12 @@ class Evaluation(ABC):
         chart.draw_returns_tear_sheet()
 
 
+class StrategyDecision:
+    BUY = "BUY"
+    SELL = "SELL"
+    IGNORE = None
+
+
 
 if __name__ == '__main__':
     from strategies import RSITickerStrategy
