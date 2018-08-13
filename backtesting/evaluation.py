@@ -43,17 +43,10 @@ class Evaluation(ABC):
         self.order_signals = []
         self.trading_df = pd.DataFrame(columns=['close_price', 'signal', 'order', 'cash', 'crypto', 'total_value'])
 
-        # TODO: this goes out
-
-        self.num_profitable_trades = 0
-        self.invested_on_buy = 0
-        self.avg_profit_per_trade_pair = 0
-
 
     @property
     def noncumulative_returns(self):
         return self.trading_df['return_relative_to_past_tick']
-
 
     @abstractmethod
     def run(self):
@@ -192,6 +185,22 @@ class Evaluation(ABC):
         return self._beta
 
     @property
+    def min_buy_sell_pair_return(self):
+        return self._buy_sell_pair_returns.min()
+
+    @property
+    def max_buy_sell_pair_return(self):
+        return self._buy_sell_pair_returns.max()
+
+    @property
+    def mean_buy_sell_pair_return(self):
+        return self._buy_sell_pair_returns.mean()
+
+    @property
+    def std_buy_sell_pair_return(self):
+        return self._buy_sell_pair_returns.std()
+
+    @property
     def min_buy_sell_pair_gain(self):
         return self._buy_sell_pair_gains.min()
 
@@ -228,16 +237,20 @@ class Evaluation(ABC):
         return self._num_sells
 
     @property
+    def num_profitable_trades(self):
+        return self._num_gains
+
+    @property
+    def num_unprofitable_trades(self):
+        return self._num_losses
+
+    @property
     def percent_profitable_trades(self):
-        num_gains = len(self._buy_sell_pair_gains) \
-            if not (len(self._buy_sell_pair_gains) == 1 and np.isnan(self._buy_sell_pair_gains[0])) else 0
-        return (num_gains / self.num_buy_sell_pairs) if self.num_buy_sell_pairs != 0 else 0
+        return self.num_profitable_trades / self.num_buy_sell_pairs
 
     @property
     def percent_unprofitable_trades(self):
-        num_losses = len(self._buy_sell_pair_losses) \
-            if not (len(self._buy_sell_pair_losses) == 1 and np.isnan(self._buy_sell_pair_losses[0])) else 0
-        return (num_losses / self.num_buy_sell_pairs) if self.num_buy_sell_pairs != 0 else 0
+        self.num_unprofitable_trades / self.num_buy_sell_pairs
 
     def _write_to_trading_df(self):
         total_value = self._crypto * self._current_price + self._cash
@@ -273,6 +286,9 @@ class Evaluation(ABC):
         self._buy_sell_pair_returns = np.array(orders_sell_df['return_relative_to_past_tick'])
         self._buy_sell_pair_gains = self._buy_sell_pair_returns[np.where(self._buy_sell_pair_returns > 0)]
         self._buy_sell_pair_losses = self._buy_sell_pair_returns[np.where(self._buy_sell_pair_returns < 0)]
+
+        self._num_gains = len(self._buy_sell_pair_gains)
+        self._num_losses = len(self._buy_sell_pair_losses)
 
         # if no returns, no gains or no losses, stat functions will return nan
         if len(self._buy_sell_pair_returns) == 0:
@@ -384,6 +400,15 @@ class Evaluation(ABC):
             self.std_buy_sell_pair_loss
         ))
 
+        output.append("  Buy-sell pair returns - overall stats")
+        output.append("     min = {}, max = {}, mean = {}, stdev = {}".format(
+            self.min_buy_sell_pair_return,
+            self.max_buy_sell_pair_return,
+            self.mean_buy_sell_pair_return,
+            self.std_buy_sell_pair_return
+        ))
+
+
         output.append("  Total buy-sell pairs: {}".format(self.num_buy_sell_pairs))
         output.append("  Total profitable trades: {}".format(self.num_profitable_trades))
         output.append("  Percent profitable trades: {}".format(self.percent_profitable_trades))
@@ -405,17 +430,12 @@ class Evaluation(ABC):
         self._crypto += delta_crypto
         self._num_trades += 1
         if order.order_type == OrderType.BUY:
-            self.invested_on_buy = -delta_cash
             self._buy_currency = order.transaction_currency
             self._num_buys += 1
         elif order.order_type == OrderType.SELL:
             # the currency we're selling must match the bought currency
             assert order.transaction_currency == self._buy_currency
             self._num_sells += 1
-            buy_sell_pair_profit_percent = (delta_cash - self.invested_on_buy) / self.invested_on_buy * 100
-            self.avg_profit_per_trade_pair += buy_sell_pair_profit_percent
-            if buy_sell_pair_profit_percent > 0:
-                self.num_profitable_trades += 1
 
 
     def to_dictionary(self):
@@ -465,7 +485,6 @@ class Evaluation(ABC):
             return
         chart = BacktestingChart(self, self._benchmark_backtest)
         chart.draw_returns_tear_sheet()
-
 
 
 
