@@ -60,7 +60,7 @@ class SignalDrivenBacktester(Evaluation):
         self._end_crypto_currency = self._buy_currency
         self._finalize_backtesting()
 
-
+    # TODO: clean and remove this
     def execute_orders(self, orders):
         for i, order in enumerate(orders):
             if i == 0: # first order

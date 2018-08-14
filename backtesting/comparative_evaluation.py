@@ -121,9 +121,9 @@ class ComparativeEvaluation:
         self.output_file = output_file
         self.time_delay = time_delay
 
-        results_df = self.build_dataframe(output_file)
+        self.build_dataframe()
         writer = pd.ExcelWriter(output_file)
-        results_df.to_excel(writer, 'Results')
+        self.filtered_results_df.to_excel(writer, 'Results')
         writer.save()
 
     def build_dataframe(self):
@@ -148,7 +148,7 @@ class ComparativeEvaluation:
         output.reset_index(inplace=True, drop=True)
 
         # save full results
-        self.results = output
+        self.full_results_df = output
 
         # find the backtest of the best performing strategy
         best_strat_backtest = output.iloc[0]["evaluation_object"]
@@ -156,11 +156,10 @@ class ComparativeEvaluation:
         logging.info(best_strat_backtest.get_report(include_order_signals=True))
 
         # filter so that only report columns remain
-        output = output[backtesting_report_columns]
-        return output
+        self.filtered_results_df = output[backtesting_report_columns]
 
     def evaluate(self, strategy, transaction_currency, counter_currency, resample_period, source):
-        logging.info("Evaluating strategy {}...", strategy.get_short_summary())
+        logging.info("Evaluating strategy...")
 
         params = {}
         params['start_time'] = self.start_time
@@ -192,7 +191,7 @@ class ComparativeEvaluation:
 
     def write_comparative_summary(self, summary_path):
         writer = pd.ExcelWriter(summary_path)
-        summary = self.results
+        summary = self.full_results_df
         # remove empty trades
         summary = summary[summary.num_trades != 0]
         summary.groupby(["strategy", "horizon"]).describe().to_excel(writer, 'Results')
