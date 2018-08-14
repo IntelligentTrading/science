@@ -102,16 +102,16 @@ class StrategyEvaluationSetBuilder:
 
 class ComparativeEvaluation:
     """
-    Comparatively backtest a set of strategies on given currency pairs, resample periods and exchanges.
+    Comparatively backtests a set of strategies on given currency pairs, resample periods and exchanges.
     """
 
-    def __init__(self, strategy_set, currency_pairs, resample_periods, source,
+    def __init__(self, strategy_set, currency_pairs, resample_periods, sources,
                  start_cash, start_crypto, start_time, end_time, output_file, time_delay=0):
 
         self.strategy_set = strategy_set
         self.currency_pairs = currency_pairs
         self.resample_periods = resample_periods
-        self.source = source
+        self.sources = sources
         self.start_time = start_time
         self.end_time = end_time
         self.start_cash = start_cash
@@ -121,41 +121,46 @@ class ComparativeEvaluation:
         self.output_file = output_file
         self.time_delay = time_delay
 
-        self.build_dataframe(strategy_set, output_file)
+        results_df = self.build_dataframe(output_file)
+        writer = pd.ExcelWriter(output_file)
+        results_df.to_excel(writer, 'Results')
+        writer.save()
 
-    def build_dataframe(self, strategy_set, output_file):
+    def build_dataframe(self):
         evaluation_dicts = []
-        for transaction_currency, counter_currency in self.currency_pairs:
-            for resample_period in self.resample_periods:
-                for strategy in strategy_set:
-                    try:
-                        dict = self.evaluate(strategy, transaction_currency, counter_currency, resample_period)
-                        evaluation_dicts.append(dict)
-                    except NoPriceDataException:
-                        continue
+        for (transaction_currency, counter_currency), resample_period, source, strategy in \
+                itertools.product(self.currency_pairs, self.resample_periods, self.sources, self.strategy_set):
+            try:
+                evaluation_dicts.append(
+                    self.evaluate(strategy, transaction_currency, counter_currency, resample_period, source))
+            except NoPriceDataException:
+                continue
 
         output = pd.DataFrame(evaluation_dicts)
         if len(output) == 0:
-            print("WARNING: No strategies evaluated.")
+            logging.warning("No strategies evaluated.")
             return
-        #output = output[output.num_trades != 0]  # remove empty trades
-        output = output.sort_values(by=['profit_percent'], ascending=False)
-        output.reset_index(inplace=True, drop=True)
-        self.results = output
-        best_eval = output.iloc[0]["evaluation_object"]
-        print("BEST:")
-        print(best_eval.get_report(include_order_signals=True))
-        # bf = open("best.txt", "w")
-        # bf.write(best_eval.get_report(include_order_signals=True))
-        # bf.close()
-        output = output[backtesting_report_columns]
-        self.dataframe = output
-        writer = pd.ExcelWriter(output_file)
-        output.to_excel(writer, 'Results')
-        writer.save()
 
-    def evaluate(self, strategy, transaction_currency, counter_currency, resample_period):
-        print("Evaluating strategy...")
+        # sort results by profit
+        output = output.sort_values(by=['profit_percent'], ascending=False)
+
+        # drop index
+        output.reset_index(inplace=True, drop=True)
+
+        # save full results
+        self.results = output
+
+        # find the backtest of the best performing strategy
+        best_strat_backtest = output.iloc[0]["evaluation_object"]
+        logging.info("Best performing strategy:")
+        logging.info(best_strat_backtest.get_report(include_order_signals=True))
+
+        # filter so that only report columns remain
+        output = output[backtesting_report_columns]
+        return output
+
+    def evaluate(self, strategy, transaction_currency, counter_currency, resample_period, source):
+        logging.info("Evaluating strategy {}...", strategy.get_short_summary())
 
         params = {}
         params['start_time'] = self.start_time
@@ -167,39 +172,15 @@ class ComparativeEvaluation:
         params['start_crypto'] = self.start_crypto
         params['evaluate_profit_on_last_order'] = self.evaluate_profit_on_last_order
         params['verbose'] = False
-        params['source'] = self.source
+        params['source'] = source
 
-
-
-        baseline = BuyAndHoldTimebasedStrategy(self.start_time, self.end_time, transaction_currency,
-                                               counter_currency)
-        """
-        baseline_evaluation = SignalDrivenBacktester(strategy=baseline,
-                                                     transaction_currency=transaction_currency,
-                                                     counter_currency=counter_currency,
-                                                     start_cash=self.start_cash,
-                                                     start_crypto=self.start_crypto,
-                                                     start_time=self.start_time,
-                                                     end_time=self.end_time,
-                                                     evaluate_profit_on_last_order=self.evaluate_profit_on_last_order,
-                                                     verbose=False)
-        evaluation = SignalDrivenBacktester(strategy=strategy,
-                                            transaction_currency=transaction_currency,
-                                            counter_currency=counter_currency,
-                                            start_cash=self.start_cash,
-                                            start_crypto=self.start_crypto,
-                                            start_time=self.start_time,
-                                            end_time=self.end_time,
-                                            evaluate_profit_on_last_order=self.evaluate_profit_on_last_order,
-                                            verbose=False,
-                                            time_delay=self.time_delay)
-        """
+        baseline = BuyAndHoldTimebasedStrategy(self.start_time, self.end_time, transaction_currency, counter_currency)
         baseline_evaluation = SignalDrivenBacktester(strategy=baseline, **params)
         evaluation = SignalDrivenBacktester(strategy=strategy, **params)
 
-        return self.get_pandas_row_dict(evaluation, baseline_evaluation)
+        return self._create_row_dict(evaluation, baseline_evaluation)
 
-    def get_pandas_row_dict(self, evaluation, baseline):
+    def _create_row_dict(self, evaluation, baseline):
         evaluation_dict = evaluation.to_dictionary()
         baseline_dict = baseline.to_dictionary()
         evaluation_dict["evaluation_object"] = evaluation
@@ -208,7 +189,6 @@ class ComparativeEvaluation:
         evaluation_dict["buy_and_hold_profit_USDT"] = baseline_dict["profit_USDT"]
         evaluation_dict["buy_and_hold_profit_percent_USDT"] = baseline_dict["profit_percent_USDT"]
         return evaluation_dict
-
 
     def write_comparative_summary(self, summary_path):
         writer = pd.ExcelWriter(summary_path)

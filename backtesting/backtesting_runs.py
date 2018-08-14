@@ -26,10 +26,10 @@ def best_performing_signals_of_the_week():
     comparison = ComparativeEvaluation(strategy_set=strategies,
                                        currency_pairs=currency_pairs,
                                        resample_periods=[60,240,1440],
-                                       source=0,
+                                       sources=[0],
                           start_cash=1, start_crypto=0,
                           start_time=start_time, end_time=end_time,
-                          output_file="best_performing_2018_07_16_refactor_new.xlsx"
+                          output_file="best_performing_2018_07_16_refactor_new2.xlsx"
                           )
 
     #comparison.write_comparative_summary("description.xlsx")
