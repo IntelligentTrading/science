@@ -1,5 +1,4 @@
 import itertools
-
 from data_sources import *
 from backtester_signals import SignalDrivenBacktester
 from config import backtesting_report_columns
@@ -14,11 +13,27 @@ class SignalCombinationMode(Enum):
 
 
 class StrategyEvaluationSetBuilder:
+    """
+    Builds a set of strategies for comparative backtest by combining signals.
+    """
 
     @staticmethod
     def build_from_signal_set(buy_signals, sell_signals, num_buy, num_sell, signal_combination_mode):
+        """
+        Builds a set of strategies based on a set of buy signals and a set of sell signals.
+        :param buy_signals: A list of signal signatures to be used for buying (see ALL_SIGNALS).
+        :param sell_signals: A list of signal signatures to be used for selling (see ALL_SIGNALS).
+        :param num_buy: Number of different signals a strategy should use to buy.
+        :param num_sell: Number of different signals a strategy should use to sell.
+        :param signal_combination_mode: Indicates how to build strategies.
+               Options: SignalCombinationMode.ANY: the signal type of buy and sell signals need not match (e.g. RSI buy, SMA sell)
+                        SignalCombinationMode.SAME_TYPE: the signal type of buy and sell signals must match.
+                        SignalCombinationMode.SAME_TYPE_AND_STRENGTH: the signal type and strength of buy and sell signals must match.
+        :return: A list of all SignalSignature strategies satisfying the building constraints.
+        """
         strategies = []
 
+        # create all possible strategies
         buy_combinations = []
         for i in range(1, num_buy+1):
             sample = [list(x) for x in itertools.combinations(buy_signals, i)]
@@ -31,6 +46,7 @@ class StrategyEvaluationSetBuilder:
 
         buy_sell_pairs = itertools.product(buy_combinations, sell_combinations)
 
+        # filter out those not satisfying the combination criteria
         for buy, sell in buy_sell_pairs:
             if not StrategyEvaluationSetBuilder.check_signal_combination_mode(buy, sell, signal_combination_mode):
                 continue
@@ -46,6 +62,13 @@ class StrategyEvaluationSetBuilder:
 
     @staticmethod
     def check_signal_combination_mode(buy_signal_set, sell_signal_set, signal_combination_mode):
+        """
+        Checks if a particular set of buy signals and set signals satisfies the combination criterion.
+        :param buy_signal_set: A set of buy signal signatures.
+        :param sell_signal_set: A set of sell signal signatures.
+        :param signal_combination_mode: Instance of SignalCombinationMode.
+        :return: True if the combination of buy and sell signals is valid according to
+        """
         if signal_combination_mode == SignalCombinationMode.ANY:
             return True
         buy_types = set([ALL_SIGNALS[x].signal for x in buy_signal_set])
@@ -60,8 +83,14 @@ class StrategyEvaluationSetBuilder:
                    buy_strengths == sell_strengths and len(buy_strengths) == 1
 
     @staticmethod
-    def build_from_rsi_thresholds(signal_type, overbought_thresholds, oversold_thresholds,
-                                  horizons, start_time, end_time, currency_pairs):
+    def build_from_rsi_thresholds(signal_type, overbought_thresholds, oversold_thresholds):
+        """
+        Builds a set of strategies as a Cartesian product of lists of overbought and oversold thresholds.
+        :param signal_type: "RSI" or "RSI_Cumulative".
+        :param overbought_thresholds: A list of overbought thresholds.
+        :param oversold_thresholds: A list of oversold thresholds.
+        :return: A list of strategies.
+        """
 
         strategies = []
         for overbought in overbought_thresholds:
@@ -72,6 +101,9 @@ class StrategyEvaluationSetBuilder:
 
 
 class ComparativeEvaluation:
+    """
+    Comparatively backtest a set of strategies on given currency pairs, resample periods and exchanges.
+    """
 
     def __init__(self, strategy_set, currency_pairs, resample_periods, source,
                  start_cash, start_crypto, start_time, end_time, output_file, time_delay=0):

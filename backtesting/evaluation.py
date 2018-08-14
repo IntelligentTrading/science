@@ -478,6 +478,14 @@ class Evaluation(ABC):
                 dictionary["profit_percent_USDT"] = "N/A"
         return dictionary
 
+    def to_excel(self, output_file):
+        writer = pd.ExcelWriter(output_file, datetime_format='mmm d yyyy hh:mm:ss',
+                        date_format='mmmm dd yyyy')
+        trading_df = self.trading_df.copy()
+        trading_df.index = pd.to_datetime(self.trading_df.index, unit='s', utc=True)
+        trading_df.to_excel(writer, 'Results')
+        writer.save()
+
     def plot_cumulative_returns(self):
         if self.trading_df.empty:
             return

@@ -11,7 +11,7 @@ def best_performing_signals_of_the_week():
         currency_pairs.append((transaction_currency, counter_currency))
 
     # for debugging
-    currency_pairs = [("BTC","USDT"),]
+    # currency_pairs = [("BTC","USDT"),]
 
     end_time = 1531699200
     start_time = end_time - 60*60*24*7
@@ -29,7 +29,7 @@ def best_performing_signals_of_the_week():
                                        source=0,
                           start_cash=1, start_crypto=0,
                           start_time=start_time, end_time=end_time,
-                          output_file="best_performing_2018_07_16_refactor2.xlsx"
+                          output_file="best_performing_2018_07_16_refactor_new.xlsx"
                           )
 
     #comparison.write_comparative_summary("description.xlsx")

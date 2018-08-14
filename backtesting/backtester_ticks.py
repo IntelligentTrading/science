@@ -110,6 +110,7 @@ if __name__ == '__main__':
                                       end_time=end_time,
                                       benchmark_backtest=benchmark)
 
+    evaluation.to_excel("test.xlsx")
     evaluation.plot_cumulative_returns()
 
 
