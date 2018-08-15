@@ -1,14 +1,16 @@
 import talib
 from data_sources import get_resampled_prices_in_range, get_volumes_in_range, get_filtered_signals
-from strategies import  Horizon
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 from signals import Signal
-from strategies import SignalSignatureStrategy
+from strategies import SignalSignatureStrategy, BuyAndHoldTimebasedStrategy, Horizon
 import operator
 from orders import OrderType
 from backtester_signals import SignalDrivenBacktester
+from comparative_evaluation import ComparativeReportBuilder
+from backtesting_runs import get_currencies_for_signal
+import logging
 
 def build_vbi_signals(price_volume_df, percent_change_price, percent_change_volume, transaction_currency, counter_currency,
                       source, resample_period):
@@ -44,7 +46,6 @@ def build_strategy_signals(price_volume_df, percent_change_price, percent_change
     counter_currency = kwargs['counter_currency']
     start_time = kwargs['start_time']
     end_time = kwargs['end_time']
-    horizon = kwargs['horizon']
     resample_period = kwargs['resample_period']
     all_buy_signals, first_cross_buy_signals = build_vbi_signals(price_volume_df, percent_change_price, percent_change_volume,
                                                                  transaction_currency, counter_currency, source, resample_period)
@@ -57,7 +58,7 @@ def build_strategy_signals(price_volume_df, percent_change_price, percent_change
     signals = get_filtered_signals(start_time=start_time, end_time=end_time, counter_currency=counter_currency,
                                    transaction_currency=transaction_currency, source=source)
 
-    rsi_sell_signals = strategy.get_sell_signals(signals)
+    rsi_sell_signals = SignalSignatureStrategy.get_sell_signals(strategy, signals)
 
     if buy_only_on_first_cross:
         buy_signals = first_cross_buy_signals
@@ -272,33 +273,43 @@ def backtest_vbi():
     kwargs['start_time'] = start_time
     kwargs['end_time'] = end_time
     kwargs['resample_period'] = resample_period
+    kwargs['start_cash'] = 1000
+    kwargs['start_crypto'] = 0
 
-    from backtesting_runs import get_currencies_for_signal, ComparativeEvaluation
     transaction_currencies = get_currencies_for_signal(counter_currency, "RSI_Cumulative")
     sell_strategy = SignalSignatureStrategy(["rsi_buy_2", "rsi_sell_2", "rsi_buy_3", "rsi_sell_3"])
 
-    strategy_signals = []
+    backtests = []
+    baselines = []
     for resample_period in [60, 240]:
-        for transaction_currency in transaction_currencies:
+        for transaction_currency in transaction_currencies[:3]:
             kwargs['transaction_currency'] = transaction_currency
-            kwargs['horizon'] = Horizon.short if resample_period == 60 else Horizon.medium
             kwargs['resample_period'] = resample_period
             print ("Processing {}".format(transaction_currency))
+
             try:
                 price_volume_df = build_resampled_price_volume_df(start_time, end_time, transaction_currency,
                                                                   counter_currency, resample_period, source)
-                strategy_signals, all_buy_signals, first_cross_buy_signals = build_strategy_signals(price_volume_df, 0.02, 0.02,
-                                                                                            buy_only_on_first_cross=True,
-                                                                                            sell_strategy=None, **kwargs)
-                strategies.append(strategy)
-            except Exception as e:
-                print("Error: {}".format(str(e)))
+                strategy_signals, all_buy_signals, first_cross_buy_signals = build_strategy_signals(
+                    price_volume_df=price_volume_df,
+                    percent_change_price=0.02,
+                    percent_change_volume=0.02,
+                    buy_only_on_first_cross=True,
+                    sell_strategy=sell_strategy,
+                    **kwargs
+                )
 
-    comparison = ComparativeEvaluation(strategy_set=strategies,
-                                       start_cash=1, start_crypto=0,
-                                       start_time=start_time, end_time=end_time,
-                                       output_file="vbi_backtest_2018_07_17.xlsx"
-                                       )
+                backtest = SignalDrivenBacktester(strategy=sell_strategy, signals=strategy_signals, **kwargs)
+                baseline_strategy = BuyAndHoldTimebasedStrategy(start_time, end_time, transaction_currency, counter_currency)
+                baseline_backtest = SignalDrivenBacktester(strategy=baseline_strategy, **kwargs)
+
+                backtests.append(backtest)
+                baselines.append(baseline_backtest)
+            except Exception as e:
+                logging.error(str(e))
+
+    comparison = ComparativeReportBuilder(backtests, baselines)
+    comparison.write_summary("comparison.xlsx")
 
 
 

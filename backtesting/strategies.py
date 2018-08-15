@@ -103,14 +103,14 @@ class SignalStrategy(Strategy):
 
     # TODO: test and clean this
     @staticmethod
-    def get_buy_signals(signals):
+    def get_buy_signals(strategy, signals):
         return [signal for signal in signals
-                if SignalStrategy.belongs_to_this_strategy(signal) and SignalStrategy.indicates_buy(signal)]
+                if strategy.belongs_to_this_strategy(signal) and strategy.indicates_buy(signal)]
 
     @staticmethod
-    def get_sell_signals(signals):
+    def get_sell_signals(strategy, signals):
         return [signal for signal in signals
-                if SignalStrategy.belongs_to_this_strategy(signal) and SignalStrategy.indicates_sell(signal)]
+                if strategy.belongs_to_this_strategy(signal) and strategy.indicates_sell(signal)]
 
 
 

@@ -6,7 +6,7 @@ from data_sources import get_price, get_filtered_signals, NoPriceDataException
 
 class SignalDrivenBacktester(Evaluation):
 
-    def __init__(self, **kwargs):
+    def __init__(self, signals=None, **kwargs):
         """
         :param strategy: Backtested strategy (instance of SignalStrategy).        
         :param transaction_currency: Transaction currency for which we're backtesting.
@@ -24,9 +24,8 @@ class SignalDrivenBacktester(Evaluation):
         :param signals: A predefined list of signals passed into the strategy. If not supplied, the signals will be
                         pulled from the database.
         """
-
         super().__init__(**kwargs)
-        if 'signals' not in kwargs:
+        if signals is None:
             self.signals = get_filtered_signals(
                 start_time=self._start_time,
                 end_time=self._end_time,
@@ -35,7 +34,7 @@ class SignalDrivenBacktester(Evaluation):
                 source=self._source
             )
         else:
-            self.signals = kwargs['signals']
+            self.signals = signals
 
         self._buy_currency = self._start_crypto_currency = self._transaction_currency
         self.orders, self.order_signals = self._strategy.get_orders(
