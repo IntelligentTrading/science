@@ -121,42 +121,23 @@ class ComparativeEvaluation:
         self.output_file = output_file
         self.time_delay = time_delay
 
-        self.build_dataframe()
-        writer = pd.ExcelWriter(output_file)
-        self.filtered_results_df.to_excel(writer, 'Results')
-        writer.save()
+        self.build_backtests()
+        report = ComparativeReportBuilder(self.backtests, self.baselines)
+        best_backtest = report.get_best_performing_strategy()
+        logging.info(best_backtest.get_report())
+        report.write_results(output_file)
 
-    def build_dataframe(self):
-        evaluation_dicts = []
+    def build_backtests(self):
+        self.backtests = []
+        self.baselines = []
         for (transaction_currency, counter_currency), resample_period, source, strategy in \
                 itertools.product(self.currency_pairs, self.resample_periods, self.sources, self.strategy_set):
             try:
-                evaluation_dicts.append(
-                    self.evaluate(strategy, transaction_currency, counter_currency, resample_period, source))
+                backtest, baseline = self.evaluate(strategy, transaction_currency, counter_currency, resample_period, source)
+                self.backtests.append(backtest)
+                self.baselines.append(baseline)
             except NoPriceDataException:
                 continue
-
-        output = pd.DataFrame(evaluation_dicts)
-        if len(output) == 0:
-            logging.warning("No strategies evaluated.")
-            return
-
-        # sort results by profit
-        output = output.sort_values(by=['profit_percent'], ascending=False)
-
-        # drop index
-        output.reset_index(inplace=True, drop=True)
-
-        # save full results
-        self.full_results_df = output
-
-        # find the backtest of the best performing strategy
-        best_strat_backtest = output.iloc[0]["evaluation_object"]
-        logging.info("Best performing strategy:")
-        logging.info(best_strat_backtest.get_report(include_order_signals=True))
-
-        # filter so that only report columns remain
-        self.filtered_results_df = output[backtesting_report_columns]
 
     def evaluate(self, strategy, transaction_currency, counter_currency, resample_period, source):
         logging.info("Evaluating strategy...")
@@ -177,7 +158,33 @@ class ComparativeEvaluation:
         baseline_evaluation = SignalDrivenBacktester(strategy=baseline, **params)
         evaluation = SignalDrivenBacktester(strategy=strategy, **params)
 
-        return self._create_row_dict(evaluation, baseline_evaluation)
+        return evaluation, baseline_evaluation
+
+
+class ComparativeReportBuilder:
+
+    def __init__(self, backtests, baselines):
+        self.backtests = backtests
+        self.baselines = baselines
+        self.build_dataframe()
+
+    def build_dataframe(self):
+        evaluation_dicts = [self._create_row_dict(backtest, baseline) for backtest, baseline in zip(self.backtests, self.baselines)]
+        output = pd.DataFrame(evaluation_dicts)
+        if len(output) == 0:
+            logging.warning("No strategies evaluated.")
+            return
+        # sort results by profit
+        output = output.sort_values(by=['profit_percent'], ascending=False)
+
+        # drop index
+        output.reset_index(inplace=True, drop=True)
+
+        # save full results
+        self.full_results_df = output
+
+        # filter so that only report columns remain
+        self.filtered_results_df = output[backtesting_report_columns]
 
     def _create_row_dict(self, evaluation, baseline):
         evaluation_dict = evaluation.to_dictionary()
@@ -189,6 +196,14 @@ class ComparativeEvaluation:
         evaluation_dict["buy_and_hold_profit_percent_USDT"] = baseline_dict["profit_percent_USDT"]
         return evaluation_dict
 
+    def get_best_performing_strategy(self):
+        return self.full_results_df.iloc[0]["evaluation_object"]
+
+    def write_results(self, output_file):
+        writer = pd.ExcelWriter(output_file)
+        self.filtered_results_df.to_excel(writer, 'Results')
+        writer.save()
+
     def write_comparative_summary(self, summary_path):
         writer = pd.ExcelWriter(summary_path)
         summary = self.full_results_df
@@ -196,4 +211,7 @@ class ComparativeEvaluation:
         summary = summary[summary.num_trades != 0]
         summary.groupby(["strategy", "horizon"]).describe().to_excel(writer, 'Results')
         writer.save()
+
+
+
 

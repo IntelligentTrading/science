@@ -11,7 +11,7 @@ def best_performing_signals_of_the_week():
         currency_pairs.append((transaction_currency, counter_currency))
 
     # for debugging
-    # currency_pairs = [("BTC","USDT"),]
+    currency_pairs = [("BTC","USDT"),]
 
     end_time = 1531699200
     start_time = end_time - 60*60*24*7

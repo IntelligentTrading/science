@@ -107,6 +107,7 @@ class SignalStrategy(Strategy):
         return [signal for signal in signals
                 if SignalStrategy.belongs_to_this_strategy(signal) and SignalStrategy.indicates_buy(signal)]
 
+    @staticmethod
     def get_sell_signals(signals):
         return [signal for signal in signals
                 if SignalStrategy.belongs_to_this_strategy(signal) and SignalStrategy.indicates_sell(signal)]
@@ -249,17 +250,17 @@ class BuyAndHoldTimebasedStrategy(SignalStrategy):
         self.transaction_currency = transaction_currency
         self.counter_currency = counter_currency
 
-    def get_orders(self, signals, start_cash, start_crypto, source, time_delay=0):
+    def get_orders(self, signals, start_cash, start_crypto, source, time_delay=0, slippage=0):
         transaction_cost_percent = transaction_cost_percents[source]
         orders = []
         start_price = get_price(self.transaction_currency, self.start_time, source, self.counter_currency)
         end_price = get_price(self.transaction_currency, self.end_time, source, self.counter_currency)
         order = Order(OrderType.BUY, self.transaction_currency, self.counter_currency,
-                      self.start_time, start_cash, start_price, transaction_cost_percent)
+                      self.start_time, start_cash, start_price, transaction_cost_percent, time_delay, slippage)
         orders.append(order)
         delta_crypto, delta_cash = order.execute()
         order = Order(OrderType.SELL, self.transaction_currency, self.counter_currency,
-                      self.end_time, delta_crypto, end_price, transaction_cost_percent)
+                      self.end_time, delta_crypto, end_price, transaction_cost_percent, time_delay, slippage)
         orders.append(order)
         return orders, []
 

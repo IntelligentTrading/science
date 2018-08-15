@@ -21,12 +21,22 @@ class SignalDrivenBacktester(Evaluation):
         :param verbose: Produce verbose output.
         :param time_delay: Parameter specifying the delay applied when fetching price info (in seconds).
         :param slippage: Parameter specifying the slippage percentage, applied in the direction of the trade.
+        :param signals: A predefined list of signals passed into the strategy. If not supplied, the signals will be
+                        pulled from the database.
         """
 
         super().__init__(**kwargs)
-        self.signals = get_filtered_signals(start_time=self._start_time, end_time=self._end_time, counter_currency=self._counter_currency,
-                                            transaction_currency=self._transaction_currency,
-                                            source=self._source)
+        if 'signals' not in kwargs:
+            self.signals = get_filtered_signals(
+                start_time=self._start_time,
+                end_time=self._end_time,
+                counter_currency=self._counter_currency,
+                transaction_currency=self._transaction_currency,
+                source=self._source
+            )
+        else:
+            self.signals = kwargs['signals']
+
         self._buy_currency = self._start_crypto_currency = self._transaction_currency
         self.orders, self.order_signals = self._strategy.get_orders(
             signals = self.signals,
@@ -34,7 +44,7 @@ class SignalDrivenBacktester(Evaluation):
             start_crypto=self._start_crypto,
             source=self._source,
             time_delay=self._time_delay,
-            slippage = self._slippage)
+            slippage=self._slippage)
         self.run()
 
 
