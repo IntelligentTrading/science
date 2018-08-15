@@ -6,9 +6,7 @@ from data_sources import get_price, get_filtered_signals, NoPriceDataException
 
 class SignalDrivenBacktester(Evaluation):
 
-    def __init__(self, strategy, transaction_currency, counter_currency,
-                 start_cash, start_crypto, start_time, end_time, source=0,
-                 resample_period=60, evaluate_profit_on_last_order=False, verbose=True, time_delay=0):
+    def __init__(self, **kwargs):
         """
         :param strategy: Backtested strategy (instance of SignalStrategy).        
         :param transaction_currency: Transaction currency for which we're backtesting.
@@ -22,22 +20,21 @@ class SignalDrivenBacktester(Evaluation):
         :param evaluate_profit_on_last_order: Evaluate gains at the time of the last order (vs. at end_time).
         :param verbose: Produce verbose output.
         :param time_delay: Parameter specifying the delay applied when fetching price info (in seconds).
+        :param slippage: Parameter specifying the slippage percentage, applied in the direction of the trade.
         """
 
-
-        super().__init__(strategy, transaction_currency, counter_currency,
-                 start_cash, start_crypto, start_time, end_time, source,
-                 resample_period, evaluate_profit_on_last_order, verbose)
-        self.signals = get_filtered_signals(start_time=start_time, end_time=end_time, counter_currency=counter_currency,
-                                            transaction_currency=transaction_currency,
-                                            source=source)
+        super().__init__(**kwargs)
+        self.signals = get_filtered_signals(start_time=self._start_time, end_time=self._end_time, counter_currency=self._counter_currency,
+                                            transaction_currency=self._transaction_currency,
+                                            source=self._source)
         self._buy_currency = self._start_crypto_currency = self._transaction_currency
         self.orders, self.order_signals = self._strategy.get_orders(
             signals = self.signals,
             start_cash=self._start_cash,
             start_crypto=self._start_crypto,
             source=self._source,
-            time_delay=time_delay)
+            time_delay=self._time_delay,
+            slippage = self._slippage)
         self.run()
 
 

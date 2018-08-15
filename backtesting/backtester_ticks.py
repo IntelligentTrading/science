@@ -28,13 +28,15 @@ class TickDrivenBacktester(Evaluation, TickListener):
         order = None
         if decision == StrategyDecision.SELL and self._crypto > 0:
             order = Order(OrderType.SELL, self._transaction_currency, self._counter_currency,
-                          self._current_timestamp, self._crypto, self._current_price, self._transaction_cost_percent, 0)
+                          self._current_timestamp, self._crypto, self._current_price, self._transaction_cost_percent, self._time_delay,
+                          self._slippage)
             self.orders.append(order)
             self.order_signals.append(order_signal)
             self.execute_order(order)
         elif decision == StrategyDecision.BUY and self._cash > 0:
             order = Order(OrderType.BUY, self._transaction_currency, self._counter_currency,
-                          self._current_timestamp, self._cash, self._current_price, self._transaction_cost_percent, 0)
+                          self._current_timestamp, self._cash, self._current_price, self._transaction_cost_percent, self._time_delay,
+                          self._slippage)
             self.orders.append(order)
             self.order_signals.append(order_signal)
             self.execute_order(order)
@@ -90,7 +92,9 @@ if __name__ == '__main__':
             end_time=end_time,
             source=source,
             resample_period=60,
-            verbose=False
+            verbose=False,
+            time_delay=0,
+            slippage=SLIPPAGE
         )
 
     strategy = TickerWrapperStrategy(rsi_strategy)
@@ -108,7 +112,10 @@ if __name__ == '__main__':
                                       start_crypto=start_crypto,
                                       start_time=start_time,
                                       end_time=end_time,
-                                      benchmark_backtest=benchmark)
+                                      benchmark_backtest=benchmark,
+                                      time_delay=0,
+                                      slippage=SLIPPAGE
+                                      )
 
     evaluation.to_excel("test.xlsx")
     evaluation.plot_cumulative_returns()

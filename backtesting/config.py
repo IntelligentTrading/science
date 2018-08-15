@@ -13,6 +13,7 @@ postgres_connection_string = "host='localhost' dbname='itf_08_05' user='postgres
 
 backtesting_report_columns = [
     "strategy",
+    "source",
     "utilized_signals",
     "transaction_currency",
     "counter_currency",

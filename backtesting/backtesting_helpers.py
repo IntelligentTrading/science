@@ -92,6 +92,7 @@ if __name__ == "__main__":
     kwargs['source'] = 0
     kwargs['resample_period'] = 60
     kwargs['time_delay'] = 0
+    kwargs['slippage'] = 0
 
     evaluate_rsi_any_currency(75, 25, **kwargs)
     evaluate_rsi_signature(**kwargs)

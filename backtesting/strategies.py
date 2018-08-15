@@ -32,7 +32,7 @@ class SignalStrategy(Strategy):
     Base class for trading strategies that build orders based on a given list of signals.
     """
 
-    def get_orders(self, signals, start_cash, start_crypto, source, time_delay=0):
+    def get_orders(self, signals, start_cash, start_crypto, source, time_delay=0, slippage=0):
         """
         Produces a list of buy-sell orders based on input signals.
         :param signals: A list of input signals.
@@ -40,6 +40,7 @@ class SignalStrategy(Strategy):
         :param start_crypto: Starting amount of transaction_currency (transaction_currency is read from first signal).
         :param source: ITF exchange code.
         :param time_delay: Parameter specifying the delay applied when fetching price info (in seconds).
+        :param slippage: Parameter specifying the slippage percentage, applied in the direction of the trade.
         :return: A list of orders produced by the strategy.
         """
         orders = []
@@ -54,7 +55,8 @@ class SignalStrategy(Strategy):
             if self.indicates_sell(signal) and crypto > 0 and signal.transaction_currency == buy_currency:
                 price = fetch_delayed_price(signal, source, time_delay)
                 order = Order(OrderType.SELL, signal.transaction_currency, signal.counter_currency,
-                              signal.timestamp, crypto, price, transaction_cost_percents[source], time_delay, signal.price)
+                              signal.timestamp, crypto, price, transaction_cost_percents[source], time_delay, slippage,
+                              signal.price)
                 orders.append(order)
                 order_signals.append(signal)
                 delta_crypto, delta_cash = order.execute()
@@ -66,7 +68,8 @@ class SignalStrategy(Strategy):
                 price = fetch_delayed_price(signal, source, time_delay)
                 buy_currency = signal.transaction_currency
                 order = Order(OrderType.BUY, signal.transaction_currency, signal.counter_currency,
-                              signal.timestamp, cash, price, transaction_cost_percents[source], time_delay, signal.price)
+                              signal.timestamp, cash, price, transaction_cost_percents[source], time_delay, slippage,
+                              signal.price)
                 orders.append(order)
                 order_signals.append(signal)
                 delta_crypto, delta_cash = order.execute()
