@@ -13,7 +13,7 @@ from charting import BacktestingChart
 class Evaluation(ABC):
     def __init__(self, strategy, transaction_currency, counter_currency,
                  start_cash, start_crypto, start_time, end_time, source=0,
-                 resample_period=60, evaluate_profit_on_last_order=True, verbose=True,
+                 resample_period=60, evaluate_profit_on_last_order=False, verbose=True,
                  benchmark_backtest=None, time_delay=0, slippage=0):
         self._strategy = strategy
         self._transaction_currency = transaction_currency
@@ -135,8 +135,8 @@ class Evaluation(ABC):
 
     @property
     def end_price(self):
-        if self._evaluate_profit_on_last_order and not self.trading_df.empty:
-            return self.trading_df.tail(1)['close_price'].item()
+        if not self.orders_df.empty and (self._evaluate_profit_on_last_order or self.orders_df.tail(1)['order'].item() == "SELL"):
+            return self.orders_df.tail(1)['close_price'].item()
         else:
             try:
                 return get_price(self._transaction_currency, self._end_time, self._source, self._counter_currency)
@@ -282,11 +282,11 @@ class Evaluation(ABC):
         self._sharpe_ratio = empyrical.sharpe_ratio(returns)
 
         # extract only rows that have orders
-        orders_df = self.trading_df[self.trading_df['order'] != ""]
+        self.orders_df = self.trading_df[self.trading_df['order'] != ""]
         # recalculate returns
-        orders_df = self._fill_returns(orders_df)
+        self.orders_df = self._fill_returns(self.orders_df)
         # get profits on sell
-        orders_sell_df = orders_df[orders_df['order'] == "SELL"]
+        orders_sell_df = self.orders_df[self.orders_df['order'] == "SELL"]
         self._buy_sell_pair_returns = np.array(orders_sell_df['return_relative_to_past_tick'])
         self._buy_sell_pair_gains = self._buy_sell_pair_returns[np.where(self._buy_sell_pair_returns > 0)]
         self._buy_sell_pair_losses = self._buy_sell_pair_returns[np.where(self._buy_sell_pair_returns < 0)]
@@ -356,6 +356,7 @@ class Evaluation(ABC):
         output.append("Number of trades: {}".format(self._num_trades))
         output.append("End cash: {0:.2f} {1}".format(self.end_cash, self._counter_currency))
         output.append("End crypto: {0:.6f} {1}".format(self.end_crypto, self._transaction_currency))
+        output.append("End price: {}".format(self.end_price))
 
         sign = "+" if self.profit != None and self.profit >= 0 else ""
         output.append("Total value invested: {} {}".format(self._format_price_dependent_value(self.start_value),

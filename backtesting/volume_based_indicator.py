@@ -123,9 +123,7 @@ def plot_results(price_volume_df, transaction_currency, counter_currency, all_bu
 
 
 # Try out different thresholds for volume and price change
-def calculate_profits(price_volume_df, start_cash, start_crypto, sell_strategy=None, **kwargs):
-    start_time = kwargs['start_time']
-    end_time = kwargs['end_time']
+def calculate_profits(price_volume_df, sell_strategy, **kwargs):
     volume_change_percents = []
     price_change_percents = []
     profits = []
@@ -139,8 +137,7 @@ def calculate_profits(price_volume_df, start_cash, start_crypto, sell_strategy=N
                                                                                                 sell_strategy=sell_strategy,
                                                                                                 **kwargs)
 
-            evaluation = SignalDrivenBacktester(signals=strategy_signals, **kwargs)
-            orders, _ = evaluation.get_orders()
+            evaluation = SignalDrivenBacktester(strategy=sell_strategy, signals=strategy_signals, verbose=False, **kwargs)
             volume_change_percents.append(percent_change_volume)
             price_change_percents.append(percent_change_price)
             profits.append(evaluation.profit_percent)
