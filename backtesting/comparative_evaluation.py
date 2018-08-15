@@ -6,6 +6,7 @@ from signals import ALL_SIGNALS
 from strategies import BuyAndHoldTimebasedStrategy, SignalSignatureStrategy, SimpleRSIStrategy
 from enum import Enum
 
+
 class SignalCombinationMode(Enum):
     ANY = 0
     SAME_TYPE = 1
@@ -103,6 +104,7 @@ class StrategyEvaluationSetBuilder:
 class ComparativeEvaluation:
     """
     Comparatively backtests a set of strategies on given currency pairs, resample periods and exchanges.
+    Uses SignalDrivenBacktester.
     """
 
     def __init__(self, strategy_set, currency_pairs, resample_periods, sources,
@@ -121,13 +123,13 @@ class ComparativeEvaluation:
         self.output_file = output_file
         self.time_delay = time_delay
 
-        self.build_backtests()
+        self._run_backtests()
         report = ComparativeReportBuilder(self.backtests, self.baselines)
-        best_backtest = report.get_best_performing_strategy()
+        best_backtest = report.get_best_performing_backtest()
         logging.info(best_backtest.get_report())
-        report.write_results(output_file)
+        report.write_summary(output_file)
 
-    def build_backtests(self):
+    def _run_backtests(self):
         self.backtests = []
         self.baselines = []
         for (transaction_currency, counter_currency), resample_period, source, strategy in \
@@ -162,13 +164,21 @@ class ComparativeEvaluation:
 
 
 class ComparativeReportBuilder:
+    """
+    Based on a set of backtests and corresponding baseline backtests, builds a comparative report of their performance.
+    """
 
     def __init__(self, backtests, baselines):
+        """
+        Initializes and builds the report dataframe.
+        :param backtests: A collection of backtest objects.
+        :param baselines: A collection of baselines corresponding to backtests.
+        """
         self.backtests = backtests
         self.baselines = baselines
-        self.build_dataframe()
+        self._build_dataframe()
 
-    def build_dataframe(self):
+    def _build_dataframe(self):
         evaluation_dicts = [self._create_row_dict(backtest, baseline) for backtest, baseline in zip(self.backtests, self.baselines)]
         output = pd.DataFrame(evaluation_dicts)
         if len(output) == 0:
@@ -181,10 +191,7 @@ class ComparativeReportBuilder:
         output.reset_index(inplace=True, drop=True)
 
         # save full results
-        self.full_results_df = output
-
-        # filter so that only report columns remain
-        self.filtered_results_df = output[backtesting_report_columns]
+        self.results_df = output
 
     def _create_row_dict(self, evaluation, baseline):
         evaluation_dict = evaluation.to_dictionary()
@@ -196,20 +203,21 @@ class ComparativeReportBuilder:
         evaluation_dict["buy_and_hold_profit_percent_USDT"] = baseline_dict["profit_percent_USDT"]
         return evaluation_dict
 
-    def get_best_performing_strategy(self):
-        return self.full_results_df.iloc[0]["evaluation_object"]
+    def get_best_performing_backtest(self):
+        return self.results_df[self.results_df.num_trades > 0].iloc[0]["evaluation_object"]
 
-    def write_results(self, output_file):
+    def write_summary(self, output_file):
         writer = pd.ExcelWriter(output_file)
-        self.filtered_results_df.to_excel(writer, 'Results')
+        # filter so that only report columns remain
+        self.results_df[backtesting_report_columns].to_excel(writer, 'Results')
         writer.save()
 
     def write_comparative_summary(self, summary_path):
         writer = pd.ExcelWriter(summary_path)
-        summary = self.full_results_df
+        summary = self.results_df.copy()
         # remove empty trades
         summary = summary[summary.num_trades != 0]
-        summary.groupby(["strategy", "horizon"]).describe().to_excel(writer, 'Results')
+        summary.groupby(["strategy", "resample_period"]).describe().to_excel(writer, 'Results')
         writer.save()
 
 
