@@ -13,7 +13,7 @@ from charting import BacktestingChart
 class Evaluation(ABC):
     def __init__(self, strategy, transaction_currency, counter_currency,
                  start_cash, start_crypto, start_time, end_time, source=0,
-                 resample_period=60, evaluate_profit_on_last_order=False, verbose=True,
+                 resample_period=60, evaluate_profit_on_last_order=True, verbose=True,
                  benchmark_backtest=None, time_delay=0, slippage=0):
         self._strategy = strategy
         self._transaction_currency = transaction_currency
