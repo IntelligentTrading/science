@@ -21,7 +21,7 @@ def evaluate_rsi_cumulative_compare(overbought_threshold, oversold_threshold, **
     return evaluation_rsi_cumulative, evaluation_rsi
 
 
-def find_num_cumulative_outperforms(currency_pairs, **kwargs):
+def find_num_cumulative_outperforms(currency_pairs, resample_periods, **kwargs):
     resample_periods = (60, 240, 1440)
     total_rsi_cumulative_better = 0
     total_rsi_cumulative_eq = 0

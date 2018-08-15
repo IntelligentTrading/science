@@ -1,6 +1,7 @@
 from comparative_evaluation import *
 from strategies import RandomTradingStrategy
 import numpy as np
+from backtesting_helpers import find_num_cumulative_outperforms
 
 def best_performing_signals_of_the_week():
     # for John - best performing signals of the week
@@ -23,65 +24,55 @@ def best_performing_signals_of_the_week():
         num_sell=2,
         signal_combination_mode=SignalCombinationMode.SAME_TYPE)
 
-    comparison = ComparativeEvaluation(strategy_set=strategies,
-                                       currency_pairs=currency_pairs,
-                                       resample_periods=[60,240,1440],
-                                       sources=[0],
-                          start_cash=1, start_crypto=0,
-                          start_time=start_time, end_time=end_time,
-                          output_file="best_performing_2018_07_16_refactor_new2.xlsx"
-                          )
+    comparison = ComparativeEvaluation(
+        strategy_set=strategies,
+        currency_pairs=currency_pairs,
+        resample_periods=[60,240,1440],
+        sources=[0],
+        start_cash=1,
+        start_crypto=0,
+        start_time=start_time,
+        end_time=end_time,
+        output_file="best_performing_current.xlsx"
+    )
 
-    #comparison.write_comparative_summary("description.xlsx")
+    # for debugging
+    # comparison.write_comparative_summary("description.xlsx")
 
 
 def rsi_vs_rsi_cumulative(start_time, end_time, time_delay=0):
     counter_currency = "BTC"
     transaction_currencies = get_currencies_for_signal(counter_currency, "RSI_Cumulative")
     currency_pairs = []
+    resample_periods = [60, 240, 1440]
     for transaction_currency in transaction_currencies:
         currency_pairs.append((transaction_currency, counter_currency))
 
-
-    strategies_rsi = StrategyEvaluationSetBuilder.build_from_rsi_thresholds("RSI",
-                                                                        [75], [25],
-                                                                        [Horizon.short, Horizon.medium, Horizon.long],
-                                                                        start_time,
-                                                                        end_time,
-                                                                        currency_pairs)
-    strategies_rsi_cumulative = StrategyEvaluationSetBuilder.build_from_rsi_thresholds("RSI_Cumulative",
-                                                                        [75], [25],
-                                                                        [Horizon.short, Horizon.medium, Horizon.long],
-                                                                        start_time,
-                                                                        end_time,
-                                                                        currency_pairs)
+    strategies_rsi = StrategyEvaluationSetBuilder.build_from_rsi_thresholds("RSI", [75], [25])
+    strategies_rsi_cumulative = StrategyEvaluationSetBuilder.build_from_rsi_thresholds("RSI_Cumulative", [75], [25])
     strategies_rsi.extend(strategies_rsi_cumulative)
 
-    ComparativeEvaluation(strategy_set=strategies_rsi,
-                          start_cash=1, start_crypto=0,
-                          start_time=start_time, end_time=end_time,
-                          output_file="RSI_cumulative_delayed.xlsx",
-                          time_delay=time_delay
-                          )
-    find_num_cumulative_outperforms(start_time, end_time, currency_pairs)
-
-
-def delayed_trading(time_delay = 60*1):
-    end = 1526637600
-    start = end - 60 * 60 * 24 * 30
-
-    transaction_currency = "ETH"
-    counter_currency = "BTC"
-    horizon = Horizon.short
-    overbought_threshold = 75
-    oversold_threshold = 25
-    start_cash = 1
-    start_crypto = 0
-
-    rsi = SimpleRSIStrategy(start, end, horizon, counter_currency, overbought_threshold,
-                            oversold_threshold, transaction_currency, "RSI")
-    evaluation_rsi = rsi.evaluate(start_cash, start_crypto, start, end)
-    evaluation_rsi_delayed = rsi.evaluate(start_cash, start_crypto, start, end, time_delay=time_delay)
+    ComparativeEvaluation(
+        strategy_set=strategies_rsi,
+        currency_pairs=currency_pairs,
+        resample_periods=resample_periods,
+        sources=[0],
+        start_cash=1,
+        start_crypto=0,
+        start_time=start_time,
+        end_time=end_time,
+        output_file="RSI_cumulative_delayed.xlsx",
+        time_delay=time_delay
+    )
+    find_num_cumulative_outperforms(
+        currency_pairs=currency_pairs,
+        resample_periods=resample_periods,
+        source=0,
+        start_cash=1,
+        start_crypto=0,
+        start_time=start_time,
+        end_time=end_time
+    )
 
 
 def delayed_trading_stats():
@@ -198,14 +189,12 @@ if __name__ == "__main__":
     # delayed_trading_stats()
 
     # Best performing signals
-    best_performing_signals_of_the_week()
+    # best_performing_signals_of_the_week()
 
     # RSI vs RSI cumulative
-    # start_time = 1518523200  # first instance of RSI_Cumulative signal
-    # end_time = 1526637600
-    # rsi_vs_rsi_cumulative(start_time, end_time, 60*5)
-    # exit(0)
-
+    start_time = 1518523200  # first instance of RSI_Cumulative signal
+    end_time = 1526637600
+    rsi_vs_rsi_cumulative(start_time, end_time, 60*5)
 
     # Other runs
     # evaluate_rsi_any_currency("BTC", start, end, 1000, 0, 70, 30)
