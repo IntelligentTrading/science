@@ -1,5 +1,6 @@
 import random
 from backtesting.strategies import Horizon, BuyAndHoldTimebasedStrategy
+from backtester_signals import SignalDrivenBacktester
 from chart_plotter import *
 import pandas as pd
 import os
@@ -13,12 +14,30 @@ start_crypto = 0
 
 from genetic_program import GeneticProgram, GeneticTradingStrategy
 
+"""
+params = {}
+params['start_time'] = self.start_time
+params['end_time'] = self.end_time
+params['transaction_currency'] = transaction_currency
+params['counter_currency'] = counter_currency
+params['resample_period'] = resample_period
+params['start_cash'] = self.start_cash
+params['start_crypto'] = self.start_crypto
+params['evaluate_profit_on_last_order'] = self.evaluate_profit_on_last_order
+params['verbose'] = False
+params['source'] = source
+"""
 
-def evaluate_buy_and_hold(data, history_size, verbose=True):
+def evaluate_buy_and_hold(data, history_size, verbose_eval, **params):
     start_bah = int(data.price_data.iloc[history_size].name)
-    bah = BuyAndHoldTimebasedStrategy(start_bah, data.end_time, data.transaction_currency, data.counter_currency, data.source)
-    evaluation = bah.evaluate(start_cash, start_crypto, start_bah, data.end_time, False, False)
-    if verbose:
+
+    bah = BuyAndHoldTimebasedStrategy(start_bah, data.end_time, params['transaction_currency'], params['counter_currency'])
+    evaluation = SignalDrivenBacktester(strategy=bah, **params)
+
+
+    # bah = BuyAndHoldTimebasedStrategy(start_bah, data.end_time, data.transaction_currency, data.counter_currency)
+    # evaluation = bah.evaluate(start_cash, start_crypto, start_bah, data.end_time, False, False)
+    if verbose_eval:
         print("Start time: {} \tEnd time: {}".format(
             pd.to_datetime(start_bah, unit='s'),
             pd.to_datetime(data.end_time, unit='s')))

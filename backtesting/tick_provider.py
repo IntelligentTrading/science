@@ -1,4 +1,4 @@
-from abc import ABC
+from abc import ABC, abstractmethod
 
 
 class TickProvider(ABC):
@@ -17,5 +17,20 @@ class TickProvider(ABC):
         for listener in self._listeners:
             listener.broadcast_ended()
 
+    @abstractmethod
+    def run(self):
+        pass
 
+
+class PriceDataframeTickProvider(TickProvider):
+
+    def __init__(self, price_df):
+        super(PriceDataframeTickProvider, self).__init__()
+        self.price_df = price_df
+
+    def run(self):
+        for timestamp, row in self.price_df.iterrows():
+            row['timestamp'] = timestamp
+            self.notify_listeners(row, None)
+        self.broadcast_ended()
 

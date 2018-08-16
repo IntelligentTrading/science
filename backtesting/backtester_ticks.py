@@ -48,6 +48,7 @@ class TickDrivenBacktester(Evaluation, TickListener):
 
 
     def broadcast_ended(self):
+        self._end_crypto_currency = self._transaction_currency
         self._finalize_backtesting()
 
     @property

@@ -265,9 +265,6 @@ class BuyAndHoldTimebasedStrategy(SignalStrategy):
     def get_short_summary(self):
         return "Buy & hold"
 
-    def get_signal_report(self):
-        return self.strategy.get_signal_report()
-
     def belongs_to_this_strategy(self, signal):
         return False
 
