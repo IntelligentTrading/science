@@ -101,4 +101,8 @@ ALL_SIGNALS = {
 
     'vbi_buy': SignalType('VBI', 1, 3),
 
+    'generic_up': SignalType('Generic', 1, 3),
+    'generic_down': SignalType('Generic', -1, 3)
+
+
 }

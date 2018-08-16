@@ -149,53 +149,76 @@ def delayed_trading_stats():
 
 def random_strategy_backtesting(out_path="random_strat_backtesting.txt"):
     out = open(out_path, "w")
-    end= 1526637600
+    end = 1526637600
     start = end - 60 * 60 * 24 * 30
+    source = 0
     num_tests = 10
+    start_cash = 1000
+    start_crypto = 0
 
     transaction_currency = "ETH"
     counter_currency = "BTC"
 
     results_random = []
+
+
     for max_num_signals in [5, 10, 20, 30, 50, 70, 100, 200]:
         num_evaluations = 0
         profit_percent = 0
         profits = []
         for i in range(0, num_tests):
-            strategy = RandomTradingStrategy(max_num_signals, start, end, Horizon.short, counter_currency, transaction_currency)
-            evaluation = strategy.evaluate(1, 0, start, end)
+            strategy = RandomTradingStrategy(max_num_signals, start, end, transaction_currency, counter_currency, source)
+            evaluation = SignalDrivenBacktester(
+                strategy=strategy,
+                transaction_currency=transaction_currency,
+                counter_currency=counter_currency,
+                start_cash=start_cash,
+                start_crypto=start_crypto,
+                start_time=start,
+                end_time=end,
+                source=source,
+                resample_period=None,
+                evaluate_profit_on_last_order=False,
+                verbose=False,
+                time_delay=0,
+                slippage=0,
+                signals=strategy.signals,
+            )
 
             if evaluation.num_trades == 0:
                 continue
             num_evaluations += 1
-            profit_percent += evaluation.profit_percent()
-            profits.append(evaluation.profit_percent())
+            profit_percent += evaluation.profit_percent
+            profits.append(evaluation.profit_percent)
 
-        results_random.append({"max_num_signals": max_num_signals, "avg_profit_percent" : np.mean(profits), "std_profit_percent": np.std(profits)})
-        print("Average profit percent: {0:0.2f}%".format(profit_percent / num_evaluations))
+        results_random.append({"max_num_signals": max_num_signals,
+                               "avg_profit_percent" : np.mean(profits),
+                               "std_profit_percent": np.std(profits)})
+        logging.info("Average profit percent: {0:0.2f}%".format(profit_percent / num_evaluations))
+
     df = pd.DataFrame(results_random)
-    print(df)
+    logging.info(df)
     out.write(str(df))
     out.write("\n--\n")
     out.write(str(df.describe()))
     out.write("\n\n")
-    bah = BuyAndHoldTimebasedStrategy(start, end, transaction_currency, counter_currency, 0, Horizon.any)
-    bah_eval = bah.evaluate(1, 0, start, end, False, True)
-    print("Buy and hold performance: {0:0.2f}%".format(bah_eval.profit_percent()))
-    out.write("Buy and hold performance: {0:0.2f}%\n".format(bah_eval.profit_percent()))
+    bah = BuyAndHoldTimebasedStrategy(start, end, transaction_currency, counter_currency)
+    bah_eval = bah.evaluate(transaction_currency, counter_currency, start_cash, start_crypto, start, end, source, None)
+    logging.info("Buy and hold performance: {0:0.2f}%".format(bah_eval.profit_percent))
+    out.write("Buy and hold performance: {0:0.2f}%\n".format(bah_eval.profit_percent))
     out.write("\n")
 
     results_rsi = []
     for overbought_threshold in [70, 75, 80]:
         for oversold_threshold in [20, 25, 30]:
-            rsi = SimpleRSIStrategy(start, end, Horizon.short, counter_currency, overbought_threshold, oversold_threshold, transaction_currency)
-            rsi_eval = rsi.evaluate(1, 0, start, end, False, True)
-            print("RSI (overbought = {}, oversold = {}) performance: {:0.2f}".format(overbought_threshold,
+            rsi = SimpleRSIStrategy(overbought_threshold, oversold_threshold)
+            rsi_eval = rsi.evaluate(transaction_currency, counter_currency, start_cash, start_crypto, start, end, source, 60)
+            logging.info("RSI (overbought = {}, oversold = {}) performance: {:0.2f}".format(overbought_threshold,
                                                                                      oversold_threshold,
-                                                                                     rsi_eval.profit_percent()))
+                                                                                     rsi_eval.profit_percent))
             results_rsi.append({"overbought_threshold": overbought_threshold,
                                 "oversold_threshold" : oversold_threshold,
-                                "profit_percent": rsi_eval.profit_percent()})
+                                "profit_percent": rsi_eval.profit_percent})
 
     df = pd.DataFrame(results_rsi)
     out.write(str(df))
@@ -204,15 +227,17 @@ def random_strategy_backtesting(out_path="random_strat_backtesting.txt"):
     out.close()
 
 
+
+
 if __name__ == "__main__":
     # Random strategy backtesting
     # random_strategy_backtesting()
 
     # Delayed trading
-    delayed_trading_stats()
+    # delayed_trading_stats()
 
     # Best performing signals
-    # best_performing_signals_of_the_week()
+    best_performing_signals_of_the_week()
 
     # RSI vs RSI cumulative
     # start_time = 1518523200  # first instance of RSI_Cumulative signal

@@ -196,9 +196,7 @@ class SimpleTrendBasedStrategy(SignalStrategy):
         return "\n".join(output)
 
     def get_short_summary(self):
-        return "Trend-based strategy, signal: {}, strength: {}, horizon: {}".format(self.signal_type,
-                                                                                    self.strength.value,
-                                                                                    self.horizon)
+        return "Trend-based strategy, signal type: {}".format(self.signal_type)
 
     def belongs_to_this_strategy(self, signal):
         return signal.signal_type == self.signal_type
@@ -369,16 +367,21 @@ class TickerBuyAndHold(TickerWrapperStrategy):
         return "Ticker-based buy and hold strategy"
 
 
-# TODO: obsolete, clean
 class RandomTradingStrategy(SimpleTrendBasedStrategy):
 
     def __init__(self, max_num_signals, start_time, end_time, transaction_currency, counter_currency, source=0):
-        super().__init__(source)
+        self.start_time = start_time
+        self.end_time = end_time
         self.transaction_currency = transaction_currency
         self.counter_currency = counter_currency
         self.max_num_signals = max_num_signals
+        self.source = source
+        self.signal_type = "Generic"
         self.signals = self.build_signals()
-        self.signal_type = "Random"
+
+
+    def get_orders(self, signals, start_cash, start_crypto, source, time_delay=0, slippage=0):
+        return SignalStrategy.get_orders(self, self.signals, start_cash, start_crypto, source, time_delay, slippage)
 
     def build_signals(self):
         num_signals = random.randint(1, self.max_num_signals)
@@ -391,11 +394,14 @@ class RandomTradingStrategy(SimpleTrendBasedStrategy):
         for timestamp, row in selected_prices.iterrows():
             price = row["price"]
             buy = random.random() < 0.5
-            signal = Signal("SMA", 1 if buy else -1, Horizon.any, 3, 3,
-                 price/1E8, 0, timestamp, None, self.transaction_currency, self.counter_currency)
+            signal = Signal(self.signal_type, 1 if buy else -1, Horizon.any, 3, 3, # "RSI" is just a placeholder
+                 price/1E8, 0, timestamp, None, self.transaction_currency, self.counter_currency, self.source, None)
             signals.append(signal)
-
         return signals
 
     def belongs_to_this_strategy(self, signal):
         return True
+
+    def get_short_summary(self):
+        return "Random trading strategy, max number of signals: {}".format(self.max_num_signals)
+
