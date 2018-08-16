@@ -13,6 +13,7 @@ from gp_data import Data
 import os
 import dill as pickle
 from backtester_ticks import TickDrivenBacktester
+import time
 
 HISTORY_SIZE = 200
 
@@ -33,6 +34,7 @@ class GeneticTradingStrategy(TickerStrategy):
         self.history_size = history_size
         # self.build_from_gp_tree(tree)
         self.i = 0
+        self.func = self.gp_object.toolbox.compile(expr=self.tree)
 
     def process_ticker(self, price_data, signals):
         """
@@ -41,13 +43,12 @@ class GeneticTradingStrategy(TickerStrategy):
         :return: StrategyDecision.BUY or StrategyDecision.SELL or StrategyDecision.IGNORE
         """
         self.i += 1
-        func = self.gp_object.toolbox.compile(expr=self.tree)
         price = price_data.close_price
         timestamp = price_data['timestamp']
         if self.i < self.history_size:
             # outcomes.append("skipped")
             return StrategyDecision.IGNORE, None
-        outcome = func([timestamp])
+        outcome = self.func([timestamp])
 
         decision = StrategyDecision.IGNORE
         signal = None
@@ -70,7 +71,68 @@ class GeneticTradingStrategy(TickerStrategy):
     def get_short_summary(self):
         return("Strategy: evolved using genetic programming\nRule set: {}".format(str(self.tree)))
 
+class GeneticSignalStrategy(SignalStrategy):
+    def __init__(self, tree, data, gp_object, history_size=HISTORY_SIZE):
+        self.data = data
+        self.horizon = data.horizon
+        self.transaction_currency = data.transaction_currency
+        self.counter_currency = data.counter_currency
+        self.resample_period = data.resample_period
+        self.strength = Strength.any
+        self.source = data.source
+        self.start_time = data.start_time
+        self.end_time = data.end_time
+        self.tree = tree
+        self.gp_object = gp_object
+        self.history_size = history_size
+        self.build_from_gp_tree(tree)
 
+    def get_orders(self, signals, start_cash, start_crypto, source, time_delay=0, slippage=0):
+        return SignalStrategy.get_orders(self, self.signals, start_cash, start_crypto, source, time_delay, slippage)
+
+    def belongs_to_this_strategy(self, signal):
+        return signal.signal_type == "Genetic"
+
+    def build_from_gp_tree(self, tree):
+        self.signals = []
+        func = self.gp_object.toolbox.compile(expr=tree)
+
+        outcomes = []
+        for i, row in enumerate(self.data.price_data.itertuples()):
+            price = row.close_price
+            timestamp = row.Index
+            if i < self.history_size:
+                outcomes.append("skipped")
+                continue
+            outcome = func([timestamp])
+
+            trend = None
+            if outcome == self.gp_object.buy:
+                trend = 1
+            elif outcome == self.gp_object.sell:
+                trend = -1
+            elif not outcome == self.gp_object.ignore:
+                print("WARNING: Invalid outcome encountered")
+            if trend != None:
+                signal = Signal("Genetic", trend, self.horizon, 3, 3, price, 0, timestamp, None, self.transaction_currency,
+                                self.counter_currency, self.source, self.resample_period)
+                self.signals.append(signal)
+
+            outcomes.append(outcome.__name__)
+        df = self.data.to_dataframe()
+        df['outcomes'] = pd.Series(outcomes, index=df.index)
+        self.df_data_and_outcomes = df
+
+        #print(self.signals)
+        #print(str(tree))
+        #print(outcomes)
+
+    def get_short_summary(self):
+        return("Strategy: evolved using genetic programming\nRule set: {}".format(str(self.tree)))
+
+
+    def get_dataframe_with_outcomes(self):
+        return self.df_data_and_outcomes
 
 """
 class GeneticTradingStrategy(Strategy):
@@ -225,12 +287,19 @@ class GeneticProgram:
         self.pset = pset
 
     def evaluate_individual(self, individual, super_verbose=False):
+        start = time.time()
+        strategy = GeneticSignalStrategy(individual, self.data, self)
+        evaluation = strategy.evaluate(transaction_currency, counter_currency, start_cash, start_crypto,
+                                       start_time, end_time, 0, 60, verbose=False)
+        """
         strategy = GeneticTradingStrategy(individual, self.data, self)
-        from tick_provider import PriceDataframeTickProvider
+        #from tick_provider import PriceDataframeTickProvider
         # supply ticks from the ITF DB
-        tick_provider = PriceDataframeTickProvider(self.data.price_data)
-
+        #tick_provider = PriceDataframeTickProvider(self.data.price_data)
+        tick_provider = self.data.price_data
+        tick_provider['timestamp'] = tick_provider.index
         # create a new tick based backtester
+        
         evaluation = TickDrivenBacktester(tick_provider=tick_provider,
                                           strategy=strategy,
                                           transaction_currency=transaction_currency,
@@ -245,6 +314,7 @@ class GeneticProgram:
                                           verbose=False
                                           )
 
+        """
         if evaluation.num_trades > 1:
             if super_verbose and False:
                 orders, _ = strategy.get_orders(1, 0)
@@ -252,7 +322,10 @@ class GeneticProgram:
                 print(str(individual))
                 print(evaluation.get_report())
                 draw_tree(individual)
+
+        end = time.time()
         max_len = 3 ** self.tree_depth
+        print("Time for one evaluation {}".format(end-start))
         return evaluation.profit_percent + (max_len - len(individual)) / float(max_len) * 20 \
                + evaluation.num_sells * 5,
 

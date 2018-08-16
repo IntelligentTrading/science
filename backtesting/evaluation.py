@@ -169,12 +169,15 @@ class Evaluation(ABC):
         returns = self.noncumulative_returns
         if len(returns) == 0:
             return np.nan, np.nan, np.nan
-        r = returns.add(1).cumprod()
-        dd = r.div(r.cummax()).sub(1)
-        mdd = dd.min()
-        end = dd.argmin()
-        start = r.loc[:end].argmax()
-        return mdd, start, end
+        try:
+            r = returns.add(1).cumprod()
+            dd = r.div(r.cummax()).sub(1)
+            mdd = dd.min()
+            end = dd.argmin()
+            start = r.loc[:end].argmax()
+            return mdd, start, end
+        except:
+            return np.nan, np.nan, np.nan
 
     @property
     def sharpe_ratio(self):
