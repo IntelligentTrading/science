@@ -1,8 +1,7 @@
 from comparative_evaluation import *
 from strategies import RandomTradingStrategy
 import numpy as np
-from volume_based_indicator import build_strategy, build_resampled_price_volume_df
-
+from backtesting_helpers import find_num_cumulative_outperforms
 
 def best_performing_signals_of_the_week():
     # for John - best performing signals of the week
@@ -13,7 +12,7 @@ def best_performing_signals_of_the_week():
         currency_pairs.append((transaction_currency, counter_currency))
 
     # for debugging
-    #currency_pairs = [("BTC","USDT"),]
+    # currency_pairs = [("BTC","USDT"),]
 
     end_time = 1531699200
     start_time = end_time - 60*60*24*7
@@ -23,72 +22,62 @@ def best_performing_signals_of_the_week():
         sell_signals=['rsi_sell_3', 'rsi_sell_2', 'rsi_cumulat_sell_2', 'rsi_cumulat_sell_3', 'ichi_kumo_down'], #, 'ann_simple_bear'],
         num_buy=2,
         num_sell=2,
-        signal_combination_mode=SignalCombinationMode.SAME_TYPE,
-        horizons=(Horizon.short, Horizon.medium, Horizon.long),
-        start_time=start_time, end_time=end_time, currency_pairs=currency_pairs)
+        signal_combination_mode=SignalCombinationMode.SAME_TYPE)
 
-    comparison = ComparativeEvaluation(strategy_set=strategies,
-                          start_cash=1, start_crypto=0,
-                          start_time=start_time, end_time=end_time,
-                          output_file="best_performing_2018_07_16.xlsx"
-                          )
+    comparison = ComparativeEvaluation(
+        strategy_set=strategies,
+        currency_pairs=currency_pairs,
+        resample_periods=[60,240,1440],
+        sources=[0],
+        start_cash=1,
+        start_crypto=0,
+        start_time=start_time,
+        end_time=end_time,
+        output_file="best_performing_current.xlsx"
+    )
 
-    #comparison.write_comparative_summary("description.xlsx")
-
+    # for debugging
+    # comparison.write_comparative_summary("description.xlsx")
 
 
 def rsi_vs_rsi_cumulative(start_time, end_time, time_delay=0):
     counter_currency = "BTC"
     transaction_currencies = get_currencies_for_signal(counter_currency, "RSI_Cumulative")
     currency_pairs = []
+    resample_periods = [60, 240, 1440]
     for transaction_currency in transaction_currencies:
         currency_pairs.append((transaction_currency, counter_currency))
 
-
-    strategies_rsi = StrategyEvaluationSetBuilder.build_from_rsi_thresholds("RSI",
-                                                                        [75], [25],
-                                                                        [Horizon.short, Horizon.medium, Horizon.long],
-                                                                        start_time,
-                                                                        end_time,
-                                                                        currency_pairs)
-    strategies_rsi_cumulative = StrategyEvaluationSetBuilder.build_from_rsi_thresholds("RSI_Cumulative",
-                                                                        [75], [25],
-                                                                        [Horizon.short, Horizon.medium, Horizon.long],
-                                                                        start_time,
-                                                                        end_time,
-                                                                        currency_pairs)
+    strategies_rsi = StrategyEvaluationSetBuilder.build_from_rsi_thresholds("RSI", [75], [25])
+    strategies_rsi_cumulative = StrategyEvaluationSetBuilder.build_from_rsi_thresholds("RSI_Cumulative", [75], [25])
     strategies_rsi.extend(strategies_rsi_cumulative)
 
-    ComparativeEvaluation(strategy_set=strategies_rsi,
-                          start_cash=1, start_crypto=0,
-                          start_time=start_time, end_time=end_time,
-                          output_file="RSI_cumulative_delayed.xlsx",
-                          time_delay=time_delay
-                          )
-    find_num_cumulative_outperforms(start_time, end_time, currency_pairs)
-
-
-def delayed_trading(time_delay = 60*1):
-    end = 1526637600
-    start = end - 60 * 60 * 24 * 30
-
-    transaction_currency = "ETH"
-    counter_currency = "BTC"
-    horizon = Horizon.short
-    overbought_threshold = 75
-    oversold_threshold = 25
-    start_cash = 1
-    start_crypto = 0
-
-    rsi = SimpleRSIStrategy(start, end, horizon, counter_currency, overbought_threshold,
-                            oversold_threshold, transaction_currency, "RSI")
-    evaluation_rsi = rsi.evaluate(start_cash, start_crypto, start, end)
-    evaluation_rsi_delayed = rsi.evaluate(start_cash, start_crypto, start, end, time_delay=time_delay)
+    ComparativeEvaluation(
+        strategy_set=strategies_rsi,
+        currency_pairs=currency_pairs,
+        resample_periods=resample_periods,
+        sources=[0],
+        start_cash=1,
+        start_crypto=0,
+        start_time=start_time,
+        end_time=end_time,
+        output_file="RSI_cumulative_delayed.xlsx",
+        time_delay=time_delay
+    )
+    find_num_cumulative_outperforms(
+        currency_pairs=currency_pairs,
+        resample_periods=resample_periods,
+        source=0,
+        start_cash=1,
+        start_crypto=0,
+        start_time=start_time,
+        end_time=end_time
+    )
 
 
 def delayed_trading_stats():
-    end = 1526637600
-    start = end - 60 * 60 * 24 * 30
+    end_time = 1526637600
+    start_time = end_time - 60 * 60 * 24 * 30
 
     counter_currency = "BTC"
     transaction_currencies = get_currencies_for_signal(counter_currency, "RSI")
@@ -96,11 +85,12 @@ def delayed_trading_stats():
     for transaction_currency in transaction_currencies:
         currency_pairs.append((transaction_currency, counter_currency))
 
-    horizons = [Horizon.short, Horizon.medium, Horizon.long]
+    resample_periods = [60, 240, 1440]
     overbought_threshold = 75
     oversold_threshold = 25
     start_cash = 1
     start_crypto = 0
+    source = 0
 
     output = []
     deltas = []
@@ -109,87 +99,134 @@ def delayed_trading_stats():
     profits_delayed = []
     per_trade_deltas = []
 
-    for time_delay in [60*5, 60*3, 60*5, 60*60, 60*60*8, 60*60*24]:
+    for time_delay in [60*1, 60*3, 60*5, 60*60, 60*60*8, 60*60*24]:
         for transaction_currency, counter_currency in currency_pairs:
-            for horizon in horizons:
+            for resample_period in resample_periods:
                 try:
-                    rsi = SimpleRSIStrategy(start, end, horizon, counter_currency, overbought_threshold,
-                                    oversold_threshold, transaction_currency, "RSI")
-                    evaluation_rsi = rsi.evaluate(start_cash, start_crypto, start, end)
-                    evaluation_rsi_delayed = rsi.evaluate(start_cash, start_crypto, start, end, time_delay=time_delay)
-                    if evaluation_rsi.get_num_trades() == 0 or evaluation_rsi_delayed.get_num_trades() == 0:
+                    rsi = SimpleRSIStrategy(overbought_threshold, oversold_threshold, "RSI")
+                    evaluation_rsi = rsi.evaluate(
+                        transaction_currency=transaction_currency,
+                        counter_currency=counter_currency,
+                        start_cash=start_cash,
+                        start_crypto=start_crypto,
+                        start_time=start_time,
+                        end_time=end_time,
+                        source=source,
+                        resample_period=resample_period
+                    )
+
+
+                    evaluation_rsi_delayed = rsi.evaluate(
+                        transaction_currency=transaction_currency,
+                        counter_currency=counter_currency,
+                        start_cash=start_cash,
+                        start_crypto=start_crypto,
+                        start_time=start_time,
+                        end_time=end_time,
+                        source=source,
+                        resample_period=resample_period,
+                        time_delay=time_delay
+                    )
+
+                    if evaluation_rsi.num_trades == 0 or evaluation_rsi_delayed.num_trades == 0\
+                            or evaluation_rsi.profit_percent is None or evaluation_rsi_delayed.profit_percent is None:
                         continue
-                    deltas.append(evaluation_rsi_delayed.get_profit_percent() - evaluation_rsi.get_profit_percent())
-                    per_trade_deltas.append(evaluation_rsi_delayed.avg_profit_per_trade_pair - evaluation_rsi.avg_profit_per_trade_pair)
-                    profits.append(evaluation_rsi.get_profit_percent())
-                    profits_delayed.append(evaluation_rsi_delayed.get_profit_percent())
+                    deltas.append(evaluation_rsi_delayed.profit_percent - evaluation_rsi.profit_percent)
+                    per_trade_deltas.append(evaluation_rsi_delayed.mean_buy_sell_pair_return - evaluation_rsi.mean_buy_sell_pair_return)
+                    profits.append(evaluation_rsi.profit_percent)
+                    profits_delayed.append(evaluation_rsi_delayed.profit_percent)
                 except NoPriceDataException:
-                    print("Price data not found!")
+                    logging.error("Price data not found!")
                     continue
         output.append("Time delay: {} delta_mean: {} delta_std: {} num_measurements: {} per_trade_delta_mean: {} per_trade_delta_std {}"
                       .format(time_delay, np.mean(deltas), np.std(deltas), len(deltas), np.mean(per_trade_deltas), np.std(per_trade_deltas)))
         deltas = []
     output.append("Mean profit: {}, std: {}".format(np.mean(profits), np.std(profits)))
-    print(profits)
-    print(len(profits))
-    print("\n".join(output))
+    logging.debug(profits)
+    logging.debug(len(profits))
+    logging.info("\n".join(output))
 
 
 def random_strategy_backtesting(out_path="random_strat_backtesting.txt"):
     out = open(out_path, "w")
-    end= 1526637600
+    end = 1526637600
     start = end - 60 * 60 * 24 * 30
+    source = 0
     num_tests = 10
+    start_cash = 1000
+    start_crypto = 0
 
     transaction_currency = "ETH"
     counter_currency = "BTC"
 
     results_random = []
+
+
     for max_num_signals in [5, 10, 20, 30, 50, 70, 100, 200]:
         num_evaluations = 0
         profit_percent = 0
         profits = []
         for i in range(0, num_tests):
-            strategy = RandomTradingStrategy(max_num_signals, start, end, Horizon.short, counter_currency, transaction_currency)
-            evaluation = strategy.evaluate(1, 0, start, end)
+            strategy = RandomTradingStrategy(max_num_signals, start, end, transaction_currency, counter_currency, source)
+            evaluation = SignalDrivenBacktester(
+                strategy=strategy,
+                transaction_currency=transaction_currency,
+                counter_currency=counter_currency,
+                start_cash=start_cash,
+                start_crypto=start_crypto,
+                start_time=start,
+                end_time=end,
+                source=source,
+                resample_period=None,
+                evaluate_profit_on_last_order=False,
+                verbose=False,
+                time_delay=0,
+                slippage=0,
+                signals=strategy.signals,
+            )
 
             if evaluation.num_trades == 0:
                 continue
             num_evaluations += 1
-            profit_percent += evaluation.get_profit_percent()
-            profits.append(evaluation.get_profit_percent())
+            profit_percent += evaluation.profit_percent
+            profits.append(evaluation.profit_percent)
 
-        results_random.append({"max_num_signals": max_num_signals, "avg_profit_percent" : np.mean(profits), "std_profit_percent": np.std(profits)})
-        print("Average profit percent: {0:0.2f}%".format(profit_percent / num_evaluations))
+        results_random.append({"max_num_signals": max_num_signals,
+                               "avg_profit_percent" : np.mean(profits),
+                               "std_profit_percent": np.std(profits)})
+        logging.info("Average profit percent: {0:0.2f}%".format(profit_percent / num_evaluations))
+
     df = pd.DataFrame(results_random)
-    print(df)
+    logging.info(df)
     out.write(str(df))
     out.write("\n--\n")
     out.write(str(df.describe()))
     out.write("\n\n")
-    bah = BuyAndHoldTimebasedStrategy(start, end, transaction_currency, counter_currency, 0, Horizon.any)
-    bah_eval = bah.evaluate(1, 0, start, end, False, True)
-    print("Buy and hold performance: {0:0.2f}%".format(bah_eval.get_profit_percent()))
-    out.write("Buy and hold performance: {0:0.2f}%\n".format(bah_eval.get_profit_percent()))
+    bah = BuyAndHoldTimebasedStrategy(start, end, transaction_currency, counter_currency)
+    bah_eval = bah.evaluate(transaction_currency, counter_currency, start_cash, start_crypto, start, end, source, None)
+    logging.info("Buy and hold performance: {0:0.2f}%".format(bah_eval.profit_percent))
+    out.write("Buy and hold performance: {0:0.2f}%\n".format(bah_eval.profit_percent))
     out.write("\n")
 
     results_rsi = []
     for overbought_threshold in [70, 75, 80]:
         for oversold_threshold in [20, 25, 30]:
-            rsi = SimpleRSIStrategy(start, end, Horizon.short, counter_currency, overbought_threshold, oversold_threshold, transaction_currency)
-            rsi_eval = rsi.evaluate(1, 0, start, end, False, True)
-            print("RSI (overbought = {}, oversold = {}) performance: {:0.2f}".format(overbought_threshold,
-                                                                                      oversold_threshold,
-                                                                                      rsi_eval.get_profit_percent()))
+            rsi = SimpleRSIStrategy(overbought_threshold, oversold_threshold)
+            rsi_eval = rsi.evaluate(transaction_currency, counter_currency, start_cash, start_crypto, start, end, source, 60)
+            logging.info("RSI (overbought = {}, oversold = {}) performance: {:0.2f}".format(overbought_threshold,
+                                                                                     oversold_threshold,
+                                                                                     rsi_eval.profit_percent))
             results_rsi.append({"overbought_threshold": overbought_threshold,
                                 "oversold_threshold" : oversold_threshold,
-                                "profit_percent": rsi_eval.get_profit_percent()})
+                                "profit_percent": rsi_eval.profit_percent})
 
     df = pd.DataFrame(results_rsi)
     out.write(str(df))
     out.write("\n--\n\n")
     out.write(str(df.describe()))
     out.close()
+
+
 
 
 if __name__ == "__main__":
@@ -206,8 +243,6 @@ if __name__ == "__main__":
     # start_time = 1518523200  # first instance of RSI_Cumulative signal
     # end_time = 1526637600
     # rsi_vs_rsi_cumulative(start_time, end_time, 60*5)
-    # exit(0)
-
 
     # Other runs
     # evaluate_rsi_any_currency("BTC", start, end, 1000, 0, 70, 30)

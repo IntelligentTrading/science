@@ -30,6 +30,31 @@ class Signal:
     def __eq__(self, other):
         return self.__dict__ == other.__dict__
 
+    @staticmethod
+    def from_pandas_row(row):
+        return Signal(
+            row['signal'],
+            row['trend'],
+            row['horizon'],
+            row['strength_value'],
+            row['strength_max'],
+            row['price'],
+            row['price_change'],
+            row['timestamp'],
+            row['rsi_value'],
+            row['transaction_currency'],
+            row['counter_currency'],
+            row['source'],
+            row['resample_period']
+        )
+
+    @staticmethod
+    def pandas_to_objects_list(signals_df):
+        signals = []
+        for i, row in signals_df.iterrows():
+            signals.append(Signal.from_pandas_row(row))
+        return signals
+
 
 def get_signal_type(signal_record):
     id = [x for x in ALL_SIGNALS if ALL_SIGNALS[x] == signal_record]
@@ -75,4 +100,9 @@ ALL_SIGNALS = {
     'ema_bear_3' : SignalType('EMA', -1, 3),
 
     'vbi_buy': SignalType('VBI', 1, 3),
+
+    'generic_up': SignalType('Generic', 1, 3),
+    'generic_down': SignalType('Generic', -1, 3)
+
+
 }

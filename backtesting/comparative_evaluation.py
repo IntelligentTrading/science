@@ -1,10 +1,11 @@
 import itertools
-
 from data_sources import *
-from evaluation import backtesting_report_columns, Evaluation
-from signals import SignalType, ALL_SIGNALS
-from strategies import Strategy, BuyAndHoldTimebasedStrategy, MultiSignalStrategy, BuyOnFirstSignalAndHoldStrategy, SignalSignatureStrategy, SimpleRSIStrategy
+from backtester_signals import SignalDrivenBacktester
+from config import backtesting_report_columns
+from signals import ALL_SIGNALS
+from strategies import BuyAndHoldTimebasedStrategy, SignalSignatureStrategy, SimpleRSIStrategy
 from enum import Enum
+
 
 class SignalCombinationMode(Enum):
     ANY = 0
@@ -13,12 +14,27 @@ class SignalCombinationMode(Enum):
 
 
 class StrategyEvaluationSetBuilder:
+    """
+    Builds a set of strategies for comparative backtest by combining signals.
+    """
 
     @staticmethod
-    def build_from_signal_set(buy_signals, sell_signals, num_buy, num_sell, signal_combination_mode,
-                              horizons, start_time, end_time, currency_pairs):
+    def build_from_signal_set(buy_signals, sell_signals, num_buy, num_sell, signal_combination_mode):
+        """
+        Builds a set of strategies based on a set of buy signals and a set of sell signals.
+        :param buy_signals: A list of signal signatures to be used for buying (see ALL_SIGNALS).
+        :param sell_signals: A list of signal signatures to be used for selling (see ALL_SIGNALS).
+        :param num_buy: Number of different signals a strategy should use to buy.
+        :param num_sell: Number of different signals a strategy should use to sell.
+        :param signal_combination_mode: Indicates how to build strategies.
+               Options: SignalCombinationMode.ANY: the signal type of buy and sell signals need not match (e.g. RSI buy, SMA sell)
+                        SignalCombinationMode.SAME_TYPE: the signal type of buy and sell signals must match.
+                        SignalCombinationMode.SAME_TYPE_AND_STRENGTH: the signal type and strength of buy and sell signals must match.
+        :return: A list of all SignalSignature strategies satisfying the building constraints.
+        """
         strategies = []
 
+        # create all possible strategies
         buy_combinations = []
         for i in range(1, num_buy+1):
             sample = [list(x) for x in itertools.combinations(buy_signals, i)]
@@ -31,6 +47,7 @@ class StrategyEvaluationSetBuilder:
 
         buy_sell_pairs = itertools.product(buy_combinations, sell_combinations)
 
+        # filter out those not satisfying the combination criteria
         for buy, sell in buy_sell_pairs:
             if not StrategyEvaluationSetBuilder.check_signal_combination_mode(buy, sell, signal_combination_mode):
                 continue
@@ -39,16 +56,20 @@ class StrategyEvaluationSetBuilder:
             if len(signal_set) == 0:
                 continue
 
-            for horizon in horizons:
-                for transaction_currency, counter_currency in currency_pairs:
-                    strategy = SignalSignatureStrategy(signal_set, start_time, end_time, horizon, counter_currency,
-                                                       transaction_currency)
-                    strategies.append(strategy)
+            strategy = SignalSignatureStrategy(signal_set)
+            strategies.append(strategy)
 
         return strategies
 
     @staticmethod
     def check_signal_combination_mode(buy_signal_set, sell_signal_set, signal_combination_mode):
+        """
+        Checks if a particular set of buy signals and set signals satisfies the combination criterion.
+        :param buy_signal_set: A set of buy signal signatures.
+        :param sell_signal_set: A set of sell signal signatures.
+        :param signal_combination_mode: Instance of SignalCombinationMode.
+        :return: True if the combination of buy and sell signals is valid according to
+        """
         if signal_combination_mode == SignalCombinationMode.ANY:
             return True
         buy_types = set([ALL_SIGNALS[x].signal for x in buy_signal_set])
@@ -63,25 +84,36 @@ class StrategyEvaluationSetBuilder:
                    buy_strengths == sell_strengths and len(buy_strengths) == 1
 
     @staticmethod
-    def build_from_rsi_thresholds(signal_type, overbought_thresholds, oversold_thresholds,
-                                  horizons, start_time, end_time, currency_pairs):
+    def build_from_rsi_thresholds(signal_type, overbought_thresholds, oversold_thresholds):
+        """
+        Builds a set of strategies as a Cartesian product of lists of overbought and oversold thresholds.
+        :param signal_type: "RSI" or "RSI_Cumulative".
+        :param overbought_thresholds: A list of overbought thresholds.
+        :param oversold_thresholds: A list of oversold thresholds.
+        :return: A list of strategies.
+        """
 
         strategies = []
         for overbought in overbought_thresholds:
             for oversold in oversold_thresholds:
-                for transaction_currency, counter_currency in currency_pairs:
-                    for horizon in horizons:
-                        strategy = SimpleRSIStrategy(start_time, end_time, horizon, counter_currency,
-                                                     overbought, oversold, transaction_currency, signal_type)
-                        strategies.append(strategy)
+                strategy = SimpleRSIStrategy(overbought, oversold, signal_type)
+                strategies.append(strategy)
         return strategies
 
 
 class ComparativeEvaluation:
+    """
+    Comparatively backtests a set of strategies on given currency pairs, resample periods and exchanges.
+    Uses SignalDrivenBacktester.
+    """
 
-    def __init__(self, strategy_set, start_cash, start_crypto, start_time, end_time, output_file, time_delay=0):
+    def __init__(self, strategy_set, currency_pairs, resample_periods, sources,
+                 start_cash, start_crypto, start_time, end_time, output_file, time_delay=0):
 
         self.strategy_set = strategy_set
+        self.currency_pairs = currency_pairs
+        self.resample_periods = resample_periods
+        self.sources = sources
         self.start_time = start_time
         self.end_time = end_time
         self.start_cash = start_cash
@@ -91,55 +123,77 @@ class ComparativeEvaluation:
         self.output_file = output_file
         self.time_delay = time_delay
 
-        self.build_dataframe(strategy_set, output_file)
+        self._run_backtests()
+        report = ComparativeReportBuilder(self.backtests, self.baselines)
+        best_backtest = report.get_best_performing_backtest()
+        logging.info(best_backtest.get_report())
+        report.write_summary(output_file)
 
-    def build_dataframe(self, strategy_set, output_file):
-        evaluation_dicts = []
-        for strategy in strategy_set:
+    def _run_backtests(self):
+        self.backtests = []
+        self.baselines = []
+        for (transaction_currency, counter_currency), resample_period, source, strategy in \
+                itertools.product(self.currency_pairs, self.resample_periods, self.sources, self.strategy_set):
             try:
-                dict = self.evaluate(strategy)
+                backtest, baseline = self.evaluate(strategy, transaction_currency, counter_currency, resample_period, source)
+                self.backtests.append(backtest)
+                self.baselines.append(baseline)
             except NoPriceDataException:
                 continue
-            evaluation_dicts.append(dict)
 
+    def evaluate(self, strategy, transaction_currency, counter_currency, resample_period, source):
+        logging.info("Evaluating strategy...")
+
+        params = {}
+        params['start_time'] = self.start_time
+        params['end_time'] = self.end_time
+        params['transaction_currency'] = transaction_currency
+        params['counter_currency'] = counter_currency
+        params['resample_period'] = resample_period
+        params['start_cash'] = self.start_cash
+        params['start_crypto'] = self.start_crypto
+        params['evaluate_profit_on_last_order'] = self.evaluate_profit_on_last_order
+        params['verbose'] = False
+        params['source'] = source
+
+        baseline = BuyAndHoldTimebasedStrategy(self.start_time, self.end_time, transaction_currency, counter_currency)
+        baseline_evaluation = SignalDrivenBacktester(strategy=baseline, **params)
+        evaluation = SignalDrivenBacktester(strategy=strategy, **params)
+
+        return evaluation, baseline_evaluation
+
+
+class ComparativeReportBuilder:
+    """
+    Based on a set of backtests and corresponding baseline backtests, builds a comparative report of their performance.
+    """
+
+    def __init__(self, backtests, baselines):
+        """
+        Initializes and builds the report dataframe.
+        :param backtests: A collection of backtest objects.
+        :param baselines: A collection of baselines corresponding to backtests.
+        """
+        self.backtests = backtests
+        self.baselines = baselines
+        self._build_dataframe()
+
+    def _build_dataframe(self):
+        evaluation_dicts = [self._create_row_dict(backtest, baseline) for backtest, baseline in zip(self.backtests, self.baselines)]
         output = pd.DataFrame(evaluation_dicts)
         if len(output) == 0:
-            print("WARNING: No strategies evaluated.")
+            logging.warning("No strategies evaluated.")
             return
-        #output = output[output.num_trades != 0]  # remove empty trades
+        # sort results by profit
         output = output.sort_values(by=['profit_percent'], ascending=False)
+
+        # drop index
         output.reset_index(inplace=True, drop=True)
-        self.results = output
-        best_eval = output.iloc[0]["evaluation_object"]
-        print("BEST:")
-        print(best_eval.get_report(include_order_signals=True))
-        # bf = open("best.txt", "w")
-        # bf.write(best_eval.get_report(include_order_signals=True))
-        # bf.close()
-        output = output[backtesting_report_columns]
-        self.dataframe = output
-        writer = pd.ExcelWriter(output_file)
-        output.to_excel(writer, 'Results')
-        writer.save()
 
-    def evaluate(self, strategy):
-        source = strategy.source
-        transaction_currency = strategy.transaction_currency
-        counter_currency = strategy.counter_currency
-        print("Evaluating strategy...")
-        horizon = strategy.horizon
+        # save full results
+        self.results_df = output
 
-        baseline = BuyAndHoldTimebasedStrategy(self.start_time, self.end_time, transaction_currency,
-                                               counter_currency, source, horizon)
-        baseline_evaluation = Evaluation(baseline, transaction_currency, counter_currency, self.start_cash,
-                                         self.start_crypto, self.start_time, self.end_time,
-                                         self.evaluate_profit_on_last_order, verbose=False)
-        evaluation = Evaluation(strategy, transaction_currency, counter_currency, self.start_cash,
-                                self.start_crypto, self.start_time, self.end_time,
-                                self.evaluate_profit_on_last_order, verbose=False, time_delay=self.time_delay)
-        return self.get_pandas_row_dict(evaluation, baseline_evaluation)
-
-    def get_pandas_row_dict(self, evaluation, baseline):
+    def _create_row_dict(self, evaluation, baseline):
         evaluation_dict = evaluation.to_dictionary()
         baseline_dict = baseline.to_dictionary()
         evaluation_dict["evaluation_object"] = evaluation
@@ -149,12 +203,23 @@ class ComparativeEvaluation:
         evaluation_dict["buy_and_hold_profit_percent_USDT"] = baseline_dict["profit_percent_USDT"]
         return evaluation_dict
 
+    def get_best_performing_backtest(self):
+        return self.results_df[self.results_df.num_trades > 0].iloc[0]["evaluation_object"]
+
+    def write_summary(self, output_file):
+        writer = pd.ExcelWriter(output_file)
+        # filter so that only report columns remain
+        self.results_df[backtesting_report_columns].to_excel(writer, 'Results')
+        writer.save()
 
     def write_comparative_summary(self, summary_path):
         writer = pd.ExcelWriter(summary_path)
-        summary = self.results
+        summary = self.results_df.copy()
         # remove empty trades
         summary = summary[summary.num_trades != 0]
-        summary.groupby(["strategy", "horizon"]).describe().to_excel(writer, 'Results')
+        summary.groupby(["strategy", "resample_period"]).describe().to_excel(writer, 'Results')
         writer.save()
+
+
+
 

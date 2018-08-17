@@ -1,21 +1,80 @@
 from deap import base
-from deap import algorithms
 from deap import creator
 from deap import tools
 import operator
 import random
 import types
 from backtesting.signals import Signal
-from backtesting.strategies import Strategy, Horizon, Strength
+from backtesting.strategies import SignalStrategy, Horizon, Strength, TickerStrategy, StrategyDecision
 from chart_plotter import *
 from custom_deap_algorithms import combined_mutation, eaSimpleCustom
 from gp_data import Data
 import os
 import dill as pickle
+from backtester_ticks import TickDrivenBacktester
+import time
+from tick_provider import PriceDataframeTickProvider
+import logging
 
 HISTORY_SIZE = 200
 
-class GeneticTradingStrategy(Strategy):
+
+class GeneticTickerStrategy(TickerStrategy):
+    def __init__(self, tree, data, gp_object, history_size=HISTORY_SIZE):
+        self.data = data
+        self.horizon = data.horizon
+        self.transaction_currency = data.transaction_currency
+        self.counter_currency = data.counter_currency
+        self.resample_period = data.resample_period
+        self.strength = Strength.any
+        self.source = data.source
+        self.start_time = data.start_time
+        self.end_time = data.end_time
+        self.tree = tree
+        self.gp_object = gp_object
+        self.history_size = history_size
+        self.i = 0
+        self.func = self.gp_object.toolbox.compile(expr=self.tree)
+
+    def process_ticker(self, price_data, signals):
+        """
+        :param price_data: Pandas row with OHLC data and timestamp.
+        :param signals: ITF signals co-ocurring with price tick.
+        :return: StrategyDecision.BUY or StrategyDecision.SELL or StrategyDecision.IGNORE
+        """
+        self.i += 1
+
+        price = price_data.close_price
+        timestamp = price_data.Index
+
+        if self.i < self.history_size:
+            # outcomes.append("skipped")
+            return StrategyDecision.IGNORE, None
+        outcome = self.func([timestamp])
+
+        decision = StrategyDecision.IGNORE
+        signal = None
+        if outcome == self.gp_object.buy:
+            decision = StrategyDecision.BUY
+            signal = Signal("Genetic", 1, None, 3, 3, price, 0, timestamp, None, self.transaction_currency,
+                            self.counter_currency, self.source, self.resample_period)
+        elif outcome == self.gp_object.sell:
+            decision = StrategyDecision.SELL
+            signal = Signal("Genetic", -1, None, 3, 3, price, 0, timestamp, None, self.transaction_currency,
+                            self.counter_currency, self.source, self.resample_period)
+        elif not outcome == self.gp_object.ignore:
+            logging.warning("Invalid outcome encountered")
+
+        return decision, signal
+
+    def belongs_to_this_strategy(self, signal):
+        return signal.signal_type == "Genetic"
+
+    def get_short_summary(self):
+        return("Strategy: evolved using genetic programming\nRule set: {}".format(str(self.tree)))
+
+
+class GeneticSignalStrategy(SignalStrategy):
     def __init__(self, tree, data, gp_object, history_size=HISTORY_SIZE):
         self.data = data
         self.horizon = data.horizon
@@ -30,6 +89,9 @@ class GeneticTradingStrategy(Strategy):
         self.gp_object = gp_object
         self.history_size = history_size
         self.build_from_gp_tree(tree)
+
+    def get_orders(self, signals, start_cash, start_crypto, source, time_delay=0, slippage=0):
+        return SignalStrategy.get_orders(self, self.signals, start_cash, start_crypto, source, time_delay, slippage)
 
     def belongs_to_this_strategy(self, signal):
         return signal.signal_type == "Genetic"
@@ -53,7 +115,7 @@ class GeneticTradingStrategy(Strategy):
             elif outcome == self.gp_object.sell:
                 trend = -1
             elif not outcome == self.gp_object.ignore:
-                print("WARNING: Invalid outcome encountered")
+                logging.warning("Invalid outcome encountered")
             if trend != None:
                 signal = Signal("Genetic", trend, self.horizon, 3, 3, price, 0, timestamp, None, self.transaction_currency,
                                 self.counter_currency, self.source, self.resample_period)
@@ -64,17 +126,11 @@ class GeneticTradingStrategy(Strategy):
         df['outcomes'] = pd.Series(outcomes, index=df.index)
         self.df_data_and_outcomes = df
 
-        #print(self.signals)
-        #print(str(tree))
-        #print(outcomes)
-
     def get_short_summary(self):
         return("Strategy: evolved using genetic programming\nRule set: {}".format(str(self.tree)))
 
-
     def get_dataframe_with_outcomes(self):
         return self.df_data_and_outcomes
-
 
 
 class GeneticProgram:
@@ -166,21 +222,52 @@ class GeneticProgram:
         pset.addEphemeralConstant("rsi_oversold_threshold", lambda: random.uniform(0, 30), float)
         self.pset = pset
 
-    def evaluate_individual(self, individual, super_verbose=False):
-        strategy = GeneticTradingStrategy(individual, self.data, self)
-        evaluation = strategy.evaluate(1, 0, self.data.start_time, self.data.end_time, False, False)
 
-        if evaluation.get_num_trades() > 1:
+    def evaluate_individual(self, individual, super_verbose=False):
+        start = time.time()
+        evaluation = self.build_evaluation_object(individual)
+
+        if evaluation.num_trades > 1:
             if super_verbose:
-                orders, _ = strategy.get_orders(1, 0)
-                draw_price_chart(self.data.timestamps, self.data.prices, orders)
-                print(str(individual))
-                print(evaluation.get_report())
+                draw_price_chart(self.data.timestamps, self.data.prices, evaluation.orders)
+                logging.info(str(individual))
+                logging.info(evaluation.get_report())
                 draw_tree(individual)
+
+        end = time.time()
         max_len = 3 ** self.tree_depth
-        return evaluation.get_profit_percent() + (max_len - len(individual)) / float(max_len) * 20 \
+        logging.info("Time for one evaluation {}".format(end-start))
+        return evaluation.profit_percent + (max_len - len(individual)) / float(max_len) * 20 \
                + evaluation.num_sells * 5,
 
+    def build_evaluation_object(self, individual, ticker=True):
+        if not ticker:
+            strategy = GeneticSignalStrategy(individual, self.data, self)
+            evaluation = strategy.evaluate(self.data.transaction_currency, self.data.counter_currency,
+                                           self.data.start_cash, self.data.start_crypto,
+                                           self.data.start_time, self.data.end_time, self.data.source, 60, verbose=False)
+
+        else:
+            strategy = GeneticTickerStrategy(individual, self.data, self)
+            tick_provider = PriceDataframeTickProvider(self.data.price_data)
+            # tick_provider = self.data.price_data
+            # tick_provider['timestamp'] = tick_provider.index
+            # create a new tick based backtester
+
+            evaluation = TickDrivenBacktester(tick_provider=tick_provider,
+                                              strategy=strategy,
+                                              transaction_currency=self.data.transaction_currency,
+                                              counter_currency=self.data.counter_currency,
+                                              start_cash=self.data.start_cash,
+                                              start_crypto=self.data.start_crypto,
+                                              start_time=self.data.start_time,
+                                              end_time=self.data.end_time,
+                                              benchmark_backtest=None,
+                                              time_delay=0,
+                                              slippage=0,
+                                              verbose=False
+                                              )
+        return evaluation
 
     def build_toolbox(self):
         creator.create("FitnessMax", base.Fitness, weights=(1.0,))
@@ -240,20 +327,20 @@ class GeneticProgram:
                                         halloffame=hof, verbose=verbose)
 
         if verbose:
-            print("Winners in each generation: ")
+            logging.info("Winners in each generation: ")
             for i in range(len(best)):
-                print(i, best[i])
-            print("Hall of fame: ")
+                logging.info(f"  {i}  {best[i]}")
+            logging.info("Hall of fame: ")
             for i in range(len(hof)):
-                print(hof[i])
+                logging.info(f"  {i}  {hof[i]}")
 
         if output_folder != None:
             hof_name = self.get_hof_filename(mating_prob, mutation_prob, run_id)
             gen_best_name = self.get_gen_best_filename(mating_prob, mutation_prob, run_id)
             out_path_hof = os.path.join(output_folder, hof_name)
             out_path_gen_best = os.path.join(output_folder, gen_best_name)
-            if False: #os.path.exists(out_path_hof) and os.path.exists(out_path_gen_best):
-                print("{} already exists, skipping...".format(hof_name))
+            if os.path.exists(out_path_hof) and os.path.exists(out_path_gen_best):
+                logging.warning(f"{hof_name} already exists, skipping...")
             else:
                 pickle.dump(hof, open(out_path_hof, "wb"))
                 pickle.dump(best, open(out_path_gen_best, "wb"))
@@ -285,5 +372,5 @@ if __name__ == '__main__':
 
     data = training_data
     gp = GeneticProgram(data)
-    gp.evolve(0.8, 0.8, 500, 10)
+    gp.evolve(0.8, 0.8, 50, 5)
 
