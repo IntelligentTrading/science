@@ -311,8 +311,9 @@ class GeneticProgram:
     def build_evaluation_object(self, individual, ticker=True):
         if not ticker:
             strategy = GeneticSignalStrategy(individual, self.data, self)
-            evaluation = strategy.evaluate(transaction_currency, counter_currency, start_cash, start_crypto,
-                                           start_time, end_time, 0, 60, verbose=False)
+            evaluation = strategy.evaluate(self.data.transaction_currency, self.data.counter_currency,
+                                           self.data.start_cash, self.data.start_crypto,
+                                           self.data.start_time, self.data.end_time, self.data.source, 60, verbose=False)
 
         else:
             strategy = GeneticTradingStrategy(individual, self.data, self)
@@ -323,12 +324,12 @@ class GeneticProgram:
 
             evaluation = TickDrivenBacktester(tick_provider=tick_provider,
                                               strategy=strategy,
-                                              transaction_currency=transaction_currency,
-                                              counter_currency=counter_currency,
-                                              start_cash=start_cash,
-                                              start_crypto=start_crypto,
-                                              start_time=start_time,
-                                              end_time=end_time,
+                                              transaction_currency=self.data.transaction_currency,
+                                              counter_currency=self.data.counter_currency,
+                                              start_cash=self.data.start_cash,
+                                              start_crypto=self.data.start_crypto,
+                                              start_time=self.data.start_time,
+                                              end_time=self.data.end_time,
                                               benchmark_backtest=None,
                                               time_delay=0,
                                               slippage=0,

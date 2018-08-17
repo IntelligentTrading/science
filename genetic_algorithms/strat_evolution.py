@@ -71,7 +71,7 @@ def go_doge(data, output_folder):
 
 def evaluate_dogenauts_wow(doge_folder, evaluation_data):
     seen_individuals = []
-    evaluate_buy_and_hold(evaluation_data, history_size)
+    # evaluate_buy_and_hold(evaluation_data, history_size, verbose_eval=False, self.params)
     start_cash = 1
     start_crypto = 0
 
@@ -113,8 +113,9 @@ def evaluate_dogenauts_wow(doge_folder, evaluation_data):
                     draw_price_chart(evaluation_data.timestamps, evaluation_data.prices, evaluation.orders)
                     print(evaluation.get_report())
                     seen_individuals.append(profit)
-            except:
+            except Exception as e:
                 print("Error in evaluating individual")
+                print(str(e))
 
 
 if __name__ == "__main__":
