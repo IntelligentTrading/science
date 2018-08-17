@@ -54,15 +54,15 @@ class GeneticTickerStrategy(TickerStrategy):
 
         decision = StrategyDecision.IGNORE
         signal = None
-        if outcome == self.gp_object.buy:
+        if outcome == self.gp_object.ta_provider.buy:
             decision = StrategyDecision.BUY
             signal = Signal("Genetic", 1, None, 3, 3, price, 0, timestamp, None, self.transaction_currency,
                             self.counter_currency, self.source, self.resample_period)
-        elif outcome == self.gp_object.sell:
+        elif outcome == self.gp_object.ta_provider.sell:
             decision = StrategyDecision.SELL
             signal = Signal("Genetic", -1, None, 3, 3, price, 0, timestamp, None, self.transaction_currency,
                             self.counter_currency, self.source, self.resample_period)
-        elif not outcome == self.gp_object.ignore:
+        elif not outcome == self.gp_object.ta_provider.ignore:
             logging.warning("Invalid outcome encountered")
 
         return decision, signal
@@ -133,18 +133,31 @@ class GeneticSignalStrategy(SignalStrategy):
         return self.df_data_and_outcomes
 
 
-class GeneticProgram:
-    def __init__(self, data, tree_depth=5):
-        self.data = data
-        self.tree_depth = tree_depth
-        self.build_grammar()
-        self.build_toolbox()
+class FunctionProvider:
 
     def if_then_else(self, input, output1, output2):
         try:
             return output1 if input else output2
         except:
             return output1
+
+    def buy(self):
+        pass
+
+    def sell(self):
+        pass
+
+    def ignore(self):
+        pass
+
+    def identity(self, x):
+        return x
+
+
+class TAProvider(FunctionProvider):
+
+    def __init__(self, data):
+        self.data = data
 
     def rsi(self, input):
         timestamp = input[0]
@@ -181,20 +194,14 @@ class GeneticProgram:
         return self.data.price_data.loc[timestamp,"close_price"]
 
 
-    def buy(self):
-        pass
 
-
-    def sell(self):
-        pass
-
-
-    def ignore(self):
-        pass
-
-
-    def identity(self, x):
-        return x
+class GeneticProgram:
+    def __init__(self, data, tree_depth=5):
+        self.ta_provider = TAProvider(data)
+        self.data = data
+        self.tree_depth = tree_depth
+        self.build_grammar()
+        self.build_toolbox()
 
 
     def build_grammar(self):
@@ -203,21 +210,21 @@ class GeneticProgram:
         pset.addPrimitive(operator.gt, [float, float], bool)
         pset.addPrimitive(operator.or_, [bool, bool], bool)
         pset.addPrimitive(operator.and_, [bool, bool], bool)
-        pset.addPrimitive(self.if_then_else, [bool, types.FunctionType, types.FunctionType], types.FunctionType)
-        pset.addPrimitive(self.rsi, [list], float)
-        pset.addPrimitive(self.sma50, [list], float)
-        pset.addPrimitive(self.ema50, [list], float)
-        pset.addPrimitive(self.sma200, [list], float)
-        pset.addPrimitive(self.ema200, [list], float)
-        pset.addPrimitive(self.price, [list], float)
+        pset.addPrimitive(self.ta_provider.if_then_else, [bool, types.FunctionType, types.FunctionType], types.FunctionType)
+        pset.addPrimitive(self.ta_provider.rsi, [list], float)
+        pset.addPrimitive(self.ta_provider.sma50, [list], float)
+        pset.addPrimitive(self.ta_provider.ema50, [list], float)
+        pset.addPrimitive(self.ta_provider.sma200, [list], float)
+        pset.addPrimitive(self.ta_provider.ema200, [list], float)
+        pset.addPrimitive(self.ta_provider.price, [list], float)
         pset.addTerminal(False, bool)
         pset.addTerminal(True, bool)
-        pset.addTerminal(self.buy, types.FunctionType)
-        pset.addTerminal(self.sell, types.FunctionType)
-        pset.addTerminal(self.ignore, types.FunctionType)
-        pset.addPrimitive(self.identity, [bool], bool, name="identity_bool")
-        pset.addPrimitive(self.identity, [list], list, name="identity_list")
-        pset.addPrimitive(self.identity, [float], float, name="identity_float")
+        pset.addTerminal(self.ta_provider.buy, types.FunctionType)
+        pset.addTerminal(self.ta_provider.sell, types.FunctionType)
+        pset.addTerminal(self.ta_provider.ignore, types.FunctionType)
+        pset.addPrimitive(self.ta_provider.identity, [bool], bool, name="identity_bool")
+        pset.addPrimitive(self.ta_provider.identity, [list], list, name="identity_list")
+        pset.addPrimitive(self.ta_provider.identity, [float], float, name="identity_float")
         pset.addEphemeralConstant("rsi_overbought_threshold", lambda: random.uniform(70, 100), float)
         pset.addEphemeralConstant("rsi_oversold_threshold", lambda: random.uniform(0, 30), float)
         self.pset = pset
