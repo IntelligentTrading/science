@@ -43,10 +43,10 @@ class GeneticTradingStrategy(TickerStrategy):
         :return: StrategyDecision.BUY or StrategyDecision.SELL or StrategyDecision.IGNORE
         """
         self.i += 1
-        #price = price_data.close_price
-        #timestamp = price_data['timestamp']
-        price = price_data
-        timestamp = signals
+
+        price = price_data.close_price
+        timestamp = price_data.Index
+
         if self.i < self.history_size:
             # outcomes.append("skipped")
             return StrategyDecision.IGNORE, None
