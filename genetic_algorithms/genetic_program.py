@@ -135,6 +135,13 @@ class GeneticSignalStrategy(SignalStrategy):
         return self.df_data_and_outcomes
 
 
+class FitnessFunction:
+    def compute(self, individual, evaluation, genetic_program):
+        max_len = 3 ** genetic_program.tree_depth
+        return evaluation.profit_percent + (max_len - len(individual)) / float(max_len) * 20 \
+               + evaluation.num_sells * 5,
+
+
 class GeneticProgram:
     def __init__(self, data, tree_depth=5):
         self.function_provider = TAProvider(data)
@@ -142,22 +149,21 @@ class GeneticProgram:
         self.tree_depth = tree_depth
         self.grammar = Grammar(self.function_provider)
         self.pset = self.grammar.pset
+        self.fitness = FitnessFunction()
         self.build_toolbox()
 
-    @time_performance
+    # @time_performance
     def compute_fitness(self, individual, super_verbose=False):
         evaluation = self.build_evaluation_object(individual)
 
-        if evaluation.num_trades > 1:
-            if super_verbose:
-                draw_price_chart(self.data.timestamps, self.data.prices, evaluation.orders)
-                logging.info(str(individual))
-                logging.info(evaluation.get_report())
-                draw_tree(individual)
+        if evaluation.num_trades > 1 and super_verbose:
+            draw_price_chart(self.data.timestamps, self.data.prices, evaluation.orders)
+            logging.info(str(individual))
+            logging.info(evaluation.get_report())
+            draw_tree(individual)
 
-        max_len = 3 ** self.tree_depth
-        return evaluation.profit_percent + (max_len - len(individual)) / float(max_len) * 20 \
-               + evaluation.num_sells * 5,
+        return self.fitness.compute(individual, evaluation, self)
+
 
     def build_evaluation_object(self, individual, ticker=True):
         if not ticker:
@@ -263,7 +269,6 @@ class GeneticProgram:
             else:
                 pickle.dump(hof, open(out_path_hof, "wb"))
                 pickle.dump(best, open(out_path_gen_best, "wb"))
-
 
 
 
