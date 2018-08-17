@@ -2,8 +2,6 @@ from deap import base
 from deap import creator
 from deap import tools
 import operator
-import random
-import types
 from backtesting.signals import Signal
 from backtesting.strategies import SignalStrategy, Horizon, Strength, TickerStrategy, StrategyDecision
 from chart_plotter import *
@@ -12,9 +10,13 @@ from gp_data import Data
 import os
 import dill as pickle
 from backtester_ticks import TickDrivenBacktester
-import time
+
+from grammar import Grammar
+from leaf_functions import TAProvider
 from tick_provider import PriceDataframeTickProvider
 import logging
+
+from utils import time_performance
 
 HISTORY_SIZE = 200
 
@@ -54,15 +56,15 @@ class GeneticTickerStrategy(TickerStrategy):
 
         decision = StrategyDecision.IGNORE
         signal = None
-        if outcome == self.gp_object.ta_provider.buy:
+        if outcome == self.gp_object.function_provider.buy:
             decision = StrategyDecision.BUY
             signal = Signal("Genetic", 1, None, 3, 3, price, 0, timestamp, None, self.transaction_currency,
                             self.counter_currency, self.source, self.resample_period)
-        elif outcome == self.gp_object.ta_provider.sell:
+        elif outcome == self.gp_object.function_provider.sell:
             decision = StrategyDecision.SELL
             signal = Signal("Genetic", -1, None, 3, 3, price, 0, timestamp, None, self.transaction_currency,
                             self.counter_currency, self.source, self.resample_period)
-        elif not outcome == self.gp_object.ta_provider.ignore:
+        elif not outcome == self.gp_object.function_provider.ignore:
             logging.warning("Invalid outcome encountered")
 
         return decision, signal
@@ -133,105 +135,17 @@ class GeneticSignalStrategy(SignalStrategy):
         return self.df_data_and_outcomes
 
 
-class FunctionProvider:
-
-    def if_then_else(self, input, output1, output2):
-        try:
-            return output1 if input else output2
-        except:
-            return output1
-
-    def buy(self):
-        pass
-
-    def sell(self):
-        pass
-
-    def ignore(self):
-        pass
-
-    def identity(self, x):
-        return x
-
-
-class TAProvider(FunctionProvider):
-
-    def __init__(self, data):
-        self.data = data
-
-    def rsi(self, input):
-        timestamp = input[0]
-        timestamp_index = np.where(self.data.price_data.index == timestamp)[0]
-        return self.data.rsi_data[timestamp_index]
-
-
-    def sma50(self, input):
-        timestamp = input[0]
-        timestamp_index = np.where(self.data.price_data.index == timestamp)[0]
-        return self.data.sma50_data[timestamp_index]
-
-
-    def ema50(self, input):
-        timestamp = input[0]
-        timestamp_index = np.where(self.data.price_data.index == timestamp)[0]
-        return self.data.ema50_data[timestamp_index]
-
-
-    def sma200(self, input):
-        timestamp = input[0]
-        timestamp_index = np.where(self.data.price_data.index == timestamp)[0]
-        return self.data.sma200_data[timestamp_index]
-
-
-    def ema200(self, input):
-        timestamp = input[0]
-        timestamp_index = np.where(self.data.price_data.index == timestamp)[0]
-        return self.data.ema200_data[timestamp_index]
-
-
-    def price(self, input):
-        timestamp = input[0]
-        return self.data.price_data.loc[timestamp,"close_price"]
-
-
-
 class GeneticProgram:
     def __init__(self, data, tree_depth=5):
-        self.ta_provider = TAProvider(data)
+        self.function_provider = TAProvider(data)
         self.data = data
         self.tree_depth = tree_depth
-        self.build_grammar()
+        self.grammar = Grammar(self.function_provider)
+        self.pset = self.grammar.pset
         self.build_toolbox()
 
-
-    def build_grammar(self):
-        pset = gp.PrimitiveSetTyped("main", [list], types.FunctionType)
-        pset.addPrimitive(operator.lt, [float, float], bool)
-        pset.addPrimitive(operator.gt, [float, float], bool)
-        pset.addPrimitive(operator.or_, [bool, bool], bool)
-        pset.addPrimitive(operator.and_, [bool, bool], bool)
-        pset.addPrimitive(self.ta_provider.if_then_else, [bool, types.FunctionType, types.FunctionType], types.FunctionType)
-        pset.addPrimitive(self.ta_provider.rsi, [list], float)
-        pset.addPrimitive(self.ta_provider.sma50, [list], float)
-        pset.addPrimitive(self.ta_provider.ema50, [list], float)
-        pset.addPrimitive(self.ta_provider.sma200, [list], float)
-        pset.addPrimitive(self.ta_provider.ema200, [list], float)
-        pset.addPrimitive(self.ta_provider.price, [list], float)
-        pset.addTerminal(False, bool)
-        pset.addTerminal(True, bool)
-        pset.addTerminal(self.ta_provider.buy, types.FunctionType)
-        pset.addTerminal(self.ta_provider.sell, types.FunctionType)
-        pset.addTerminal(self.ta_provider.ignore, types.FunctionType)
-        pset.addPrimitive(self.ta_provider.identity, [bool], bool, name="identity_bool")
-        pset.addPrimitive(self.ta_provider.identity, [list], list, name="identity_list")
-        pset.addPrimitive(self.ta_provider.identity, [float], float, name="identity_float")
-        pset.addEphemeralConstant("rsi_overbought_threshold", lambda: random.uniform(70, 100), float)
-        pset.addEphemeralConstant("rsi_oversold_threshold", lambda: random.uniform(0, 30), float)
-        self.pset = pset
-
-
-    def evaluate_individual(self, individual, super_verbose=False):
-        start = time.time()
+    @time_performance
+    def compute_fitness(self, individual, super_verbose=False):
         evaluation = self.build_evaluation_object(individual)
 
         if evaluation.num_trades > 1:
@@ -241,9 +155,7 @@ class GeneticProgram:
                 logging.info(evaluation.get_report())
                 draw_tree(individual)
 
-        end = time.time()
         max_len = 3 ** self.tree_depth
-        logging.info("Time for one evaluation {}".format(end-start))
         return evaluation.profit_percent + (max_len - len(individual)) / float(max_len) * 20 \
                + evaluation.num_sells * 5,
 
@@ -285,7 +197,7 @@ class GeneticProgram:
         toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.expr)
         toolbox.register("population", tools.initRepeat, list, toolbox.individual)
         toolbox.register("compile", gp.compile, pset=self.pset)
-        toolbox.register("evaluate", self.evaluate_individual)
+        toolbox.register("evaluate", self.compute_fitness)
         toolbox.register("select", tools.selTournament, tournsize=3)
         toolbox.register("mate", gp.cxOnePoint)
         toolbox.register("expr_mut", combined_mutation, min_=0, max_=self.tree_depth)
@@ -378,6 +290,6 @@ if __name__ == '__main__':
                            start_cash, start_crypto, source)
 
     data = training_data
-    gp = GeneticProgram(data)
-    gp.evolve(0.8, 0.8, 50, 5)
+    gprog = GeneticProgram(data)
+    gprog.evolve(0.8, 0.8, 50, 5)
 
