@@ -43,7 +43,8 @@ class Evaluation(ABC):
         self._num_sells = 0
         self.orders = []
         self.order_signals = []
-        self.trading_df = pd.DataFrame(columns=['close_price', 'signal', 'order', 'cash', 'crypto', 'total_value'])
+        self.trading_df_rows = []  # optimization for speed
+        #self.trading_df = pd.DataFrame(columns=['close_price', 'signal', 'order', 'cash', 'crypto', 'total_value'])
 
 
     @property
@@ -259,9 +260,10 @@ class Evaluation(ABC):
     def percent_unprofitable_trades(self):
         self.num_unprofitable_trades / self.num_buy_sell_pairs if self.num_buy_sell_pairs !=0 else np.nan
 
-    def _write_to_trading_df(self):
+    def _write_trading_df_row(self):
         total_value = self._crypto * self._current_price + self._cash
 
+        """
         # fill a row in the trading dataframe
         self.trading_df.loc[self._current_timestamp] = pd.Series({
             'close_price': self._current_price,
@@ -270,8 +272,21 @@ class Evaluation(ABC):
             'total_value': total_value,
             'order': "" if self._current_order is None else self._current_order.order_type.value,
             'signal': "" if self._current_order is None or self._current_signal is None else self._current_signal.signal_type})
+        """
+        self.trading_df_rows.append({
+            'close_price': self._current_price,
+            'cash': self._cash,
+            'crypto': self._crypto,
+            'total_value': total_value,
+            'order': "" if self._current_order is None else self._current_order.order_type.value,
+            'signal': "" if self._current_order is None or self._current_signal is None else self._current_signal.signal_type}
+        )
 
     def _finalize_backtesting(self):
+
+        # self.trading_df = pd.DataFrame(columns=['close_price', 'signal', 'order', 'cash', 'crypto', 'total_value'])
+        self.trading_df = pd.DataFrame(self.trading_df_rows)
+
         # set finishing variable values
         self._end_cash = self._cash
         self._end_crypto = self._crypto

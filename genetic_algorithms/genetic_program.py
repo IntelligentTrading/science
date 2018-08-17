@@ -1,5 +1,4 @@
 from deap import base
-from deap import algorithms
 from deap import creator
 from deap import tools
 import operator
@@ -14,6 +13,7 @@ import os
 import dill as pickle
 from backtester_ticks import TickDrivenBacktester
 import time
+from tick_provider import PriceDataframeTickProvider
 
 HISTORY_SIZE = 200
 
@@ -43,8 +43,10 @@ class GeneticTradingStrategy(TickerStrategy):
         :return: StrategyDecision.BUY or StrategyDecision.SELL or StrategyDecision.IGNORE
         """
         self.i += 1
-        price = price_data.close_price
-        timestamp = price_data['timestamp']
+        #price = price_data.close_price
+        #timestamp = price_data['timestamp']
+        price = price_data
+        timestamp = signals
         if self.i < self.history_size:
             # outcomes.append("skipped")
             return StrategyDecision.IGNORE, None
@@ -70,6 +72,7 @@ class GeneticTradingStrategy(TickerStrategy):
 
     def get_short_summary(self):
         return("Strategy: evolved using genetic programming\nRule set: {}".format(str(self.tree)))
+
 
 class GeneticSignalStrategy(SignalStrategy):
     def __init__(self, tree, data, gp_object, history_size=HISTORY_SIZE):
@@ -288,33 +291,34 @@ class GeneticProgram:
 
     def evaluate_individual(self, individual, super_verbose=False):
         start = time.time()
-        strategy = GeneticSignalStrategy(individual, self.data, self)
-        evaluation = strategy.evaluate(transaction_currency, counter_currency, start_cash, start_crypto,
-                                       start_time, end_time, 0, 60, verbose=False)
-        """
-        strategy = GeneticTradingStrategy(individual, self.data, self)
-        #from tick_provider import PriceDataframeTickProvider
-        # supply ticks from the ITF DB
-        #tick_provider = PriceDataframeTickProvider(self.data.price_data)
-        tick_provider = self.data.price_data
-        tick_provider['timestamp'] = tick_provider.index
-        # create a new tick based backtester
-        
-        evaluation = TickDrivenBacktester(tick_provider=tick_provider,
-                                          strategy=strategy,
-                                          transaction_currency=transaction_currency,
-                                          counter_currency=counter_currency,
-                                          start_cash=start_cash,
-                                          start_crypto=start_crypto,
-                                          start_time=start_time,
-                                          end_time=end_time,
-                                          benchmark_backtest=None,
-                                          time_delay=0,
-                                          slippage=0,
-                                          verbose=False
-                                          )
+        ticker = True
+        if not ticker:
+            strategy = GeneticSignalStrategy(individual, self.data, self)
+            evaluation = strategy.evaluate(transaction_currency, counter_currency, start_cash, start_crypto,
+                                           start_time, end_time, 0, 60, verbose=False)
 
-        """
+        else:
+            strategy = GeneticTradingStrategy(individual, self.data, self)
+            tick_provider = PriceDataframeTickProvider(self.data.price_data)
+            # tick_provider = self.data.price_data
+            # tick_provider['timestamp'] = tick_provider.index
+            # create a new tick based backtester
+
+            evaluation = TickDrivenBacktester(tick_provider=tick_provider,
+                                              strategy=strategy,
+                                              transaction_currency=transaction_currency,
+                                              counter_currency=counter_currency,
+                                              start_cash=start_cash,
+                                              start_crypto=start_crypto,
+                                              start_time=start_time,
+                                              end_time=end_time,
+                                              benchmark_backtest=None,
+                                              time_delay=0,
+                                              slippage=0,
+                                              verbose=False
+                                              )
+
+
         if evaluation.num_trades > 1:
             if super_verbose and False:
                 orders, _ = strategy.get_orders(1, 0)
