@@ -30,8 +30,9 @@ class PriceDataframeTickProvider(TickProvider):
 
     def run(self):
         for i, row in enumerate(self.price_df.itertuples()):
-            price = row.close_price
-            timestamp = row.Index
-            self.notify_listeners(price, timestamp)
+            # price = row.close_price
+            # timestamp = row.Index
+
+            self.notify_listeners(row, None)
         self.broadcast_ended()
 

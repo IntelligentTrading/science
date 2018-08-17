@@ -22,11 +22,15 @@ class TickDrivenBacktester(Evaluation, TickListener):
         # the provider will call the broadcast_ended() method when no ticks remain
 
     def process_event(self, price_data, signals_now):
-        #self._current_timestamp = price_data['timestamp']
-        #self._current_price = price_data['close_price'].item()
+        # self._current_timestamp = price_data['timestamp']
+        # self._current_price = price_data['close_price'].item()
 
-        self._current_timestamp = signals_now
-        self._current_price = price_data
+        # price = row.close_price
+        self._current_timestamp = price_data.Index
+        self._current_price = price_data.close_price
+
+        # self._current_timestamp = signals_now
+        # self._current_price = price_data
 
         decision, order_signal = self._strategy.process_ticker(price_data, signals_now)
         order = None
