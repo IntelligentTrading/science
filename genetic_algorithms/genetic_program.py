@@ -1,21 +1,20 @@
+import operator
+import os
+import logging
+
 from deap import base
 from deap import creator
 from deap import tools
-import operator
 from backtesting.signals import Signal
 from backtesting.strategies import SignalStrategy, Horizon, Strength, TickerStrategy, StrategyDecision
 from chart_plotter import *
 from custom_deap_algorithms import combined_mutation, eaSimpleCustom
 from gp_data import Data
-import os
-import dill as pickle
 from backtester_ticks import TickDrivenBacktester
-
 from grammar import Grammar
 from leaf_functions import TAProvider
 from tick_provider import PriceDataframeTickProvider
-import logging
-
+from artemis.experiments import experiment_function
 from utils import time_performance
 
 HISTORY_SIZE = 200
@@ -143,98 +142,16 @@ class FitnessFunction:
 
 
 class GeneticProgram:
-    def __init__(self, data, tree_depth=5):
-        self.function_provider = TAProvider(data)
+    def __init__(self, data, **kwargs):
         self.data = data
-        self.tree_depth = tree_depth
-        self.grammar = Grammar(self.function_provider)
+        self.function_provider = kwargs.get('function_provider', TAProvider(data))
+        self.tree_depth = kwargs.get('tree_depth', 5)
+        self.grammar = kwargs.get('grammar', Grammar(self.function_provider))
+        self.fitness = kwargs.get('fitness_function', FitnessFunction())
         self.pset = self.grammar.pset
-        self.fitness = FitnessFunction()
         self.build_toolbox()
 
-    # @time_performance
-    def compute_fitness(self, individual, super_verbose=False):
-        evaluation = self.build_evaluation_object(individual)
-
-        if evaluation.num_trades > 1 and super_verbose:
-            draw_price_chart(self.data.timestamps, self.data.prices, evaluation.orders)
-            logging.info(str(individual))
-            logging.info(evaluation.get_report())
-            draw_tree(individual)
-
-        return self.fitness.compute(individual, evaluation, self)
-
-
-    def build_evaluation_object(self, individual, ticker=True):
-        if not ticker:
-            strategy = GeneticSignalStrategy(individual, self.data, self)
-            evaluation = strategy.evaluate(self.data.transaction_currency, self.data.counter_currency,
-                                           self.data.start_cash, self.data.start_crypto,
-                                           self.data.start_time, self.data.end_time, self.data.source, 60, verbose=False)
-
-        else:
-            strategy = GeneticTickerStrategy(individual, self.data, self)
-            tick_provider = PriceDataframeTickProvider(self.data.price_data)
-            # tick_provider = self.data.price_data
-            # tick_provider['timestamp'] = tick_provider.index
-            # create a new tick based backtester
-
-            evaluation = TickDrivenBacktester(tick_provider=tick_provider,
-                                              strategy=strategy,
-                                              transaction_currency=self.data.transaction_currency,
-                                              counter_currency=self.data.counter_currency,
-                                              start_cash=self.data.start_cash,
-                                              start_crypto=self.data.start_crypto,
-                                              start_time=self.data.start_time,
-                                              end_time=self.data.end_time,
-                                              benchmark_backtest=None,
-                                              time_delay=0,
-                                              slippage=0,
-                                              verbose=False
-                                              )
-        return evaluation
-
-    def build_toolbox(self):
-        creator.create("FitnessMax", base.Fitness, weights=(1.0,))
-        creator.create("Individual", gp.PrimitiveTree, fitness=creator.FitnessMax)
-
-        toolbox = base.Toolbox()
-        toolbox.register("expr", gp.genHalfAndHalf, pset=self.pset, min_=1, max_=self.tree_depth)
-        toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.expr)
-        toolbox.register("population", tools.initRepeat, list, toolbox.individual)
-        toolbox.register("compile", gp.compile, pset=self.pset)
-        toolbox.register("evaluate", self.compute_fitness)
-        toolbox.register("select", tools.selTournament, tournsize=3)
-        toolbox.register("mate", gp.cxOnePoint)
-        toolbox.register("expr_mut", combined_mutation, min_=0, max_=self.tree_depth)
-        toolbox.register("mutate", gp.mutUniform, expr=toolbox.expr_mut, pset=self.pset)
-        toolbox.register("mutate", combined_mutation, expr=toolbox.expr_mut, pset=self.pset)
-
-        toolbox.decorate("mate", gp.staticLimit(key=operator.attrgetter("height"), max_value=self.tree_depth))  # 17))
-        toolbox.decorate("mutate", gp.staticLimit(key=operator.attrgetter("height"), max_value=self.tree_depth))  # 17))
-        self.toolbox = toolbox
-
-    @staticmethod
-    def get_gen_best_filename(mating_prob, mutation_prob, run_id):
-        gen_best_name = "doge_{}_x-{}_m-{}-gen_best.p".format(run_id, mating_prob, mutation_prob)
-        return gen_best_name
-
-    @staticmethod
-    def get_hof_filename(mating_prob, mutation_prob, run_id):
-        hof_name = "doge_{}_x-{}_m-{}-hof.p".format(run_id, mating_prob, mutation_prob)
-        return hof_name
-
-    @staticmethod
-    def parse_evolution_filename(filename):
-        filename = filename.split("_")
-        run = int(filename[1])
-        mating_prob = float(filename[2].split("-")[1])
-        mutation_prob = float(filename[3].split("-")[1])
-        return run, mating_prob, mutation_prob
-
-    def load_evolution_file(self, file_path):
-        return pickle.load(open(file_path, "rb"))
-
+    @experiment_function
     def evolve(self, mating_prob, mutation_prob, population_size,
                num_generations, verbose=True, output_folder=None, run_id=None):
         pop = self.toolbox.population(n=population_size)
@@ -271,6 +188,93 @@ class GeneticProgram:
                 pickle.dump(best, open(out_path_gen_best, "wb"))
 
 
+    #@time_performance
+    def compute_fitness(self, individual, super_verbose=False):
+        evaluation = self.build_evaluation_object(individual)
+
+        if evaluation.num_trades > 1 and super_verbose:
+            draw_price_chart(self.data.timestamps, self.data.prices, evaluation.orders)
+            logging.info(str(individual))
+            logging.info(evaluation.get_report())
+            draw_tree(individual)
+
+        return self.fitness.compute(individual, evaluation, self)
+
+
+    def build_evaluation_object(self, individual, ticker=True):
+        if not ticker:
+            strategy = GeneticSignalStrategy(individual, self.data, self)
+            evaluation = strategy.evaluate(self.data.transaction_currency, self.data.counter_currency,
+                                           self.data.start_cash, self.data.start_crypto,
+                                           self.data.start_time, self.data.end_time, self.data.source, 60, verbose=False)
+
+        else:
+            strategy = GeneticTickerStrategy(individual, self.data, self)
+            tick_provider = PriceDataframeTickProvider(self.data.price_data)
+
+            # create a new tick based backtester
+            evaluation = TickDrivenBacktester(
+                tick_provider=tick_provider,
+                strategy=strategy,
+                transaction_currency=self.data.transaction_currency,
+                counter_currency=self.data.counter_currency,
+                start_cash=self.data.start_cash,
+                start_crypto=self.data.start_crypto,
+                start_time=self.data.start_time,
+                end_time=self.data.end_time,
+                benchmark_backtest=None,
+                time_delay=0,
+                slippage=0,
+                verbose=False
+            )
+        return evaluation
+
+    def build_toolbox(self):
+        creator.create("FitnessMax", base.Fitness, weights=(1.0,))
+        creator.create("Individual", gp.PrimitiveTree, fitness=creator.FitnessMax)
+
+        toolbox = base.Toolbox()
+        toolbox.register("expr", gp.genHalfAndHalf, pset=self.pset, min_=1, max_=self.tree_depth)
+        toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.expr)
+        toolbox.register("population", tools.initRepeat, list, toolbox.individual)
+        toolbox.register("compile", gp.compile, pset=self.pset)
+        toolbox.register("evaluate", self.compute_fitness)
+        toolbox.register("select", tools.selTournament, tournsize=3)
+        toolbox.register("mate", gp.cxOnePoint)
+        toolbox.register("expr_mut", combined_mutation, min_=0, max_=self.tree_depth)
+        toolbox.register("mutate", gp.mutUniform, expr=toolbox.expr_mut, pset=self.pset)
+        toolbox.register("mutate", combined_mutation, expr=toolbox.expr_mut, pset=self.pset)
+
+        toolbox.decorate("mate", gp.staticLimit(key=operator.attrgetter("height"), max_value=self.tree_depth))  # 17))
+        toolbox.decorate("mutate", gp.staticLimit(key=operator.attrgetter("height"), max_value=self.tree_depth))  # 17))
+        self.toolbox = toolbox
+
+
+    @staticmethod
+    def get_gen_best_filename(mating_prob, mutation_prob, run_id):
+        gen_best_name = "doge_{}_x-{}_m-{}-gen_best.p".format(run_id, mating_prob, mutation_prob)
+        return gen_best_name
+
+    @staticmethod
+    def get_hof_filename(mating_prob, mutation_prob, run_id):
+        hof_name = "doge_{}_x-{}_m-{}-hof.p".format(run_id, mating_prob, mutation_prob)
+        return hof_name
+
+    @staticmethod
+    def parse_evolution_filename(filename):
+        filename = filename.split("_")
+        run = int(filename[1])
+        mating_prob = float(filename[2].split("-")[1])
+        mutation_prob = float(filename[3].split("-")[1])
+        return run, mating_prob, mutation_prob
+
+    def load_evolution_file(self, file_path):
+        return pickle.load(open(file_path, "rb"))
+
+@experiment_function
+def run_experiment(gprog, mating_prob, mutation_prob, population_size, num_generations):
+    gprog.evolve(gprog, mating_prob, mutation_prob, population_size, num_generations)
+
 
 if __name__ == '__main__':
     transaction_currency = "OMG"
@@ -296,5 +300,12 @@ if __name__ == '__main__':
 
     data = training_data
     gprog = GeneticProgram(data)
-    gprog.evolve(0.8, 0.8, 50, 5)
+    run_experiment.add_variant(gprog=gprog, mating_prob=0.7, mutation_prob=0.5, population_size=50, num_generations=2)
+    run_experiment.add_variant(gprog=gprog, mating_prob=0.8, mutation_prob=0.8, population_size=50, num_generations=2)
+    run_experiment.browse(close_after=True)
+
+    # Note: to make Artemis work
+    # change line 3 in persistent_ordered_dict.py to import dill as pickle (TODO: fork)
+
+    # gprog.evolve(0.8, 0.8, 50, 5)
 
