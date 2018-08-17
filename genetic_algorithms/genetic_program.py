@@ -289,9 +289,26 @@ class GeneticProgram:
         pset.addEphemeralConstant("rsi_oversold_threshold", lambda: random.uniform(0, 30), float)
         self.pset = pset
 
+
     def evaluate_individual(self, individual, super_verbose=False):
         start = time.time()
-        ticker = True
+        evaluation = self.build_evaluation_object(individual)
+
+        if evaluation.num_trades > 1:
+            if super_verbose:
+                orders, _ = strategy.get_orders(1, 0)
+                draw_price_chart(self.data.timestamps, self.data.prices, orders)
+                print(str(individual))
+                print(evaluation.get_report())
+                draw_tree(individual)
+
+        end = time.time()
+        max_len = 3 ** self.tree_depth
+        print("Time for one evaluation {}".format(end-start))
+        return evaluation.profit_percent + (max_len - len(individual)) / float(max_len) * 20 \
+               + evaluation.num_sells * 5,
+
+    def build_evaluation_object(self, individual, ticker=True):
         if not ticker:
             strategy = GeneticSignalStrategy(individual, self.data, self)
             evaluation = strategy.evaluate(transaction_currency, counter_currency, start_cash, start_crypto,
@@ -317,22 +334,7 @@ class GeneticProgram:
                                               slippage=0,
                                               verbose=False
                                               )
-
-
-        if evaluation.num_trades > 1:
-            if super_verbose and False:
-                orders, _ = strategy.get_orders(1, 0)
-                draw_price_chart(self.data.timestamps, self.data.prices, orders)
-                print(str(individual))
-                print(evaluation.get_report())
-                draw_tree(individual)
-
-        end = time.time()
-        max_len = 3 ** self.tree_depth
-        print("Time for one evaluation {}".format(end-start))
-        return evaluation.profit_percent + (max_len - len(individual)) / float(max_len) * 20 \
-               + evaluation.num_sells * 5,
-
+        return evaluation
 
     def build_toolbox(self):
         creator.create("FitnessMax", base.Fitness, weights=(1.0,))

@@ -97,19 +97,20 @@ def evaluate_dogenauts_wow(doge_folder, evaluation_data):
             try:
                 #start_time = validation_start_time
                 #end_time = validation_end_time
-                strat = GeneticTradingStrategy(individual, evaluation_data, genp)
-                df = strat.get_dataframe_with_outcomes()
+                # strat = GeneticTradingStrategy(individual, evaluation_data, genp)
+                # df = strat.get_dataframe_with_outcomes()
 
-                writer = pd.ExcelWriter("tmp.xlsx")
-                df.to_excel(writer, "Results")
-                writer.save()
+                # writer = pd.ExcelWriter("tmp.xlsx")
+                # df.to_excel(writer, "Results")
+                # writer.save()
 
-                orders, _ = strat.get_orders(start_cash, start_crypto)
-                evaluation = strat.evaluate(start_cash, start_crypto, evaluation_data.start_time, evaluation_data.end_time, False, True)
-                profit = evaluation.profit_percent()
+                # orders, _ = strat.get_orders(start_cash, start_crypto)
+                # evaluation = strat.evaluate(start_cash, start_crypto, evaluation_data.start_time, evaluation_data.end_time, False, True)
+                evaluation = genp.build_evaluation_object(individual)
+                profit = evaluation.profit_percent
                 print("Profit: {0:0.02f}%".format(profit))
                 if profit > 0 and not profit in seen_individuals:
-                    draw_price_chart(evaluation_data.timestamps, evaluation_data.prices, orders)
+                    draw_price_chart(evaluation_data.timestamps, evaluation_data.prices, evaluation.orders)
                     print(evaluation.get_report())
                     seen_individuals.append(profit)
             except:
