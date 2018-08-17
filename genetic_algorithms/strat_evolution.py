@@ -7,26 +7,14 @@ import os
 import time
 from gp_data import Data
 import sys
+import logging
 
 SUPER_VERBOSE = False
 start_cash = 1
 start_crypto = 0
 
-from genetic_program import GeneticProgram, GeneticTradingStrategy
+from genetic_program import GeneticProgram, GeneticTickerStrategy
 
-"""
-params = {}
-params['start_time'] = self.start_time
-params['end_time'] = self.end_time
-params['transaction_currency'] = transaction_currency
-params['counter_currency'] = counter_currency
-params['resample_period'] = resample_period
-params['start_cash'] = self.start_cash
-params['start_crypto'] = self.start_crypto
-params['evaluate_profit_on_last_order'] = self.evaluate_profit_on_last_order
-params['verbose'] = False
-params['source'] = source
-"""
 
 def evaluate_buy_and_hold(data, history_size, verbose_eval, **params):
     start_bah = int(data.price_data.iloc[history_size].name)
@@ -66,16 +54,14 @@ def go_doge(data, output_folder):
                 doge.evolve(mating_prob, mutation_prob, population_size, num_generations, verbose=True,
                             output_folder=output_folder, run_id=run)
         end = time.time()
-        print("Time for one run: {} minutes".format((end-start)/60))
+        logging.info("Time for one run: {} minutes".format((end-start)/60))
 
 
 def evaluate_dogenauts_wow(doge_folder, evaluation_data):
     seen_individuals = []
     # evaluate_buy_and_hold(evaluation_data, history_size, verbose_eval=False, self.params)
-    start_cash = 1
-    start_crypto = 0
 
-    genp = GeneticProgram(evaluation_data)
+    genetic_program = GeneticProgram(evaluation_data)
 
     for hof_filename in os.listdir(doge_folder):
         if not hof_filename.endswith("best.p"):
@@ -83,39 +69,27 @@ def evaluate_dogenauts_wow(doge_folder, evaluation_data):
         try:
             run, mating_prob, mutation_prob = GeneticProgram.parse_evolution_filename(hof_filename)
         except:
-            print("Error parsing filename {}".format(hof_filename))
+            logging.error("Error parsing filename {}".format(hof_filename))
             continue
-        gen_best_filename = GeneticProgram.get_gen_best_filename(mating_prob, mutation_prob, run)
-        print("Evaluating {}...".format(hof_filename))
+
+        # gen_best_filename = GeneticProgram.get_gen_best_filename(mating_prob, mutation_prob, run)
+        logging.info("Evaluating {}...".format(hof_filename))
 
         # load the individuals in the hall of fame
-
-        hof = genp.load_evolution_file(os.path.join(doge_folder, hof_filename))
+        hof = genetic_program.load_evolution_file(os.path.join(doge_folder, hof_filename))
 
         for individual in hof:
-            print(str(individual))
+            logging.info(f"  individual:  {str(individual)}")
             try:
-                #start_time = validation_start_time
-                #end_time = validation_end_time
-                # strat = GeneticTradingStrategy(individual, evaluation_data, genp)
-                # df = strat.get_dataframe_with_outcomes()
-
-                # writer = pd.ExcelWriter("tmp.xlsx")
-                # df.to_excel(writer, "Results")
-                # writer.save()
-
-                # orders, _ = strat.get_orders(start_cash, start_crypto)
-                # evaluation = strat.evaluate(start_cash, start_crypto, evaluation_data.start_time, evaluation_data.end_time, False, True)
-                evaluation = genp.build_evaluation_object(individual)
+                evaluation = genetic_program.build_evaluation_object(individual)
                 profit = evaluation.profit_percent
-                print("Profit: {0:0.02f}%".format(profit))
+                logging.info(f"    --> profit: {profit:0.02f}%")
                 if profit > 0 and not profit in seen_individuals:
                     draw_price_chart(evaluation_data.timestamps, evaluation_data.prices, evaluation.orders)
-                    print(evaluation.get_report())
+                    logging.debug(evaluation.get_report())
                     seen_individuals.append(profit)
             except Exception as e:
-                print("Error in evaluating individual")
-                print(str(e))
+                logging.error(f"Error evaluating individual: {str(e)}")
 
 
 if __name__ == "__main__":
@@ -147,8 +121,8 @@ if __name__ == "__main__":
                            horizon,
                            start_cash, start_crypto, source)
 
-    #go_doge(training_data, output_folder)
-    evaluate_dogenauts_wow(output_folder, validation_data)
+    go_doge(training_data, output_folder)
+    #evaluate_dogenauts_wow(output_folder, validation_data)
 
 
 
