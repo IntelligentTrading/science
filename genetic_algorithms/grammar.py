@@ -1,0 +1,36 @@
+import operator
+import random
+import types
+
+from deap import gp
+
+
+class Grammar:
+    def __init__(self, function_provider):
+        self.function_provider = function_provider
+        self.build_grammar()
+
+    def build_grammar(self):
+        pset = gp.PrimitiveSetTyped("main", [list], types.FunctionType)
+        pset.addPrimitive(operator.lt, [float, float], bool)
+        pset.addPrimitive(operator.gt, [float, float], bool)
+        pset.addPrimitive(operator.or_, [bool, bool], bool)
+        pset.addPrimitive(operator.and_, [bool, bool], bool)
+        pset.addPrimitive(self.function_provider.if_then_else, [bool, types.FunctionType, types.FunctionType], types.FunctionType)
+        pset.addPrimitive(self.function_provider.rsi, [list], float)
+        pset.addPrimitive(self.function_provider.sma50, [list], float)
+        pset.addPrimitive(self.function_provider.ema50, [list], float)
+        pset.addPrimitive(self.function_provider.sma200, [list], float)
+        pset.addPrimitive(self.function_provider.ema200, [list], float)
+        pset.addPrimitive(self.function_provider.price, [list], float)
+        pset.addTerminal(False, bool)
+        pset.addTerminal(True, bool)
+        pset.addTerminal(self.function_provider.buy, types.FunctionType)
+        pset.addTerminal(self.function_provider.sell, types.FunctionType)
+        pset.addTerminal(self.function_provider.ignore, types.FunctionType)
+        pset.addPrimitive(self.function_provider.identity, [bool], bool, name="identity_bool")
+        pset.addPrimitive(self.function_provider.identity, [list], list, name="identity_list")
+        pset.addPrimitive(self.function_provider.identity, [float], float, name="identity_float")
+        pset.addEphemeralConstant("rsi_overbought_threshold", lambda: random.uniform(70, 100), float)
+        pset.addEphemeralConstant("rsi_oversold_threshold", lambda: random.uniform(0, 30), float)
+        self.pset = pset
