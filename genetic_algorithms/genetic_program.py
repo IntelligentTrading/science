@@ -11,11 +11,13 @@ from chart_plotter import *
 from custom_deap_algorithms import combined_mutation, eaSimpleCustom
 from gp_data import Data
 from backtester_ticks import TickDrivenBacktester
-from grammar import Grammar
+from grammar import GrammarV1
 from leaf_functions import TAProvider
 from tick_provider import PriceDataframeTickProvider
 from artemis.experiments import experiment_function
 from utils import time_performance
+from abc import ABC, abstractmethod
+import dill as pickle
 
 HISTORY_SIZE = 200
 
@@ -40,7 +42,7 @@ class GeneticTickerStrategy(TickerStrategy):
     def process_ticker(self, price_data, signals):
         """
         :param price_data: Pandas row with OHLC data and timestamp.
-        :param signals: ITF signals co-ocurring with price tick.
+        :param signals: ITF signals co-occurring with price tick.
         :return: StrategyDecision.BUY or StrategyDecision.SELL or StrategyDecision.IGNORE
         """
         self.i += 1
@@ -134,11 +136,26 @@ class GeneticSignalStrategy(SignalStrategy):
         return self.df_data_and_outcomes
 
 
-class FitnessFunction:
+class FitnessFunction(ABC):
+    @abstractmethod
+    def compute(self, individual, evaluation, genetic_program):
+        pass
+
+    @property
+    @abstractmethod
+    def name(self):
+        pass
+
+
+class FitnessFunctionV1(FitnessFunction):
+
     def compute(self, individual, evaluation, genetic_program):
         max_len = 3 ** genetic_program.tree_depth
         return evaluation.profit_percent + (max_len - len(individual)) / float(max_len) * 20 \
                + evaluation.num_sells * 5,
+    @property
+    def name(self):
+        return "ff_v1"
 
 
 class GeneticProgram:
@@ -146,12 +163,32 @@ class GeneticProgram:
         self.data = data
         self.function_provider = kwargs.get('function_provider', TAProvider(data))
         self.tree_depth = kwargs.get('tree_depth', 5)
-        self.grammar = kwargs.get('grammar', Grammar(self.function_provider))
-        self.fitness = kwargs.get('fitness_function', FitnessFunction())
+        self.grammar = kwargs.get('grammar', GrammarV1(self.function_provider))
+        self.fitness = kwargs.get('fitness_function', FitnessFunctionV1())
         self.pset = self.grammar.pset
-        self.build_toolbox()
+        self._build_toolbox()
 
-    @experiment_function
+    def _build_toolbox(self):
+        creator.create("FitnessMax", base.Fitness, weights=(1.0,))
+        creator.create("Individual", gp.PrimitiveTree, fitness=creator.FitnessMax)
+
+        toolbox = base.Toolbox()
+        toolbox.register("expr", gp.genHalfAndHalf, pset=self.pset, min_=1, max_=self.tree_depth)
+        toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.expr)
+        toolbox.register("population", tools.initRepeat, list, toolbox.individual)
+        toolbox.register("compile", gp.compile, pset=self.pset)
+        toolbox.register("evaluate", self.compute_fitness)
+        toolbox.register("select", tools.selTournament, tournsize=3)
+        toolbox.register("mate", gp.cxOnePoint)
+        toolbox.register("expr_mut", combined_mutation, min_=0, max_=self.tree_depth)
+        toolbox.register("mutate", gp.mutUniform, expr=toolbox.expr_mut, pset=self.pset)
+        toolbox.register("mutate", combined_mutation, expr=toolbox.expr_mut, pset=self.pset)
+
+        toolbox.decorate("mate", gp.staticLimit(key=operator.attrgetter("height"), max_value=self.tree_depth))  # 17))
+        toolbox.decorate("mutate", gp.staticLimit(key=operator.attrgetter("height"), max_value=self.tree_depth))  # 17))
+        self.toolbox = toolbox
+
+    #@experiment_function
     def evolve(self, mating_prob, mutation_prob, population_size,
                num_generations, verbose=True, output_folder=None, run_id=None):
         pop = self.toolbox.population(n=population_size)
@@ -186,6 +223,8 @@ class GeneticProgram:
             else:
                 pickle.dump(hof, open(out_path_hof, "wb"))
                 pickle.dump(best, open(out_path_gen_best, "wb"))
+
+        return hof, best
 
 
     #@time_performance
@@ -229,26 +268,6 @@ class GeneticProgram:
             )
         return evaluation
 
-    def build_toolbox(self):
-        creator.create("FitnessMax", base.Fitness, weights=(1.0,))
-        creator.create("Individual", gp.PrimitiveTree, fitness=creator.FitnessMax)
-
-        toolbox = base.Toolbox()
-        toolbox.register("expr", gp.genHalfAndHalf, pset=self.pset, min_=1, max_=self.tree_depth)
-        toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.expr)
-        toolbox.register("population", tools.initRepeat, list, toolbox.individual)
-        toolbox.register("compile", gp.compile, pset=self.pset)
-        toolbox.register("evaluate", self.compute_fitness)
-        toolbox.register("select", tools.selTournament, tournsize=3)
-        toolbox.register("mate", gp.cxOnePoint)
-        toolbox.register("expr_mut", combined_mutation, min_=0, max_=self.tree_depth)
-        toolbox.register("mutate", gp.mutUniform, expr=toolbox.expr_mut, pset=self.pset)
-        toolbox.register("mutate", combined_mutation, expr=toolbox.expr_mut, pset=self.pset)
-
-        toolbox.decorate("mate", gp.staticLimit(key=operator.attrgetter("height"), max_value=self.tree_depth))  # 17))
-        toolbox.decorate("mutate", gp.staticLimit(key=operator.attrgetter("height"), max_value=self.tree_depth))  # 17))
-        self.toolbox = toolbox
-
 
     @staticmethod
     def get_gen_best_filename(mating_prob, mutation_prob, run_id):
@@ -273,7 +292,8 @@ class GeneticProgram:
 
 @experiment_function
 def run_experiment(gprog, mating_prob, mutation_prob, population_size, num_generations):
-    gprog.evolve(gprog, mating_prob, mutation_prob, population_size, num_generations)
+    hof, best = gprog.evolve(mating_prob, mutation_prob, population_size, num_generations)
+    return hof, best
 
 
 if __name__ == '__main__':
@@ -300,9 +320,14 @@ if __name__ == '__main__':
 
     data = training_data
     gprog = GeneticProgram(data)
-    run_experiment.add_variant(gprog=gprog, mating_prob=0.7, mutation_prob=0.5, population_size=50, num_generations=2)
-    run_experiment.add_variant(gprog=gprog, mating_prob=0.8, mutation_prob=0.8, population_size=50, num_generations=2)
-    run_experiment.browse(close_after=True)
+    #record = run_experiment.run(gprog=gprog, mating_prob=0.7, mutation_prob=0.5, population_size=50, num_generations=2)
+
+    run_experiment.add_variant("proba", gprog=gprog, mating_prob=0.7, mutation_prob=0.5, population_size=50, num_generations=2)
+    ex = run_experiment.get_variant("proba")
+    record = ex.run()
+    print(record)
+    #run_experiment.add_variant(gprog=gprog, mating_prob=0.8, mutation_prob=0.8, population_size=50, num_generations=2)
+    run_experiment.browse(close_after=False)
 
     # Note: to make Artemis work
     # change line 3 in persistent_ordered_dict.py to import dill as pickle (TODO: fork)
