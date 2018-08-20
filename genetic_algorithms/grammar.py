@@ -3,14 +3,35 @@ import random
 import types
 
 from deap import gp
+from abc import ABC, abstractmethod
 
 
-class Grammar:
+class Grammar(ABC):
+
     def __init__(self, function_provider):
         self.function_provider = function_provider
-        self.build_grammar()
 
-    def build_grammar(self):
+    @property
+    @abstractmethod
+    def pset(self):
+        pass
+
+    @property
+    @abstractmethod
+    def name(self):
+        pass
+
+
+class GrammarV1(Grammar):
+
+    def __init__(self, function_provider):
+        super(GrammarV1, self).__init__(function_provider)
+        self._build_grammar()
+
+    def name(self):
+        return("g_v1")
+
+    def _build_grammar(self):
         pset = gp.PrimitiveSetTyped("main", [list], types.FunctionType)
         pset.addPrimitive(operator.lt, [float, float], bool)
         pset.addPrimitive(operator.gt, [float, float], bool)
@@ -33,4 +54,8 @@ class Grammar:
         pset.addPrimitive(self.function_provider.identity, [float], float, name="identity_float")
         pset.addEphemeralConstant("rsi_overbought_threshold", lambda: random.uniform(70, 100), float)
         pset.addEphemeralConstant("rsi_oversold_threshold", lambda: random.uniform(0, 30), float)
-        self.pset = pset
+        self._pset = pset
+
+    @property
+    def pset(self):
+        return self._pset
