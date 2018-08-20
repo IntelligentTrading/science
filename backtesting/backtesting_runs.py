@@ -1,6 +1,7 @@
 from comparative_evaluation import *
 from strategies import RandomTradingStrategy
 import numpy as np
+import datetime
 from backtesting_helpers import find_num_cumulative_outperforms
 
 def best_performing_signals_of_the_week():
@@ -14,12 +15,12 @@ def best_performing_signals_of_the_week():
     # for debugging
     # currency_pairs = [("BTC","USDT"),]
 
-    end_time = 1531699200
-    start_time = end_time - 60*60*24*7
+    start_time = datetime.datetime(2018, 8, 13, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
+    end_time = datetime.datetime(2018, 8, 17, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
 
     strategies = StrategyEvaluationSetBuilder.build_from_signal_set(
-        buy_signals=['rsi_buy_3', 'rsi_buy_2', 'rsi_cumulat_buy_2', 'rsi_cumulat_buy_3', 'ichi_kumo_up'], #, 'ann_simple_bull'],
-        sell_signals=['rsi_sell_3', 'rsi_sell_2', 'rsi_cumulat_sell_2', 'rsi_cumulat_sell_3', 'ichi_kumo_down'], #, 'ann_simple_bear'],
+        buy_signals=['rsi_buy_3', 'rsi_buy_2', 'rsi_cumulat_buy_2', 'rsi_cumulat_buy_3', 'ichi_kumo_up', 'ann_simple_bull'],
+        sell_signals=['rsi_sell_3', 'rsi_sell_2', 'rsi_cumulat_sell_2', 'rsi_cumulat_sell_3', 'ichi_kumo_down', 'ann_simple_bear'],
         num_buy=2,
         num_sell=2,
         signal_combination_mode=SignalCombinationMode.SAME_TYPE)
@@ -33,7 +34,7 @@ def best_performing_signals_of_the_week():
         start_crypto=0,
         start_time=start_time,
         end_time=end_time,
-        output_file="best_performing_current.xlsx"
+        output_file=f"best_performing_{datetime.datetime.utcfromtimestamp(end_time).strftime('%Y-%m-%d')}.xlsx"
     )
 
     # for debugging

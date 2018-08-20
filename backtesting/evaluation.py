@@ -284,8 +284,9 @@ class Evaluation(ABC):
 
     def _finalize_backtesting(self):
 
-        # self.trading_df = pd.DataFrame(columns=['close_price', 'signal', 'order', 'cash', 'crypto', 'total_value'])
-        self.trading_df = pd.DataFrame(self.trading_df_rows)
+        # self.trading_df = pd.DataFrame(columns=['close_price', 'signal', 'order', 'cash', 'crypto', 'total_value'],
+        # columns=['close_price', 'signal', 'order', 'cash', 'crypto', 'total_value'])
+        self.trading_df = pd.DataFrame(self.trading_df_rows, columns=['close_price', 'signal', 'order', 'cash', 'crypto', 'total_value'])
 
         # set finishing variable values
         self._end_cash = self._cash
