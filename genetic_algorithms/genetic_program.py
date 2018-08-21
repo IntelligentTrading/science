@@ -16,6 +16,9 @@ from abc import ABC, abstractmethod
 import dill as pickle
 import random
 
+creator.create("FitnessMax", base.Fitness, weights=(1.0,))
+creator.create("Individual", gp.PrimitiveTree, fitness=creator.FitnessMax)
+
 HISTORY_SIZE = 200
 
 class Grammar(ABC):
@@ -177,24 +180,17 @@ class GeneticProgram:
 
         self.data = data
         self.function_provider = kwargs.get('function_provider', TAProvider(data))
-        self.tree_depth = kwargs.get('tree_depth', 5)
         self.grammar = kwargs.get('grammar', GrammarV1(self.function_provider))
+        assert self.function_provider == self.grammar.function_provider
         self.fitness = kwargs.get('fitness_function', FitnessFunctionV1())
-        self.pset = self.grammar.pset
+        self.tree_depth = kwargs.get('tree_depth', 5)
         self._build_toolbox()
 
+    @property
+    def pset(self):
+        return self.grammar.pset
+
     def _build_toolbox(self):
-        #import importlib, deap
-        #importlib.reload(deap)
-        #from deap import creator, tools, base
-        #self.tools = tools
-        #glob = globals()
-
-        #creator = importlib.reload(deap.creator)
-
-
-        creator.create("FitnessMax", base.Fitness, weights=(1.0,))
-        creator.create("Individual", gp.PrimitiveTree, fitness=creator.FitnessMax)
 
         toolbox = base.Toolbox()
         toolbox.register("expr", gp.genHalfAndHalf, pset=self.pset, min_=1, max_=self.tree_depth)
@@ -212,7 +208,7 @@ class GeneticProgram:
         toolbox.decorate("mutate", gp.staticLimit(key=operator.attrgetter("height"), max_value=self.tree_depth))  # 17))
         self.toolbox = toolbox
 
-    #@experiment_function
+
     def evolve(self, mating_prob, mutation_prob, population_size,
                num_generations, verbose=True, output_folder=None, run_id=None):
         pop = self.toolbox.population(n=population_size)
@@ -358,10 +354,7 @@ if __name__ == '__main__':
 
     # gprog.evolve(0.8, 0.8, 50, 5)
 
-    variants = run_experiment.get_all_variants()
-    print(variants[0])
-
-    records = variants[0].get_records()
-    print(records)
+    # records = variants[0].get_records()
+    # print(records)
 
 
