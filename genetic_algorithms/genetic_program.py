@@ -1,10 +1,8 @@
 import operator
 import os
 import logging
-
-from deap import base
-from deap import creator
-from deap import tools
+import types
+from deap import creator, tools, base
 from backtesting.signals import Signal
 from backtesting.strategies import SignalStrategy, Horizon, Strength, TickerStrategy, StrategyDecision
 from chart_plotter import *
@@ -16,8 +14,23 @@ from leaf_functions import TAProvider
 from tick_provider import PriceDataframeTickProvider
 from abc import ABC, abstractmethod
 import dill as pickle
+import random
 
 HISTORY_SIZE = 200
+
+class Grammar(ABC):
+
+    def __init__(self, function_provider):
+        self.function_provider = function_provider
+
+    @property
+    def pset(self):
+        return self._pset
+
+    @property
+    @abstractmethod
+    def name(self):
+        pass
 
 
 class GeneticTickerStrategy(TickerStrategy):
@@ -158,6 +171,10 @@ class FitnessFunctionV1(FitnessFunction):
 
 class GeneticProgram:
     def __init__(self, data, **kwargs):
+        #import importlib, deap
+        #gp = importlib.reload(deap.gp)
+        #tools = importlib.reload(deap.tools)
+
         self.data = data
         self.function_provider = kwargs.get('function_provider', TAProvider(data))
         self.tree_depth = kwargs.get('tree_depth', 5)
@@ -167,6 +184,15 @@ class GeneticProgram:
         self._build_toolbox()
 
     def _build_toolbox(self):
+        #import importlib, deap
+        #importlib.reload(deap)
+        #from deap import creator, tools, base
+        #self.tools = tools
+        #glob = globals()
+
+        #creator = importlib.reload(deap.creator)
+
+
         creator.create("FitnessMax", base.Fitness, weights=(1.0,))
         creator.create("Individual", gp.PrimitiveTree, fitness=creator.FitnessMax)
 
