@@ -1,13 +1,17 @@
-from data_sources import *
-from orders import *
-from utils import *
 import logging
-from config import transaction_cost_percents
-logging.getLogger().setLevel(logging.INFO)
-from abc import ABC, abstractmethod
 import empyrical
 import numpy as np
+import pandas as pd
+
+from data_sources import get_price, convert_value_to_USDT, NoPriceDataException, Horizon
+from orders import OrderType
+from utils import get_distinct_signal_types, datetime_from_timestamp
+from config import transaction_cost_percents
+from abc import ABC, abstractmethod
 from charting import BacktestingChart
+
+logging.getLogger().setLevel(logging.INFO)
+pd.options.mode.chained_assignment = None
 
 
 class Evaluation(ABC):
@@ -534,5 +538,5 @@ if __name__ == '__main__':
     start_cash = 10000000
     start_crypto = 0
     strategy = RSITickerStrategy(start_time, end_time, Horizon.short, None)
-    evaluation = Evaluation(strategy, 'BTC', 'USDT', start_cas, start_crypto, start_time, end_time)
+    evaluation = Evaluation(strategy, 'BTC', 'USDT', start_cash, start_crypto, start_time, end_time)
     #evaluation.simulate_events()

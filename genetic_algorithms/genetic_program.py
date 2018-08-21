@@ -14,8 +14,6 @@ from backtester_ticks import TickDrivenBacktester
 from grammar import GrammarV1
 from leaf_functions import TAProvider
 from tick_provider import PriceDataframeTickProvider
-from artemis.experiments import experiment_function
-from utils import time_performance
 from abc import ABC, abstractmethod
 import dill as pickle
 
@@ -290,11 +288,6 @@ class GeneticProgram:
     def load_evolution_file(self, file_path):
         return pickle.load(open(file_path, "rb"))
 
-@experiment_function
-def run_experiment(gprog, mating_prob, mutation_prob, population_size, num_generations):
-    hof, best = gprog.evolve(mating_prob, mutation_prob, population_size, num_generations)
-    return hof, best
-
 
 if __name__ == '__main__':
     transaction_currency = "OMG"
@@ -322,15 +315,27 @@ if __name__ == '__main__':
     gprog = GeneticProgram(data)
     #record = run_experiment.run(gprog=gprog, mating_prob=0.7, mutation_prob=0.5, population_size=50, num_generations=2)
 
-    run_experiment.add_variant("proba", gprog=gprog, mating_prob=0.7, mutation_prob=0.5, population_size=50, num_generations=2)
-    ex = run_experiment.get_variant("proba")
-    record = ex.run()
-    print(record)
+    #run_experiment.add_variant("test", gprog=gprog, mating_prob=0.7, mutation_prob=0.5, population_size=50, num_generations=2)
+    #ex = run_experiment.get_variant("test")
+    #record = ex.run(keep_record=True, display_results=True)
+
+    #print(record)
     #run_experiment.add_variant(gprog=gprog, mating_prob=0.8, mutation_prob=0.8, population_size=50, num_generations=2)
-    run_experiment.browse(close_after=False)
+    #run_experiment.browse(close_after=False)
+
+    #records = run_experiment.get_records()
+    #print(records)
+    #result = records[0].get_result()
 
     # Note: to make Artemis work
     # change line 3 in persistent_ordered_dict.py to import dill as pickle (TODO: fork)
 
     # gprog.evolve(0.8, 0.8, 50, 5)
+
+    variants = run_experiment.get_all_variants()
+    print(variants[0])
+
+    records = variants[0].get_records()
+    print(records)
+
 
