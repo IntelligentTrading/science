@@ -6,11 +6,17 @@ from leaf_functions import TAProvider
 import logging
 from grammar import GrammarV2, GrammarV1
 
+#@experiment_function
+#def run_evolution(genetic_program, mating_prob, mutation_prob, population_size, num_generations):
+#    hof, best = genetic_program.evolve(mating_prob, mutation_prob, population_size, num_generations)
+#    return hof, best
+
 @experiment_function
-def run_evolution(genetic_program, mating_prob, mutation_prob, population_size, num_generations):
+def run_evolution(data, function_provider, grammar, fitness_function, mating_prob, mutation_prob, population_size, num_generations):
+    genetic_program = GeneticProgram(data=data, function_provider=function_provider,
+                            grammar=grammar, fitness_function=fitness_function)
     hof, best = genetic_program.evolve(mating_prob, mutation_prob, population_size, num_generations)
     return hof, best
-
 
 def construct_data():
     transaction_currency = "OMG"
@@ -36,53 +42,57 @@ def construct_data():
     return training_data
 
 
-
 def register_variants():
     data = construct_data()
-
     function_provider = TAProvider(data=data)
 
-    gprog = GeneticProgram(data, function_provider=function_provider, grammar=GrammarV1(function_provider=function_provider))
-
-    # add variants of experiments
-    variant1 = run_evolution.add_variant(variant_name='evolution_v1', genetic_program=gprog, mating_prob=0.7, mutation_prob=0.5,
-                                         population_size=50, num_generations=2)
-    variant1.run()
-
-
-    variant2 = run_evolution.add_variant(variant_name='evolution_v2', genetic_program=gprog, mating_prob=0.5, mutation_prob=0.7,
+    variant1 = run_evolution.add_variant(variant_name='evolution_v1',
+                                         data=data,
+                                         function_provider=function_provider,
+                                         grammar=GrammarV1(function_provider=function_provider, ephemeral_prefix="ev1"),
+                                         fitness_function=FitnessFunctionV1(),
+                                         mating_prob=0.7,
+                                         mutation_prob=0.5,
                                          population_size=50,
-                                         num_generations=3)
-    variant2.run()
+                                         num_generations=2)
 
-    #return variant1, variant1, variant1
-
-
-    gprog2 = GeneticProgram(data, function_provider=function_provider, grammar=GrammarV2(function_provider=function_provider))
-    #gprog2 = GeneticProgram(data, fitness_function=FitnessFunctionV1())
-
-    variant3 = \
-        run_evolution.add_variant(variant_name='evolution_v3', genetic_program=gprog2, mating_prob=0.5, mutation_prob=0.7,
+    variant2 = run_evolution.add_variant(variant_name='evolution_v2',
+                                         data=data,
+                                         function_provider=function_provider,
+                                         grammar=GrammarV1(function_provider=function_provider, ephemeral_prefix="ev2"),
+                                         fitness_function=FitnessFunctionV1(),
+                                         mating_prob=0.7,
+                                         mutation_prob=0.5,
                                          population_size=50,
-                                         num_generations=3)
-    variant3.run()
+                                         num_generations=2)
 
-    return variant1, variant2, variant3
+    variant3 = run_evolution.add_variant(variant_name='evolution_v3',
+                                         data=data,
+                                         function_provider=function_provider,
+                                         grammar=GrammarV1(function_provider=function_provider, ephemeral_prefix="ev3"),
+                                         fitness_function=FitnessFunctionV1(),
+                                         mating_prob=0.7,
+                                         mutation_prob=0.5,
+                                         population_size=50,
+                                         num_generations=2)
 
-def run_experiments():
-    variant1.run(keep_record=True, display_results=True)
-    variant2.run(keep_record=True, display_results=True)
-    #variant3.run(keep_record=True, display_results=True)
+    return run_evolution.get_variants()
 
+
+
+def run_experiments(variants):
+    for variant in variants:
+        variant.run(keep_record=True, display_results=True)
 
 
 def explore_records():
-    variant_names = ['evolution_v1', 'evolution_v2', 'evolution_v3']
-    # variants = run_evolution.get_all_variants(include_roots=True, include_self=True)
-    for variant_name in variant_names:
-        variant = run_evolution.get_variant(variant_name)
+#    variant_names = ['evolution_v1', 'evolution_v2', 'evolution_v3']
+    variants = run_evolution.get_variants()
+    for variant in variants:
+    #for variant_name in variant_names:
+     #   variant = run_evolution.get_variant(variant_name)
         records = variant.get_records()
-        logging.info(f"===== Exploring experiment variant {variant_name} =====")
+        logging.info(f"===== Exploring experiment variant {variant} =====")
         logging.info("== Variant records:")
         logging.info(records)
         logging.info("== Last result:")
@@ -103,8 +113,8 @@ def explore_records():
 ####################################
 
 if __name__ == "__main__":
-    variant1, variant2, variant3 = register_variants()
-    #run_experiments()
-    #explore_records()
+    variants = register_variants()
+    run_experiments(variants)
+    explore_records()
 
 

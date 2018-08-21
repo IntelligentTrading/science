@@ -101,6 +101,6 @@ class GrammarV2(Grammar):
         pset.addPrimitive(self.function_provider.identity, [bool], bool, name="identity_bool")
         pset.addPrimitive(self.function_provider.identity, [list], list, name="identity_list")
         pset.addPrimitive(self.function_provider.identity, [float], float, name="identity_float")
-        pset.addEphemeralConstant(f"rsi_overbought_threshold_{random.randint(0,1000)}", lambda: random.uniform(70, 100), float)
-        pset.addEphemeralConstant(f"rsi_oversold_threshold_{random.randint(0,1000)}", lambda: random.uniform(0, 30), float)
+        #pset.addEphemeralConstant(f"rsi_overbought_threshold_{random.randint(0,1000)}", lambda: random.uniform(70, 100), float)
+        #pset.addEphemeralConstant(f"rsi_oversold_threshold_{random.randint(0,1000)}", lambda: random.uniform(0, 30), float)
         self._pset = pset
