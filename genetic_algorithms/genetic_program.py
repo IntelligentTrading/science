@@ -179,8 +179,8 @@ class GeneticProgram:
         #tools = importlib.reload(deap.tools)
 
         self.data = data
-        self.function_provider = kwargs.get('function_provider', TAProvider(data))
-        self.grammar = kwargs.get('grammar', GrammarV1(self.function_provider))
+        self.function_provider = kwargs.get('function_provider')
+        self.grammar = kwargs.get('grammar')
         assert self.function_provider == self.grammar.function_provider
         self.fitness = kwargs.get('fitness_function', FitnessFunctionV1())
         self.tree_depth = kwargs.get('tree_depth', 5)

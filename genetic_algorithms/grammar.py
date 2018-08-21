@@ -37,6 +37,7 @@ class GrammarV1(Grammar):
     def _build_grammar(self):
         #import importlib, deap
         #gp = importlib.reload(deap.gp)
+        print(f"Hi! Build grammar V1 was called. The name of ephc is rsi_overbought_threshold_{self._ephemeral_prefix}")
 
         pset = gp.PrimitiveSetTyped(f"main-{self.name}", [list], types.FunctionType)
         pset.addPrimitive(operator.lt, [float, float], bool)
@@ -58,8 +59,8 @@ class GrammarV1(Grammar):
         pset.addPrimitive(self.function_provider.identity, [bool], bool, name="identity_bool")
         pset.addPrimitive(self.function_provider.identity, [list], list, name="identity_list")
         pset.addPrimitive(self.function_provider.identity, [float], float, name="identity_float")
-        pset.addEphemeralConstant(f"rsi_overbought_threshold_{random.randint(0,1000)}", lambda: random.uniform(70, 100), float)
-        pset.addEphemeralConstant(f"rsi_oversold_threshold_{random.randint(0,1000)}", lambda: random.uniform(0, 30), float)
+        pset.addEphemeralConstant(f"rsi_overbought_threshold_{self._ephemeral_prefix}", lambda: random.uniform(70, 100), float)
+        pset.addEphemeralConstant(f"rsi_oversold_threshold_{self._ephemeral_prefix}", lambda: random.uniform(0, 30), float)
         self._pset = pset
 
 
