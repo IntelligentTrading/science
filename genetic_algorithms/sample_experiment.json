@@ -1,0 +1,30 @@
+{
+    "data": {
+        "transaction_currency": "OMG",
+        "counter_currency": "BTC",
+        "start_time": "2018/02/18 00:00:00 UTC",
+        "end_time": "2018/04/18 00:00:00 UTC",
+        "resample_period": 60,
+        "source": 0
+    },
+
+    "fitness_function": "ff_v1",
+    "grammar_version": "gv1",
+    "num_generations": 3,
+
+    "mating_probabilities": [
+        0.4,
+        0.5,
+        0.6
+    ],
+
+    "mutation_probabilities": [
+        0.7,
+        0.8,
+        0.9
+    ],
+
+    "population_sizes": [
+        50
+    ]
+}

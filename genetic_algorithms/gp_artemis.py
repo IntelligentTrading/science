@@ -1,10 +1,12 @@
 from artemis.experiments import experiment_function
 from gp_data import Data
 from data_sources import Horizon
-from genetic_program import GeneticProgram, FitnessFunctionV1, FitnessFunctionV2
+from genetic_program import GeneticProgram, FitnessFunction, FitnessFunctionV1, FitnessFunctionV2
 from leaf_functions import TAProvider
 import logging
 from grammar import GrammarV2, GrammarV1, Grammar
+import json
+import itertools
 
 
 @experiment_function
@@ -42,6 +44,74 @@ def construct_data():
     return training_data
 
 
+class ExperimentManager:
+
+    START_CASH = 1000
+    START_CRYPTO = 0
+
+    def __init__(self, experiment_file_path):
+        with open(experiment_file_path) as f:
+            experiment_info = json.load(f)
+        self.experiment_json = experiment_info
+        # initialize data
+        self.training_data = Data(horizon=Horizon.any,start_cash=self.START_CASH, start_crypto=self.START_CRYPTO, **experiment_info["data"])
+        # create function provider based on data
+        self.function_provider = TAProvider(self.training_data)
+        # initialize fitness function
+        self.fitness_function = FitnessFunction.construct(experiment_info["fitness_function"])
+        self._fill_experiment_db()
+
+    def _fill_experiment_db(self):
+        self.experiment_db = ExperimentDB()
+
+        variants = itertools.product(self.experiment_json["mating_probabilities"],
+                                     self.experiment_json["mutation_probabilities"],
+                                     self.experiment_json["population_sizes"])
+        for mating_prob, mutation_prob, population_size in variants:
+            self.experiment_db.add(
+                data=self.training_data,
+                function_provider=self.function_provider,
+                grammar_version=self.experiment_json["grammar_version"],
+                fitness_function=self.fitness_function,
+                mating_prob=mating_prob,
+                mutation_prob=mutation_prob,
+                population_size=population_size,
+                num_generations=self.experiment_json["num_generations"])
+
+    def register_variants(self, rebuild_grammar=False):
+        if rebuild_grammar:
+            for experiment_name, experiment in self.experiment_db.get_all():
+                Grammar.construct(experiment['grammar_version'], experiment['function_provider'],
+                                  experiment['experiment_id'])
+
+        for experiment_name, experiment in self.experiment_db.get_all():
+            run_evolution.add_variant(variant_name=experiment_name, **experiment)
+        self.variants = run_evolution.get_variants()
+
+    def run_experiments(self):
+        for i, variant in enumerate(self.variants):
+            print(f"Running variant {i}")
+            variant.run(keep_record=True, display_results=True)
+
+    def explore_records(self):
+        #   variants = run_evolution.get_variants()
+        for variant in self.variants:
+            # for variant_name in variant_names:
+            #   variant = run_evolution.get_variant(variant_name)
+            records = variant.get_records()
+            logging.info(f"\n\n===== Exploring experiment variant {variant} =====")
+            logging.info("== Variant records:")
+            logging.info(records)
+            logging.info("== Last result:")
+            logging.info(records[-1].get_result())
+            hof, best = records[-1].get_result()
+            for individual in hof:
+                print(individual)
+
+            logging.info("== Experiment output log:")
+            logging.info(records[0].get_log())
+
+
 class ExperimentDB:
 
     def __init__(self):
@@ -68,7 +138,7 @@ class ExperimentDB:
         for k, v in self._experiments.items():
             yield k, v
 
-    def build_experiment_id(**kwargs):
+    def build_experiment_id(self, **kwargs):
         return f"data_{kwargs['data']};" \
                f"provider_{kwargs['function_provider']};" \
                f"grammar_{kwargs['grammar_version']};" \
@@ -80,6 +150,7 @@ class ExperimentDB:
 
     # def build_experiment_id(**kwargs):
     #    return ';'.join(['{}_{}'.format(k, v) for k, v in kwargs.iteritems()])
+
 
 
 def register_experiments():
@@ -98,7 +169,7 @@ def register_experiments():
         num_generations=2)
 
 
-    experiments.add(  # variant_name='evolution_v2',
+    experiments.add(
         data=data,
         function_provider=function_provider,
         grammar_version="gv2",
@@ -108,7 +179,7 @@ def register_experiments():
         population_size=50,
         num_generations=2)
 
-    experiments.add(  # variant_name='evolution_v3',
+    experiments.add(
         data=data,
         function_provider=function_provider,
         grammar_version="gv1",
@@ -169,6 +240,12 @@ def explore_records(variants):
 ####################################
 
 if __name__ == "__main__":
+    e = ExperimentManager("sample_experiment.json")
+    e.register_variants(rebuild_grammar=False)
+    e.run_experiments()
+    e.explore_records()
+    exit(0)
+
     variants = register_variants(rebuild_grammar=True)
     #run_experiments(variants)
     explore_records(variants)
