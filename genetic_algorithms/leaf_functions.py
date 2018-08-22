@@ -22,10 +22,14 @@ class FunctionProvider:
         return x
 
 
+
 class TAProvider(FunctionProvider):
 
     def __init__(self, data):
         self.data = data
+
+    def __str__(self):
+        return("TAprovider")
 
     def rsi(self, input):
         timestamp = input[0]

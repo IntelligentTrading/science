@@ -36,3 +36,6 @@ class Data:
         df['EMA50'] = pd.Series(self.ema50_data, index=df.index)
         df['EMA200'] = pd.Series(self.ema200_data, index=df.index)
         return df
+
+    def __str__(self):
+        return f"{self.transaction_currency}-{self.counter_currency}-{self.start_time}-{self.end_time}"
