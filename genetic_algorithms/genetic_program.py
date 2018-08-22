@@ -193,10 +193,6 @@ class FitnessFunctionV2(FitnessFunction):
 
 class GeneticProgram:
     def __init__(self, data, **kwargs):
-        #import importlib, deap
-        #gp = importlib.reload(deap.gp)
-        #tools = importlib.reload(deap.tools)
-
         self.data = data
         self.function_provider = kwargs.get('function_provider')
         self.grammar = kwargs.get('grammar')
@@ -251,6 +247,12 @@ class GeneticProgram:
             logging.info("Hall of fame: ")
             for i in range(len(hof)):
                 logging.info(f"  {i}  {hof[i]}")
+
+            best_individual = hof[0]
+            evaluation = self.build_evaluation_object(best_individual)
+            draw_price_chart(self.data.timestamps, self.data.prices, evaluation.orders)
+            #logging.info(evaluation.get_report())
+            #draw_tree(best_individual)
 
         if output_folder != None:
             hof_name = self.get_hof_filename(mating_prob, mutation_prob, run_id)

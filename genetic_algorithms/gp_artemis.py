@@ -1,4 +1,4 @@
-from artemis.experiments import experiment_function
+from artemis.experiments import experiment_function, experiment_root
 from gp_data import Data
 from data_sources import Horizon
 from genetic_program import GeneticProgram, FitnessFunction, FitnessFunctionV1, FitnessFunctionV2
@@ -9,7 +9,7 @@ import json
 import itertools
 
 
-@experiment_function
+@experiment_root
 def run_evolution(experiment_id, data, function_provider, grammar_version, fitness_function, mating_prob,
                   mutation_prob, population_size, num_generations):
     grammar = Grammar.construct(grammar_version, function_provider, ephemeral_suffix=experiment_id)
@@ -54,7 +54,10 @@ class ExperimentManager:
             experiment_info = json.load(f)
         self.experiment_json = experiment_info
         # initialize data
-        self.training_data = Data(start_cash=self.START_CASH, start_crypto=self.START_CRYPTO, **self.experiment_json["data"])
+        self.training_data = Data(start_cash=self.START_CASH, start_crypto=self.START_CRYPTO,
+                                  **self.experiment_json["training_data"])
+        self.validation_data = Data(start_cash=self.START_CASH, start_crypto=self.START_CRYPTO,
+                                  **self.experiment_json["validation_data"])
         # create function provider based on data
         self.function_provider = TAProvider(self.training_data)
         # initialize fitness function
@@ -91,7 +94,7 @@ class ExperimentManager:
     def run_experiments(self):
         for i, variant in enumerate(self.variants):
             print(f"Running variant {i}")
-            variant.run(keep_record=True, display_results=True)
+            variant.run(keep_record=True, display_results=True, saved_figure_ext='.fig.pdf')
 
     def explore_records(self):
         #   variants = run_evolution.get_variants()
@@ -152,81 +155,6 @@ class ExperimentDB:
     #    return ';'.join(['{}_{}'.format(k, v) for k, v in kwargs.iteritems()])
 
 
-
-def register_experiments():
-    experiments = ExperimentDB()
-    data = construct_data()
-    function_provider = TAProvider(data=data)
-
-    experiments.add(
-        data=data,
-        function_provider=function_provider,
-        grammar_version="gv1",
-        fitness_function=FitnessFunctionV1(),
-        mating_prob=0.7,
-        mutation_prob=0.5,
-        population_size=50,
-        num_generations=2)
-
-
-    experiments.add(
-        data=data,
-        function_provider=function_provider,
-        grammar_version="gv2",
-        fitness_function=FitnessFunctionV1(),
-        mating_prob=0.7,
-        mutation_prob=0.5,
-        population_size=50,
-        num_generations=2)
-
-    experiments.add(
-        data=data,
-        function_provider=function_provider,
-        grammar_version="gv1",
-        fitness_function=FitnessFunctionV2(),
-        mating_prob=0.7,
-        mutation_prob=0.5,
-        population_size=50,
-        num_generations=2)
-
-
-    return experiments
-
-def register_variants(rebuild_grammar=False):
-    experiments = register_experiments()
-    if rebuild_grammar:
-        for experiment_name, experiment in experiments.get_all():
-            Grammar.construct(experiment['grammar_version'], experiment['function_provider'], experiment['experiment_id'])
-
-    for experiment_name, experiment in experiments.get_all():
-        run_evolution.add_variant(variant_name=experiment_name, **experiment)
-    return run_evolution.get_variants()
-
-
-def run_experiments(variants):
-    for i, variant in enumerate(variants):
-        print(f"Running variant {i}")
-        variant.run(keep_record=True, display_results=True)
-
-
-def explore_records(variants):
-#   variants = run_evolution.get_variants()
-    for variant in variants:
-    #for variant_name in variant_names:
-    #   variant = run_evolution.get_variant(variant_name)
-        records = variant.get_records()
-        logging.info(f"\n\n===== Exploring experiment variant {variant} =====")
-        logging.info("== Variant records:")
-        logging.info(records)
-        logging.info("== Last result:")
-        logging.info(records[-1].get_result())
-        hof, best = records[-1].get_result()
-        for individual in hof:
-            print(individual)
-
-        logging.info("== Experiment output log:")
-        logging.info(records[0].get_log())
-
 ####################################
 #
 # Artemis workflow:
@@ -244,10 +172,6 @@ if __name__ == "__main__":
     e.register_variants(rebuild_grammar=False)
     e.run_experiments()
     e.explore_records()
-    exit(0)
 
-    variants = register_variants(rebuild_grammar=True)
-    #run_experiments(variants)
-    explore_records(variants)
 
 

@@ -1,9 +1,18 @@
 {
-    "data": {
+    "training_data": {
         "transaction_currency": "OMG",
         "counter_currency": "BTC",
         "start_time": "2018/02/18 00:00:00 UTC",
         "end_time": "2018/04/18 00:00:00 UTC",
+        "resample_period": 60,
+        "source": 0
+    },
+
+    "validation_data": {
+        "transaction_currency": "OMG",
+        "counter_currency": "BTC",
+        "start_time": "2018/01/01 00:00:00 UTC",
+        "end_time": "2018/02/01 00:00:00 UTC",
         "resample_period": 60,
         "source": 0
     },
