@@ -4,7 +4,7 @@ from data_sources import Horizon
 from genetic_program import GeneticProgram, FitnessFunctionV1
 from leaf_functions import TAProvider
 import logging
-from grammar import GrammarV2, GrammarV1
+from grammar import GrammarV2, GrammarV1, Grammar
 
 #@experiment_function
 #def run_evolution(genetic_program, mating_prob, mutation_prob, population_size, num_generations):
@@ -12,10 +12,11 @@ from grammar import GrammarV2, GrammarV1
 #    return hof, best
 
 @experiment_function
-def run_evolution(data, function_provider, grammar, fitness_function, mating_prob, mutation_prob, population_size, num_generations):
-    g = GrammarV1(function_provider, ephemeral_prefix=grammar)
+def run_evolution(evolution_name, data, function_provider, grammar_version, fitness_function, mating_prob,
+                  mutation_prob, population_size, num_generations):
+    grammar = Grammar.construct(grammar_version, function_provider, ephemeral_suffix=evolution_name)
     genetic_program = GeneticProgram(data=data, function_provider=function_provider,
-                            grammar=g, fitness_function=fitness_function)
+                            grammar=grammar, fitness_function=fitness_function)
     hof, best = genetic_program.evolve(mating_prob, mutation_prob, population_size, num_generations)
     return hof, best
 
@@ -43,19 +44,21 @@ def construct_data():
     return training_data
 
 
-def register_variants():
+def register_variants(rebuild_grammar=False):
     data = construct_data()
     function_provider = TAProvider(data=data)
-    GrammarV1(function_provider=function_provider, ephemeral_prefix="ev1")
-    GrammarV1(function_provider=function_provider, ephemeral_prefix="ev2")
-    GrammarV1(function_provider=function_provider, ephemeral_prefix="ev3")
+    if rebuild_grammar:
+        GrammarV1(function_provider=function_provider, ephemeral_suffix="ev1")
+        GrammarV1(function_provider=function_provider, ephemeral_suffix="ev2")
+        GrammarV1(function_provider=function_provider, ephemeral_suffix="ev3")
 
 
     variant1 = run_evolution.add_variant(variant_name='evolution_v1',
+                                         evolution_name='ev1',
                                          data=data,
                                          function_provider=function_provider,
                                          #grammar=GrammarV1(function_provider=function_provider, ephemeral_prefix="ev1"),
-                                         grammar="ev1",
+                                         grammar_version="gv1",
                                          fitness_function=FitnessFunctionV1(),
                                          mating_prob=0.7,
                                          mutation_prob=0.5,
@@ -63,10 +66,11 @@ def register_variants():
                                          num_generations=2)
 
     variant2 = run_evolution.add_variant(variant_name='evolution_v2',
+                                         evolution_name='ev2',
                                          data=data,
                                          function_provider=function_provider,
                                          #grammar=GrammarV1(function_provider=function_provider, ephemeral_prefix="ev2"),
-                                         grammar="ev2",
+                                         grammar_version="gv2",
                                          fitness_function=FitnessFunctionV1(),
                                          mating_prob=0.7,
                                          mutation_prob=0.5,
@@ -75,9 +79,10 @@ def register_variants():
 
     variant3 = run_evolution.add_variant(variant_name='evolution_v3',
                                          data=data,
+                                         evolution_name='ev3',
                                          function_provider=function_provider,
                                          #grammar=GrammarV1(function_provider=function_provider, ephemeral_prefix="ev3"),
-                                         grammar="ev3",
+                                         grammar_version="gv1",
                                          fitness_function=FitnessFunctionV1(),
                                          mating_prob=0.7,
                                          mutation_prob=0.5,
@@ -122,8 +127,8 @@ def explore_records(variants):
 ####################################
 
 if __name__ == "__main__":
-    variants = register_variants()
-    #run_experiments(variants)
+    variants = register_variants(rebuild_grammar=False)
+    run_experiments(variants)
     explore_records(variants)
 
 
