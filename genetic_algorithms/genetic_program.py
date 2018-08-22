@@ -39,7 +39,6 @@ class Grammar(ABC):
 class GeneticTickerStrategy(TickerStrategy):
     def __init__(self, tree, data, gp_object, history_size=HISTORY_SIZE):
         self.data = data
-        self.horizon = data.horizon
         self.transaction_currency = data.transaction_currency
         self.counter_currency = data.counter_currency
         self.resample_period = data.resample_period
@@ -94,7 +93,6 @@ class GeneticTickerStrategy(TickerStrategy):
 class GeneticSignalStrategy(SignalStrategy):
     def __init__(self, tree, data, gp_object, history_size=HISTORY_SIZE):
         self.data = data
-        self.horizon = data.horizon
         self.transaction_currency = data.transaction_currency
         self.counter_currency = data.counter_currency
         self.resample_period = data.resample_period
@@ -346,13 +344,11 @@ if __name__ == '__main__':
     source = 0
     history_size = 100
 
-    training_data = Data(start_time, end_time, transaction_currency, counter_currency, resample_period, horizon,
-                         start_cash,
+    training_data = Data(start_time, end_time, transaction_currency, counter_currency, resample_period, start_cash,
                          start_crypto, source)
 
     validation_data = Data(validation_start_time, validation_end_time, transaction_currency, counter_currency,
-                           resample_period, horizon,
-                           start_cash, start_crypto, source)
+                           resample_period, start_cash, start_crypto, source)
 
     data = training_data
     gprog = GeneticProgram(data)

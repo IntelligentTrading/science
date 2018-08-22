@@ -108,8 +108,7 @@ if __name__ == "__main__":
 
     output_folder = sys.argv[1]
 
-    training_data = Data(start_time, end_time, transaction_currency, counter_currency, resample_period, horizon,
-                         start_cash,
+    training_data = Data(start_time, end_time, transaction_currency, counter_currency, resample_period, start_cash,
                          start_crypto, source)
 
 
@@ -118,7 +117,6 @@ if __name__ == "__main__":
     #validation_start_time = start_time
     #validation_end_time = end_time
     validation_data = Data(validation_start_time, validation_end_time, "DOGE", counter_currency, resample_period,
-                           horizon,
                            start_cash, start_crypto, source)
 
     go_doge(training_data, output_folder)

@@ -14,14 +14,13 @@ class Data:
             return time_object.timestamp()
         return time_input
 
-    def __init__(self, start_time, end_time, transaction_currency, counter_currency, resample_period, horizon,
-                 start_cash, start_crypto, source):
+    def __init__(self, start_time, end_time, transaction_currency, counter_currency, resample_period, start_cash,
+                 start_crypto, source):
         self.start_time = self._parse_time(start_time)
         self.end_time = self._parse_time(end_time)
         self.transaction_currency = transaction_currency
         self.counter_currency = counter_currency
         self.resample_period = resample_period
-        self.horizon = horizon
         self.start_cash = start_cash
         self.start_crypto = start_crypto
         self.source = source
