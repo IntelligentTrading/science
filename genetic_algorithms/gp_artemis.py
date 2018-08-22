@@ -33,8 +33,8 @@ def construct_data():
     start_crypto = 0
     source = 0
 
-    training_data = Data(start_time, end_time, transaction_currency, counter_currency, resample_period, horizon,
-                         start_cash, start_crypto, source)
+    training_data = Data(start_time, end_time, transaction_currency, counter_currency, resample_period, start_cash,
+                         start_crypto, source)
 
     """
     validation_data = Data(validation_start_time, validation_end_time, transaction_currency, counter_currency,
@@ -54,7 +54,7 @@ class ExperimentManager:
             experiment_info = json.load(f)
         self.experiment_json = experiment_info
         # initialize data
-        self.training_data = Data(horizon=Horizon.any,start_cash=self.START_CASH, start_crypto=self.START_CRYPTO, **experiment_info["data"])
+        self.training_data = Data(start_cash=self.START_CASH, start_crypto=self.START_CRYPTO, **self.experiment_json["data"])
         # create function provider based on data
         self.function_provider = TAProvider(self.training_data)
         # initialize fitness function
