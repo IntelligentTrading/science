@@ -155,13 +155,24 @@ class FitnessFunction(ABC):
     def compute(self, individual, evaluation, genetic_program):
         pass
 
+    @staticmethod
+    def construct(fitness_function_name):
+        for subclass in FitnessFunction.__subclasses__():
+            if subclass._name == fitness_function_name:
+                return subclass()
+        raise Exception(f"Unknown function {fitness_function_name}!")
+
     @property
     @abstractmethod
     def name(self):
         pass
 
+    def __str__(self):
+        return self._name
+
 
 class FitnessFunctionV1(FitnessFunction):
+    _name = "ff_v1"
 
     def compute(self, individual, evaluation, genetic_program):
         max_len = 3 ** genetic_program.tree_depth
@@ -169,8 +180,18 @@ class FitnessFunctionV1(FitnessFunction):
                + evaluation.num_sells * 5,
     @property
     def name(self):
-        return "ff_v1"
+        return self._name
 
+class FitnessFunctionV2(FitnessFunction):
+    _name = "ff_v2"
+
+    def compute(self, individual, evaluation, genetic_program):
+        max_len = 1 ** genetic_program.tree_depth
+        return evaluation.profit_percent + (max_len - len(individual)) / float(max_len) * 10 \
+               + evaluation.num_sells * 4,
+    @property
+    def name(self):
+        return self._name
 
 class GeneticProgram:
     def __init__(self, data, **kwargs):

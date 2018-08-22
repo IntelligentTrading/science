@@ -1,15 +1,11 @@
 from artemis.experiments import experiment_function
 from gp_data import Data
 from data_sources import Horizon
-from genetic_program import GeneticProgram, FitnessFunctionV1
+from genetic_program import GeneticProgram, FitnessFunctionV1, FitnessFunctionV2
 from leaf_functions import TAProvider
 import logging
 from grammar import GrammarV2, GrammarV1, Grammar
 
-#@experiment_function
-#def run_evolution(genetic_program, mating_prob, mutation_prob, population_size, num_generations):
-#    hof, best = genetic_program.evolve(mating_prob, mutation_prob, population_size, num_generations)
-#    return hof, best
 
 @experiment_function
 def run_evolution(evolution_name, data, function_provider, grammar_version, fitness_function, mating_prob,
@@ -53,11 +49,10 @@ def register_variants(rebuild_grammar=False):
         GrammarV1(function_provider=function_provider, ephemeral_suffix="ev3")
 
 
-    variant1 = run_evolution.add_variant(variant_name='evolution_v1',
+    variant1 = run_evolution.add_variant(#variant_name='evolution_v1',
                                          evolution_name='ev1',
                                          data=data,
                                          function_provider=function_provider,
-                                         #grammar=GrammarV1(function_provider=function_provider, ephemeral_prefix="ev1"),
                                          grammar_version="gv1",
                                          fitness_function=FitnessFunctionV1(),
                                          mating_prob=0.7,
@@ -65,11 +60,10 @@ def register_variants(rebuild_grammar=False):
                                          population_size=50,
                                          num_generations=2)
 
-    variant2 = run_evolution.add_variant(variant_name='evolution_v2',
+    variant2 = run_evolution.add_variant(#variant_name='evolution_v2',
                                          evolution_name='ev2',
                                          data=data,
                                          function_provider=function_provider,
-                                         #grammar=GrammarV1(function_provider=function_provider, ephemeral_prefix="ev2"),
                                          grammar_version="gv2",
                                          fitness_function=FitnessFunctionV1(),
                                          mating_prob=0.7,
@@ -77,13 +71,12 @@ def register_variants(rebuild_grammar=False):
                                          population_size=50,
                                          num_generations=2)
 
-    variant3 = run_evolution.add_variant(variant_name='evolution_v3',
+    variant3 = run_evolution.add_variant(#variant_name='evolution_v3',
                                          data=data,
                                          evolution_name='ev3',
                                          function_provider=function_provider,
-                                         #grammar=GrammarV1(function_provider=function_provider, ephemeral_prefix="ev3"),
                                          grammar_version="gv1",
-                                         fitness_function=FitnessFunctionV1(),
+                                         fitness_function=FitnessFunctionV2(),
                                          mating_prob=0.7,
                                          mutation_prob=0.5,
                                          population_size=50,
@@ -100,17 +93,20 @@ def run_experiments(variants):
 
 
 def explore_records(variants):
-#    variant_names = ['evolution_v1', 'evolution_v2', 'evolution_v3']
-    #variants = run_evolution.get_variants()
+#   variants = run_evolution.get_variants()
     for variant in variants:
     #for variant_name in variant_names:
-     #   variant = run_evolution.get_variant(variant_name)
+    #   variant = run_evolution.get_variant(variant_name)
         records = variant.get_records()
-        logging.info(f"===== Exploring experiment variant {variant} =====")
+        logging.info(f"\n\n===== Exploring experiment variant {variant} =====")
         logging.info("== Variant records:")
         logging.info(records)
         logging.info("== Last result:")
         logging.info(records[-1].get_result())
+        hof, best = records[-1].get_result()
+        for individual in hof:
+            print(individual)
+
         logging.info("== Experiment output log:")
         logging.info(records[0].get_log())
 
