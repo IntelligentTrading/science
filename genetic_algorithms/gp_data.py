@@ -1,15 +1,23 @@
 import numpy as np
 import pandas as pd
 import talib
+from dateutil import parser
 
 from data_sources import get_resampled_prices_in_range
 
 
 class Data:
+
+    def _parse_time(self, time_input):
+        if isinstance(time_input, str):
+            time_object = parser.parse(time_input)
+            return time_object.timestamp()
+        return time_input
+
     def __init__(self, start_time, end_time, transaction_currency, counter_currency, resample_period, horizon,
                  start_cash, start_crypto, source):
-        self.start_time = start_time
-        self.end_time = end_time
+        self.start_time = self._parse_time(start_time)
+        self.end_time = self._parse_time(end_time)
         self.transaction_currency = transaction_currency
         self.counter_currency = counter_currency
         self.resample_period = resample_period
@@ -18,7 +26,7 @@ class Data:
         self.start_crypto = start_crypto
         self.source = source
 
-        self.price_data = get_resampled_prices_in_range(start_time, end_time, transaction_currency, counter_currency, resample_period)
+        self.price_data = get_resampled_prices_in_range(self.start_time, self.end_time, transaction_currency, counter_currency, resample_period)
         self.rsi_data = talib.RSI(np.array(self.price_data.close_price, dtype=float), timeperiod=14)
         self.sma50_data = talib.SMA(np.array(self.price_data.close_price, dtype=float), timeperiod=50)
         self.ema50_data = talib.EMA(np.array(self.price_data.close_price, dtype=float), timeperiod=50)
