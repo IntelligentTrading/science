@@ -2,11 +2,13 @@ import operator
 import random
 import types
 from deap import gp
-
+import logging
 from abc import ABC, abstractmethod
 
 
 class Grammar(ABC):
+
+    __grammars = {}
 
     def __init__(self, function_provider):
         self.function_provider = function_provider
@@ -21,9 +23,14 @@ class Grammar(ABC):
 
     @staticmethod
     def construct(grammar_name, function_provider, ephemeral_suffix):
+        key = (grammar_name, str(function_provider), ephemeral_suffix)
+        if key in Grammar.__grammars:
+            logging.warning("Hey! You requested a grammar that was initialized previously, returning the original instance...")
+            return Grammar.__grammars[key]
         for subclass in Grammar.__subclasses__():
             if subclass._name == grammar_name:
-                return subclass(function_provider, ephemeral_suffix)
+                Grammar.__grammars[key] = subclass(function_provider, ephemeral_suffix)
+                return Grammar.__grammars[key]
         raise Exception(f"Unknown grammar {grammar_name}!")
 
     def _init_basic_grammar(self):
