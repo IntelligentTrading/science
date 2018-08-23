@@ -345,7 +345,8 @@ class TickerBuyAndHold(TickerWrapperStrategy):
         :param signals: ITF signals, ignored.
         :return: StrategyDecision.BUY or StrategyDecision.SELL or StrategyDecision.IGNORE
         """
-        timestamp = price_data['timestamp']
+        timestamp = price_data.Index
+
         if timestamp >= self._start_time and timestamp <= self._end_time and not self._bought:
             if abs(timestamp - self._start_time) > 120:
                 logging.warning("Buy and hold BUY: ticker more than 2 mins after start time ({:.2f} mins)!"

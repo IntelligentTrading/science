@@ -272,7 +272,7 @@ class GeneticProgram:
 
         return self.fitness.compute(individual, evaluation, self)
 
-    def build_evaluation_object(self, individual, ticker=True):
+    def build_evaluation_object(self, individual, ticker=True, include_buy_and_hold=True):
         if not ticker:
             strategy = GeneticSignalStrategy(individual, self.data, self)
             evaluation = strategy.evaluate(self.data.transaction_currency, self.data.counter_currency,
@@ -282,6 +282,19 @@ class GeneticProgram:
         else:
             strategy = GeneticTickerStrategy(individual, self.data, self)
             tick_provider = PriceDataframeTickProvider(self.data.price_data)
+            benchmark = None
+
+            if include_buy_and_hold:
+                benchmark = TickDrivenBacktester.build_benchmark(
+                    transaction_currency=self.data.transaction_currency,
+                    counter_currency=self.data.counter_currency,
+                    start_cash=self.data.start_cash,
+                    start_crypto=self.data.start_crypto,
+                    start_time=self.data.start_time,
+                    end_time=self.data.end_time,
+                    source=self.data.source,
+                    tick_provider=tick_provider
+                )
 
             # create a new tick based backtester
             evaluation = TickDrivenBacktester(
@@ -293,11 +306,12 @@ class GeneticProgram:
                 start_crypto=self.data.start_crypto,
                 start_time=self.data.start_time,
                 end_time=self.data.end_time,
-                benchmark_backtest=None,
+                benchmark_backtest=benchmark,
                 time_delay=0,
                 slippage=0,
                 verbose=False
             )
+
         return evaluation
 
 

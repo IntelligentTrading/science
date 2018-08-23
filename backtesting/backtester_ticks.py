@@ -2,7 +2,7 @@ from evaluation import Evaluation
 from tick_listener import TickListener
 from orders import Order, OrderType
 from tick_provider_itf_db import TickProviderITFDB
-from strategies import StrategyDecision
+from strategies import StrategyDecision, TickerBuyAndHold
 
 
 class TickDrivenBacktester(Evaluation, TickListener):
@@ -65,6 +65,33 @@ class TickDrivenBacktester(Evaluation, TickListener):
             return self.trading_df.tail(1)['close_price'].item()
         else:
             return Evaluation.end_price.fget(self)
+
+    @staticmethod
+    def build_benchmark(transaction_currency, counter_currency, start_cash, start_crypto, start_time, end_time,
+                        source, tick_provider=None, time_delay=0, slippage=0):
+        if tick_provider is None:
+            tick_provider = TickProviderITFDB(transaction_currency,
+                                                    counter_currency,
+                                                    start_time,
+                                                    end_time)
+        benchmark_strategy = TickerBuyAndHold(start_time, end_time)
+        benchmark = TickDrivenBacktester(
+                tick_provider=tick_provider,
+                strategy=benchmark_strategy,
+                transaction_currency=transaction_currency,
+                counter_currency=counter_currency,
+                start_cash=start_cash,
+                start_crypto=start_crypto,
+                start_time=start_time,
+                end_time=end_time,
+                source=source,
+                resample_period=None,
+                verbose=False,
+                time_delay=time_delay,
+                slippage=slippage
+            )
+        return benchmark
+
 
 
 if __name__ == '__main__':

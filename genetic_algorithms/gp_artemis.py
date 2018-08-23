@@ -108,7 +108,9 @@ class ExperimentManager:
 
     def analyze_and_find_best(self, data=None):
         if data is None:
-            data = self.validation_data
+            data = self.training_data
+
+        performance_rows = []
 
         # we'll go through all variants and record performance
         for variant in self.variants:
@@ -119,12 +121,20 @@ class ExperimentManager:
                 continue
             hof, best = latest.get_result()
 
-            for individual in hof:
+            for rank, individual in enumerate(hof):
                 evaluation = self._build_evaluation_object(individual, variant, data)
-                draw_price_chart(data.timestamps, data.prices, evaluation.orders)
-                draw_tree(individual)
+                #draw_price_chart(data.timestamps, data.prices, evaluation.orders)
+                #draw_tree(individual)
+                row = evaluation.to_primitive_types_dictionary()
+                row['experiment_id'] = variant.name
+                row['hof_ranking'] = rank
+                row["individual"] = individual
+                performance_rows.append(row)
 
+        performance_info = pd.DataFrame(performance_rows)
+        performance_info = performance_info.sort_values(by=['profit_percent'], ascending=False)
 
+        return performance_info
 
     def browse_variants(self):
         run_evolution.browse()

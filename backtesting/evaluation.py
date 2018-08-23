@@ -264,6 +264,10 @@ class Evaluation(ABC):
     def percent_unprofitable_trades(self):
         self.num_unprofitable_trades / self.num_buy_sell_pairs if self.num_buy_sell_pairs !=0 else np.nan
 
+    @property
+    def benchmark_backtest(self):
+        return self._benchmark_backtest
+
     def _write_trading_df_row(self):
         total_value = self._crypto * self._current_price + self._cash
 
@@ -465,6 +469,20 @@ class Evaluation(ABC):
             assert order.transaction_currency == self._buy_currency
             self._num_sells += 1
 
+    def to_primitive_types_dictionary(self):
+        import inspect
+        result = {}
+        members = inspect.getmembers(self)
+        for (name, value) in members:
+            if name.startswith("__"):
+                continue
+            if type(value) not in (int, str, bool, float, np.float64):
+                continue
+            if name.startswith("_"):
+                name = name[1:]
+            result[name] = value
+        return result
+
 
     def to_dictionary(self):
         dictionary = vars(self).copy()
@@ -472,7 +490,8 @@ class Evaluation(ABC):
         tmp = {(k[1:] if k.startswith("_") else k): dictionary[k] for k in dictionary.keys()}
         dictionary = tmp
         del dictionary["orders"]
-        del dictionary["signals"]
+        if "signals" in dictionary:
+            del dictionary["signals"]
         dictionary["strategy"] = dictionary["strategy"].get_short_summary()
         dictionary["utilized_signals"] = ", ".join(get_distinct_signal_types(self.order_signals))
         dictionary["start_time"] = datetime_from_timestamp(dictionary["start_time"])
