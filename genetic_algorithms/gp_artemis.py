@@ -123,16 +123,21 @@ class ExperimentManager:
 
             for rank, individual in enumerate(hof):
                 evaluation = self._build_evaluation_object(individual, variant, data)
-                #draw_price_chart(data.timestamps, data.prices, evaluation.orders)
-                #draw_tree(individual)
+                # draw_price_chart(data.timestamps, data.prices, evaluation.orders)
+                # draw_tree(individual)
                 row = evaluation.to_primitive_types_dictionary()
                 row['experiment_id'] = variant.name
                 row['hof_ranking'] = rank
                 row["individual"] = individual
+                row["evaluation"] = evaluation
                 performance_rows.append(row)
 
         performance_info = pd.DataFrame(performance_rows)
         performance_info = performance_info.sort_values(by=['profit_percent'], ascending=False)
+
+        best = performance_info.iloc[0]
+        draw_price_chart(data.timestamps, data.prices, best['evaluation'].orders)
+        draw_tree(best['individual'])
 
         return performance_info
 

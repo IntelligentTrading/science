@@ -354,8 +354,9 @@ class TickerBuyAndHold(TickerWrapperStrategy):
             self._bought = True
             return StrategyDecision.BUY, None
         elif timestamp >= self._end_time and not self._sold:
-            logging.warning("Buy and hold SELL: ticker more than 2 mins after end time ({:.2f} mins)!"
-                            .format(abs(timestamp - self._end_time) / 60))
+            if abs(timestamp - self._end_time) > 120:
+                logging.warning("Buy and hold SELL: ticker more than 2 mins after end time ({:.2f} mins)!"
+                                .format(abs(timestamp - self._end_time) / 60))
             self._sold = True
             return StrategyDecision.SELL, None
         else:
