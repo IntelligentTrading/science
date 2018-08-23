@@ -58,10 +58,10 @@ class ExperimentManager:
 
     def _register_variants(self, rebuild_grammar=True):
         if rebuild_grammar:
-           for experiment_name, experiment in self.experiment_db.get_all():
-               Grammar.construct(experiment['grammar_version'],
-                                 experiment['function_provider'],
-                                 experiment['experiment_id'])
+            for experiment_name, experiment in self.experiment_db.get_all():
+                Grammar.construct(experiment['grammar_version'],
+                                  experiment['function_provider'],
+                                  experiment['experiment_id'])
 
         for experiment_name, experiment in self.experiment_db.get_all():
             run_evolution.add_variant(variant_name=experiment_name, **experiment)
@@ -76,7 +76,11 @@ class ExperimentManager:
             logging.info(f"Running variant {i}")
             variant.run(keep_record=True, display_results=True, saved_figure_ext='.fig.png')
 
-    def explore_records(self):
+    def explore_records(self, use_validation_data=True):
+        if use_validation_data:
+            data = self.validation_data
+        else:
+            data = self.training_data
         #   variants = run_evolution.get_variants()
         for variant in self.variants:
             # for variant_name in variant_names:
@@ -95,14 +99,37 @@ class ExperimentManager:
             for individual in hof:
                 print(individual)
             best_individual = hof[0]
-            evaluation = self._build_evaluation_object(best_individual, variant)
-            draw_price_chart(self.training_data.timestamps, self.training_data.prices, evaluation.orders)
+            evaluation = self._build_evaluation_object(best_individual, variant, data)
+            draw_price_chart(data.timestamps, data.prices, evaluation.orders)
             draw_tree(best_individual)
 
             logging.info("== Experiment output log:")
             logging.info(latest.get_log())
 
-    def _build_evaluation_object(self, individual, variant):
+    def analyze_and_find_best(self, data=None):
+        if data is None:
+            data = self.validation_data
+
+        # we'll go through all variants and record performance
+        for variant in self.variants:
+            records = variant.get_records()
+            latest = variant.get_latest_record(only_completed=True)
+            if latest is None:
+                logging.warning(f">>> No records found for variant {variant.name}, skipping...")
+                continue
+            hof, best = latest.get_result()
+
+            for individual in hof:
+                evaluation = self._build_evaluation_object(individual, variant, data)
+                draw_price_chart(data.timestamps, data.prices, evaluation.orders)
+                draw_tree(individual)
+
+
+
+    def browse_variants(self):
+        run_evolution.browse()
+
+    def _build_evaluation_object(self, individual, variant, data):
         db_record = self.experiment_db[variant.name[len("run_evolution."):]]
         grammar = Grammar.construct(
             grammar_name=db_record['grammar_version'],
@@ -110,7 +137,7 @@ class ExperimentManager:
             ephemeral_suffix=db_record['experiment_id']
         )
         genetic_program = GeneticProgram(
-            data=self.training_data,
+            data=data,
             function_provider=self.function_provider,
             grammar=grammar,
             fitness_function=self.fitness_function
@@ -175,9 +202,9 @@ class ExperimentDB:
 
 if __name__ == "__main__":
     e = ExperimentManager("sample_experiment.json")
-#    e.run_experiments()
-    e.explore_records()
-
-
+    #e.run_experiments()
+    #e.explore_records()
+    e.analyze_and_find_best()
+    #e.browse_variants()
 
 
