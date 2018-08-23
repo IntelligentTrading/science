@@ -37,6 +37,7 @@ class ExperimentManager:
         # initialize fitness function
         self.fitness_function = FitnessFunction.construct(experiment_info["fitness_function"])
         self._fill_experiment_db()
+        self._register_variants()
 
     def _fill_experiment_db(self):
         self.experiment_db = ExperimentDB()
@@ -55,19 +56,24 @@ class ExperimentManager:
                 population_size=population_size,
                 num_generations=self.experiment_json["num_generations"])
 
-    def register_variants(self, rebuild_grammar=False):
+    def _register_variants(self, rebuild_grammar=True):
         if rebuild_grammar:
-            for experiment_name, experiment in self.experiment_db.get_all():
-                Grammar.construct(experiment['grammar_version'], experiment['function_provider'],
-                                  experiment['experiment_id'])
+           for experiment_name, experiment in self.experiment_db.get_all():
+               Grammar.construct(experiment['grammar_version'],
+                                 experiment['function_provider'],
+                                 experiment['experiment_id'])
 
         for experiment_name, experiment in self.experiment_db.get_all():
             run_evolution.add_variant(variant_name=experiment_name, **experiment)
         self.variants = run_evolution.get_variants()
 
-    def run_experiments(self):
+    def run_experiments(self, rerun_existing=False):
         for i, variant in enumerate(self.variants):
-            print(f"Running variant {i}")
+            if len(variant.get_records(only_completed=True)) > 0 and not rerun_existing:
+                logging.info(f">>> Variant {variant.name} already has completed records, skipping...")
+                continue
+
+            logging.info(f"Running variant {i}")
             variant.run(keep_record=True, display_results=True, saved_figure_ext='.fig.png')
 
     def explore_records(self):
@@ -76,12 +82,16 @@ class ExperimentManager:
             # for variant_name in variant_names:
             #   variant = run_evolution.get_variant(variant_name)
             records = variant.get_records()
+            latest = variant.get_latest_record(only_completed=True)
+            if latest is None:
+                logging.warning(f">>> No records found for variant {variant.name}, skipping...")
+                continue
             logging.info(f"\n\n===== Exploring experiment variant {variant} =====")
             logging.info("== Variant records:")
             logging.info(records)
             logging.info("== Last result:")
-            logging.info(records[-1].get_result())
-            hof, best = records[-1].get_result()
+            logging.info(latest)
+            hof, best = latest.get_result()
             for individual in hof:
                 print(individual)
             best_individual = hof[0]
@@ -90,7 +100,7 @@ class ExperimentManager:
             draw_tree(best_individual)
 
             logging.info("== Experiment output log:")
-            logging.info(records[0].get_log())
+            logging.info(latest.get_log())
 
     def _build_evaluation_object(self, individual, variant):
         db_record = self.experiment_db[variant.name[len("run_evolution."):]]
@@ -164,10 +174,8 @@ class ExperimentDB:
 ####################################
 
 if __name__ == "__main__":
-
     e = ExperimentManager("sample_experiment.json")
-    e.register_variants(rebuild_grammar=True)
-    e.run_experiments()
+#    e.run_experiments()
     e.explore_records()
 
 
