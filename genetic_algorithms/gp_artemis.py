@@ -1,13 +1,12 @@
-from artemis.experiments import experiment_function, experiment_root
+from artemis.experiments import experiment_root
 from gp_data import Data
-from data_sources import Horizon
-from genetic_program import GeneticProgram, FitnessFunction, FitnessFunctionV1, FitnessFunctionV2
+from genetic_program import GeneticProgram, FitnessFunction
 from leaf_functions import TAProvider
 import logging
-from grammar import GrammarV2, GrammarV1, Grammar
+from grammar import Grammar
 import json
 import itertools
-
+from chart_plotter import *
 
 @experiment_root
 def run_evolution(experiment_id, data, function_provider, grammar_version, fitness_function, mating_prob,
@@ -17,31 +16,6 @@ def run_evolution(experiment_id, data, function_provider, grammar_version, fitne
                             grammar=grammar, fitness_function=fitness_function)
     hof, best = genetic_program.evolve(mating_prob, mutation_prob, population_size, num_generations)
     return hof, best
-
-
-
-def construct_data():
-    transaction_currency = "OMG"
-    counter_currency = "BTC"
-    end_time = 1526637600
-    start_time = end_time - 60 * 60 * 24 * 30
-    validation_start_time = start_time - 60 * 60 * 24 * 30
-    validation_end_time = start_time
-    resample_period = 60
-    horizon = Horizon.short
-    start_cash = 1
-    start_crypto = 0
-    source = 0
-
-    training_data = Data(start_time, end_time, transaction_currency, counter_currency, resample_period, start_cash,
-                         start_crypto, source)
-
-    """
-    validation_data = Data(validation_start_time, validation_end_time, transaction_currency, counter_currency,
-                           resample_period, horizon, start_cash, start_crypto, source)
-    """
-
-    return training_data
 
 
 class ExperimentManager:
@@ -94,7 +68,7 @@ class ExperimentManager:
     def run_experiments(self):
         for i, variant in enumerate(self.variants):
             print(f"Running variant {i}")
-            variant.run(keep_record=True, display_results=True, saved_figure_ext='.fig.pdf')
+            variant.run(keep_record=True, display_results=True, saved_figure_ext='.fig.png')
 
     def explore_records(self):
         #   variants = run_evolution.get_variants()
@@ -110,9 +84,28 @@ class ExperimentManager:
             hof, best = records[-1].get_result()
             for individual in hof:
                 print(individual)
+            best_individual = hof[0]
+            evaluation = self._build_evaluation_object(best_individual, variant)
+            draw_price_chart(self.training_data.timestamps, self.training_data.prices, evaluation.orders)
+            draw_tree(best_individual)
 
             logging.info("== Experiment output log:")
             logging.info(records[0].get_log())
+
+    def _build_evaluation_object(self, individual, variant):
+        db_record = self.experiment_db[variant.name[len("run_evolution."):]]
+        grammar = Grammar.construct(
+            grammar_name=db_record['grammar_version'],
+            function_provider=self.function_provider,
+            ephemeral_suffix=db_record['experiment_id']
+        )
+        genetic_program = GeneticProgram(
+            data=self.training_data,
+            function_provider=self.function_provider,
+            grammar=grammar,
+            fitness_function=self.fitness_function
+        )
+        return genetic_program.build_evaluation_object(individual)
 
 
 class ExperimentDB:
@@ -151,6 +144,9 @@ class ExperimentDB:
                f"populationsize_{kwargs['population_size']};" \
                f"generations_{kwargs['num_generations']}"
 
+    def __getitem__(self, key):
+        return self._experiments[key]
+
     # def build_experiment_id(**kwargs):
     #    return ';'.join(['{}_{}'.format(k, v) for k, v in kwargs.iteritems()])
 
@@ -168,10 +164,12 @@ class ExperimentDB:
 ####################################
 
 if __name__ == "__main__":
+
     e = ExperimentManager("sample_experiment.json")
-    e.register_variants(rebuild_grammar=False)
+    e.register_variants(rebuild_grammar=True)
     e.run_experiments()
     e.explore_records()
+
 
 
 

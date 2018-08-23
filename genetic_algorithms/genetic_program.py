@@ -1,7 +1,6 @@
 import operator
 import os
 import logging
-import types
 from deap import creator, tools, base
 from backtesting.signals import Signal
 from backtesting.strategies import SignalStrategy, Horizon, Strength, TickerStrategy, StrategyDecision
@@ -9,12 +8,10 @@ from chart_plotter import *
 from custom_deap_algorithms import combined_mutation, eaSimpleCustom
 from gp_data import Data
 from backtester_ticks import TickDrivenBacktester
-from grammar import GrammarV1
-from leaf_functions import TAProvider
 from tick_provider import PriceDataframeTickProvider
 from abc import ABC, abstractmethod
 import dill as pickle
-import random
+from matplotlib import pyplot as plt
 
 creator.create("FitnessMax", base.Fitness, weights=(1.0,))
 creator.create("Individual", gp.PrimitiveTree, fitness=creator.FitnessMax)
@@ -248,11 +245,6 @@ class GeneticProgram:
             for i in range(len(hof)):
                 logging.info(f"  {i}  {hof[i]}")
 
-            best_individual = hof[0]
-            evaluation = self.build_evaluation_object(best_individual)
-            draw_price_chart(self.data.timestamps, self.data.prices, evaluation.orders)
-            #logging.info(evaluation.get_report())
-            #draw_tree(best_individual)
 
         if output_folder != None:
             hof_name = self.get_hof_filename(mating_prob, mutation_prob, run_id)
@@ -279,7 +271,6 @@ class GeneticProgram:
             draw_tree(individual)
 
         return self.fitness.compute(individual, evaluation, self)
-
 
     def build_evaluation_object(self, individual, ticker=True):
         if not ticker:
