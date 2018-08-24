@@ -13,7 +13,7 @@ class BacktestingChart:
             self.benchmark_trading_df = benchmark.trading_df.copy()
             self.benchmark_trading_df.index = pd.to_datetime(self.benchmark_trading_df.index, unit='s', utc=True)
         self.benchmark = benchmark
-        self.draw_price_and_cumulative_returns()
+        #self.draw_price_and_cumulative_returns()
 
     @staticmethod
     def price(x):

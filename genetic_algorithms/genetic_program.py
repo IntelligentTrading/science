@@ -293,7 +293,9 @@ class GeneticProgram:
                 start_crypto=self.data.start_crypto,
                 start_time=self.data.start_time,
                 end_time=self.data.end_time,
-                benchmark_backtest=self.data.buy_and_hold_benchmark,
+                benchmark_backtest=self.data.build_buy_and_hold_benchmark(
+                    num_ticks_to_skip=self.grammar.longest_function_history_size
+                ),
                 time_delay=0,
                 slippage=0,
                 verbose=False

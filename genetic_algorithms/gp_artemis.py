@@ -218,7 +218,7 @@ class ExperimentDB:
 
 if __name__ == "__main__":
     e = ExperimentManager("sample_experiment.json")
-    #e.run_experiments()
+    e.run_experiments()
     #e.explore_records()
     print("analyzing...")
     df = e.analyze_and_find_best()

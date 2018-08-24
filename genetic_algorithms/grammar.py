@@ -21,6 +21,17 @@ class Grammar(ABC):
     def name(self):
         return self._name
 
+    @property
+    @abstractmethod
+    def longest_function_history_size(self):
+        """
+        The largest number of ticks needed to calculate all functions in the grammar.
+        For instance, for grammars including SMA50 and EMA200, this number is 200.
+        Needed for correct comparison with buy & hold.
+        :return:
+        """
+        pass
+
     @staticmethod
     def construct(grammar_name, function_provider, ephemeral_suffix):
         key = (grammar_name, str(function_provider), ephemeral_suffix)
@@ -76,6 +87,10 @@ class GrammarV1(Grammar):
 #        pset.addPrimitive(self.function_provider.sma200, [list], float)
         self._pset = pset
 
+    @property
+    def longest_function_history_size(self):
+        return 50
+
 
 
 class GrammarV2(Grammar):
@@ -95,6 +110,11 @@ class GrammarV2(Grammar):
         pset.addPrimitive(self.function_provider.ema200, [list], float)
         pset.addPrimitive(self.function_provider.price, [list], float)
         self._pset = pset
+
+    @property
+    def longest_function_history_size(self):
+        return 200
+
 
 
 
