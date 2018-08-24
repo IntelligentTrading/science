@@ -126,6 +126,7 @@ class ExperimentManager:
                 # draw_price_chart(data.timestamps, data.prices, evaluation.orders)
                 # draw_tree(individual)
                 row = evaluation.to_primitive_types_dictionary()
+                #row = evaluation.to_dictionary()
                 row['experiment_id'] = variant.name
                 row['hof_ranking'] = rank
                 row["individual"] = individual
@@ -219,7 +220,10 @@ if __name__ == "__main__":
     e = ExperimentManager("sample_experiment.json")
     #e.run_experiments()
     #e.explore_records()
-    e.analyze_and_find_best()
+    print("analyzing...")
+    df = e.analyze_and_find_best()
+    print("done")
+    df.iloc[3].evaluation.plot_cumulative_returns()
     #e.browse_variants()
 
 

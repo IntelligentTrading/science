@@ -282,6 +282,7 @@ class Evaluation(ABC):
             'signal': "" if self._current_order is None or self._current_signal is None else self._current_signal.signal_type})
         """
         self.trading_df_rows.append({
+            'timestamp': self._current_timestamp,
             'close_price': self._current_price,
             'cash': self._cash,
             'crypto': self._crypto,
@@ -294,8 +295,9 @@ class Evaluation(ABC):
 
         # self.trading_df = pd.DataFrame(columns=['close_price', 'signal', 'order', 'cash', 'crypto', 'total_value'],
         # columns=['close_price', 'signal', 'order', 'cash', 'crypto', 'total_value'])
-        self.trading_df = pd.DataFrame(self.trading_df_rows, columns=['close_price', 'signal', 'order', 'cash', 'crypto', 'total_value'])
-
+        self.trading_df = pd.DataFrame(self.trading_df_rows,
+                                       columns=['timestamp', 'close_price', 'signal', 'order', 'cash', 'crypto', 'total_value'])
+        self.trading_df = self.trading_df.set_index('timestamp')
         # set finishing variable values
         self._end_cash = self._cash
         self._end_crypto = self._crypto
@@ -481,7 +483,12 @@ class Evaluation(ABC):
             if name.startswith("_"):
                 name = name[1:]
             result[name] = value
+        if self._benchmark_backtest is not None:
+            result['benchmark_profit_percent'] = self._benchmark_backtest.profit_percent
+            result['benchmark_profit_percent_usdt'] = self._benchmark_backtest.profit_percent_usdt
+
         return result
+
 
 
     def to_dictionary(self):

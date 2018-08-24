@@ -2,7 +2,8 @@ import numpy as np
 import pandas as pd
 import talib
 from dateutil import parser
-
+from tick_provider import PriceDataframeTickProvider
+from backtester_ticks import TickDrivenBacktester
 from data_sources import get_resampled_prices_in_range
 
 
@@ -35,6 +36,8 @@ class Data:
         self.timestamps = pd.to_datetime(self.price_data.index.values, unit='s')
         assert len(self.prices) == len(self.timestamps)
 
+        self._build_buy_and_hold_benchmark()
+
     def to_dataframe(self):
         df = self.price_data.copy(deep=True)
         df['RSI'] = pd.Series(self.rsi_data, index=df.index)
@@ -46,3 +49,19 @@ class Data:
 
     def __str__(self):
         return f"{self.transaction_currency}-{self.counter_currency}-{self.start_time}-{self.end_time}"
+
+    def _build_buy_and_hold_benchmark(self):
+        self._bah_benchmark = TickDrivenBacktester.build_benchmark(
+            transaction_currency=self.transaction_currency,
+            counter_currency=self.counter_currency,
+            start_cash=self.start_cash,
+            start_crypto=self.start_crypto,
+            start_time=self.start_time,
+            end_time=self.end_time,
+            source=self.source,
+            tick_provider=PriceDataframeTickProvider(self.price_data)
+        )
+
+    @property
+    def buy_and_hold_benchmark(self):
+        return self._bah_benchmark

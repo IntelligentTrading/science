@@ -25,7 +25,7 @@ class Grammar(ABC):
     def construct(grammar_name, function_provider, ephemeral_suffix):
         key = (grammar_name, str(function_provider), ephemeral_suffix)
         if key in Grammar.__grammars:
-            logging.warning("Hey! You requested a grammar that was initialized previously, returning the original instance...")
+            logging.debug("Hey! You requested a grammar that was initialized previously, returning the original instance...")
             return Grammar.__grammars[key]
         for subclass in Grammar.__subclasses__():
             if subclass._name == grammar_name:
@@ -34,7 +34,7 @@ class Grammar(ABC):
         raise Exception(f"Unknown grammar {grammar_name}!")
 
     def _init_basic_grammar(self):
-        print(f"Hi! Build grammar version {self.name} was called. The name of ephc is rsi_overbought_threshold_{self._ephemeral_suffix}")
+        logging.debug(f"Hi! Build grammar version {self.name} was called. The name of ephc is rsi_overbought_threshold_{self._ephemeral_suffix}")
         pset = gp.PrimitiveSetTyped(f"main-{self.name}", [list], types.FunctionType)
         pset.addPrimitive(operator.lt, [float, float], bool)
         pset.addPrimitive(operator.gt, [float, float], bool)
