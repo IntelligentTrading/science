@@ -136,6 +136,7 @@ class ExperimentManager:
         performance_info = pd.DataFrame(performance_rows)
         performance_info = performance_info.sort_values(by=['profit_percent'], ascending=False)
 
+        # show the best doge baby
         best = performance_info.iloc[0]
         draw_price_chart(data.timestamps, data.prices, best['evaluation'].orders)
         draw_tree(best['individual'])
@@ -220,9 +221,7 @@ if __name__ == "__main__":
     e = ExperimentManager("sample_experiment.json")
     e.run_experiments()
     #e.explore_records()
-    print("analyzing...")
     df = e.analyze_and_find_best()
-    print("done")
     df.iloc[3].evaluation.plot_cumulative_returns()
     #e.browse_variants()
 

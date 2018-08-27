@@ -244,9 +244,10 @@ class GeneticProgram:
             logging.info("Hall of fame: ")
             for i in range(len(hof)):
                 logging.info(f"  {i}  {hof[i]}")
+            draw_tree(hof[0])
 
 
-        if output_folder != None:
+        if output_folder != None:  # TODO: clean
             hof_name = self.get_hof_filename(mating_prob, mutation_prob, run_id)
             gen_best_name = self.get_gen_best_filename(mating_prob, mutation_prob, run_id)
             out_path_hof = os.path.join(output_folder, hof_name)
