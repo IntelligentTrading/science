@@ -1,28 +1,41 @@
-from deap import base
-from deap import creator
-from deap import tools
 import operator
-import random
-import types
+import os
+import logging
+from deap import creator, tools, base
 from backtesting.signals import Signal
 from backtesting.strategies import SignalStrategy, Horizon, Strength, TickerStrategy, StrategyDecision
 from chart_plotter import *
 from custom_deap_algorithms import combined_mutation, eaSimpleCustom
 from gp_data import Data
-import os
-import dill as pickle
 from backtester_ticks import TickDrivenBacktester
-import time
 from tick_provider import PriceDataframeTickProvider
-import logging
+from abc import ABC, abstractmethod
+import dill as pickle
+from matplotlib import pyplot as plt
+
+creator.create("FitnessMax", base.Fitness, weights=(1.0,))
+creator.create("Individual", gp.PrimitiveTree, fitness=creator.FitnessMax)
 
 HISTORY_SIZE = 200
+
+class Grammar(ABC):
+
+    def __init__(self, function_provider):
+        self.function_provider = function_provider
+
+    @property
+    def pset(self):
+        return self._pset
+
+    @property
+    @abstractmethod
+    def name(self):
+        pass
 
 
 class GeneticTickerStrategy(TickerStrategy):
     def __init__(self, tree, data, gp_object, history_size=HISTORY_SIZE):
         self.data = data
-        self.horizon = data.horizon
         self.transaction_currency = data.transaction_currency
         self.counter_currency = data.counter_currency
         self.resample_period = data.resample_period
@@ -39,7 +52,7 @@ class GeneticTickerStrategy(TickerStrategy):
     def process_ticker(self, price_data, signals):
         """
         :param price_data: Pandas row with OHLC data and timestamp.
-        :param signals: ITF signals co-ocurring with price tick.
+        :param signals: ITF signals co-occurring with price tick.
         :return: StrategyDecision.BUY or StrategyDecision.SELL or StrategyDecision.IGNORE
         """
         self.i += 1
@@ -54,15 +67,15 @@ class GeneticTickerStrategy(TickerStrategy):
 
         decision = StrategyDecision.IGNORE
         signal = None
-        if outcome == self.gp_object.buy:
+        if outcome == self.gp_object.function_provider.buy:
             decision = StrategyDecision.BUY
             signal = Signal("Genetic", 1, None, 3, 3, price, 0, timestamp, None, self.transaction_currency,
                             self.counter_currency, self.source, self.resample_period)
-        elif outcome == self.gp_object.sell:
+        elif outcome == self.gp_object.function_provider.sell:
             decision = StrategyDecision.SELL
             signal = Signal("Genetic", -1, None, 3, 3, price, 0, timestamp, None, self.transaction_currency,
                             self.counter_currency, self.source, self.resample_period)
-        elif not outcome == self.gp_object.ignore:
+        elif not outcome == self.gp_object.function_provider.ignore:
             logging.warning("Invalid outcome encountered")
 
         return decision, signal
@@ -77,7 +90,6 @@ class GeneticTickerStrategy(TickerStrategy):
 class GeneticSignalStrategy(SignalStrategy):
     def __init__(self, tree, data, gp_object, history_size=HISTORY_SIZE):
         self.data = data
-        self.horizon = data.horizon
         self.transaction_currency = data.transaction_currency
         self.counter_currency = data.counter_currency
         self.resample_period = data.resample_period
@@ -133,152 +145,71 @@ class GeneticSignalStrategy(SignalStrategy):
         return self.df_data_and_outcomes
 
 
-class GeneticProgram:
-    def __init__(self, data, tree_depth=5):
-        self.data = data
-        self.tree_depth = tree_depth
-        self.build_grammar()
-        self.build_toolbox()
-
-    def if_then_else(self, input, output1, output2):
-        try:
-            return output1 if input else output2
-        except:
-            return output1
-
-    def rsi(self, input):
-        timestamp = input[0]
-        timestamp_index = np.where(self.data.price_data.index == timestamp)[0]
-        return self.data.rsi_data[timestamp_index]
-
-
-    def sma50(self, input):
-        timestamp = input[0]
-        timestamp_index = np.where(self.data.price_data.index == timestamp)[0]
-        return self.data.sma50_data[timestamp_index]
-
-
-    def ema50(self, input):
-        timestamp = input[0]
-        timestamp_index = np.where(self.data.price_data.index == timestamp)[0]
-        return self.data.ema50_data[timestamp_index]
-
-
-    def sma200(self, input):
-        timestamp = input[0]
-        timestamp_index = np.where(self.data.price_data.index == timestamp)[0]
-        return self.data.sma200_data[timestamp_index]
-
-
-    def ema200(self, input):
-        timestamp = input[0]
-        timestamp_index = np.where(self.data.price_data.index == timestamp)[0]
-        return self.data.ema200_data[timestamp_index]
-
-
-    def price(self, input):
-        timestamp = input[0]
-        return self.data.price_data.loc[timestamp,"close_price"]
-
-
-    def buy(self):
+class FitnessFunction(ABC):
+    @abstractmethod
+    def compute(self, individual, evaluation, genetic_program):
         pass
 
+    @staticmethod
+    def construct(fitness_function_name):
+        for subclass in FitnessFunction.__subclasses__():
+            if subclass._name == fitness_function_name:
+                return subclass()
+        raise Exception(f"Unknown function {fitness_function_name}!")
 
-    def sell(self):
+    @property
+    @abstractmethod
+    def name(self):
         pass
 
-
-    def ignore(self):
-        pass
-
-
-    def identity(self, x):
-        return x
+    def __str__(self):
+        return self._name
 
 
-    def build_grammar(self):
-        pset = gp.PrimitiveSetTyped("main", [list], types.FunctionType)
-        pset.addPrimitive(operator.lt, [float, float], bool)
-        pset.addPrimitive(operator.gt, [float, float], bool)
-        pset.addPrimitive(operator.or_, [bool, bool], bool)
-        pset.addPrimitive(operator.and_, [bool, bool], bool)
-        pset.addPrimitive(self.if_then_else, [bool, types.FunctionType, types.FunctionType], types.FunctionType)
-        pset.addPrimitive(self.rsi, [list], float)
-        pset.addPrimitive(self.sma50, [list], float)
-        pset.addPrimitive(self.ema50, [list], float)
-        pset.addPrimitive(self.sma200, [list], float)
-        pset.addPrimitive(self.ema200, [list], float)
-        pset.addPrimitive(self.price, [list], float)
-        pset.addTerminal(False, bool)
-        pset.addTerminal(True, bool)
-        pset.addTerminal(self.buy, types.FunctionType)
-        pset.addTerminal(self.sell, types.FunctionType)
-        pset.addTerminal(self.ignore, types.FunctionType)
-        pset.addPrimitive(self.identity, [bool], bool, name="identity_bool")
-        pset.addPrimitive(self.identity, [list], list, name="identity_list")
-        pset.addPrimitive(self.identity, [float], float, name="identity_float")
-        pset.addEphemeralConstant("rsi_overbought_threshold", lambda: random.uniform(70, 100), float)
-        pset.addEphemeralConstant("rsi_oversold_threshold", lambda: random.uniform(0, 30), float)
-        self.pset = pset
+class FitnessFunctionV1(FitnessFunction):
+    _name = "ff_v1"
 
-
-    def evaluate_individual(self, individual, super_verbose=False):
-        start = time.time()
-        evaluation = self.build_evaluation_object(individual)
-
-        if evaluation.num_trades > 1:
-            if super_verbose:
-                draw_price_chart(self.data.timestamps, self.data.prices, evaluation.orders)
-                logging.info(str(individual))
-                logging.info(evaluation.get_report())
-                draw_tree(individual)
-
-        end = time.time()
-        max_len = 3 ** self.tree_depth
-        logging.info("Time for one evaluation {}".format(end-start))
+    def compute(self, individual, evaluation, genetic_program):
+        max_len = 3 ** genetic_program.tree_depth
         return evaluation.profit_percent + (max_len - len(individual)) / float(max_len) * 20 \
                + evaluation.num_sells * 5,
+    @property
+    def name(self):
+        return self._name
 
-    def build_evaluation_object(self, individual, ticker=True):
-        if not ticker:
-            strategy = GeneticSignalStrategy(individual, self.data, self)
-            evaluation = strategy.evaluate(self.data.transaction_currency, self.data.counter_currency,
-                                           self.data.start_cash, self.data.start_crypto,
-                                           self.data.start_time, self.data.end_time, self.data.source, 60, verbose=False)
+class FitnessFunctionV2(FitnessFunction):
+    _name = "ff_v2"
 
-        else:
-            strategy = GeneticTickerStrategy(individual, self.data, self)
-            tick_provider = PriceDataframeTickProvider(self.data.price_data)
-            # tick_provider = self.data.price_data
-            # tick_provider['timestamp'] = tick_provider.index
-            # create a new tick based backtester
+    def compute(self, individual, evaluation, genetic_program):
+        max_len = 1 ** genetic_program.tree_depth
+        return evaluation.profit_percent + (max_len - len(individual)) / float(max_len) * 10 \
+               + evaluation.num_sells * 4,
+    @property
+    def name(self):
+        return self._name
 
-            evaluation = TickDrivenBacktester(tick_provider=tick_provider,
-                                              strategy=strategy,
-                                              transaction_currency=self.data.transaction_currency,
-                                              counter_currency=self.data.counter_currency,
-                                              start_cash=self.data.start_cash,
-                                              start_crypto=self.data.start_crypto,
-                                              start_time=self.data.start_time,
-                                              end_time=self.data.end_time,
-                                              benchmark_backtest=None,
-                                              time_delay=0,
-                                              slippage=0,
-                                              verbose=False
-                                              )
-        return evaluation
+class GeneticProgram:
+    def __init__(self, data, **kwargs):
+        self.data = data
+        self.function_provider = kwargs.get('function_provider')
+        self.grammar = kwargs.get('grammar')
+        assert self.function_provider == self.grammar.function_provider
+        self.fitness = kwargs.get('fitness_function', FitnessFunctionV1())
+        self.tree_depth = kwargs.get('tree_depth', 5)
+        self._build_toolbox()
 
-    def build_toolbox(self):
-        creator.create("FitnessMax", base.Fitness, weights=(1.0,))
-        creator.create("Individual", gp.PrimitiveTree, fitness=creator.FitnessMax)
+    @property
+    def pset(self):
+        return self.grammar.pset
+
+    def _build_toolbox(self):
 
         toolbox = base.Toolbox()
         toolbox.register("expr", gp.genHalfAndHalf, pset=self.pset, min_=1, max_=self.tree_depth)
         toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.expr)
         toolbox.register("population", tools.initRepeat, list, toolbox.individual)
         toolbox.register("compile", gp.compile, pset=self.pset)
-        toolbox.register("evaluate", self.evaluate_individual)
+        toolbox.register("evaluate", self.compute_fitness)
         toolbox.register("select", tools.selTournament, tournsize=3)
         toolbox.register("mate", gp.cxOnePoint)
         toolbox.register("expr_mut", combined_mutation, min_=0, max_=self.tree_depth)
@@ -289,26 +220,6 @@ class GeneticProgram:
         toolbox.decorate("mutate", gp.staticLimit(key=operator.attrgetter("height"), max_value=self.tree_depth))  # 17))
         self.toolbox = toolbox
 
-    @staticmethod
-    def get_gen_best_filename(mating_prob, mutation_prob, run_id):
-        gen_best_name = "doge_{}_x-{}_m-{}-gen_best.p".format(run_id, mating_prob, mutation_prob)
-        return gen_best_name
-
-    @staticmethod
-    def get_hof_filename(mating_prob, mutation_prob, run_id):
-        hof_name = "doge_{}_x-{}_m-{}-hof.p".format(run_id, mating_prob, mutation_prob)
-        return hof_name
-
-    @staticmethod
-    def parse_evolution_filename(filename):
-        filename = filename.split("_")
-        run = int(filename[1])
-        mating_prob = float(filename[2].split("-")[1])
-        mutation_prob = float(filename[3].split("-")[1])
-        return run, mating_prob, mutation_prob
-
-    def load_evolution_file(self, file_path):
-        return pickle.load(open(file_path, "rb"))
 
     def evolve(self, mating_prob, mutation_prob, population_size,
                num_generations, verbose=True, output_folder=None, run_id=None):
@@ -333,8 +244,10 @@ class GeneticProgram:
             logging.info("Hall of fame: ")
             for i in range(len(hof)):
                 logging.info(f"  {i}  {hof[i]}")
+            draw_tree(hof[0])
 
-        if output_folder != None:
+
+        if output_folder != None:  # TODO: clean
             hof_name = self.get_hof_filename(mating_prob, mutation_prob, run_id)
             gen_best_name = self.get_gen_best_filename(mating_prob, mutation_prob, run_id)
             out_path_hof = os.path.join(output_folder, hof_name)
@@ -345,7 +258,73 @@ class GeneticProgram:
                 pickle.dump(hof, open(out_path_hof, "wb"))
                 pickle.dump(best, open(out_path_gen_best, "wb"))
 
+        return hof, best
 
+
+    #@time_performance
+    def compute_fitness(self, individual, super_verbose=False):
+        evaluation = self.build_evaluation_object(individual)
+
+        if evaluation.num_trades > 1 and super_verbose:
+            draw_price_chart(self.data.timestamps, self.data.prices, evaluation.orders)
+            logging.info(str(individual))
+            logging.info(evaluation.get_report())
+            draw_tree(individual)
+
+        return self.fitness.compute(individual, evaluation, self)
+
+    def build_evaluation_object(self, individual, ticker=True):
+        if not ticker:
+            strategy = GeneticSignalStrategy(individual, self.data, self)
+            evaluation = strategy.evaluate(self.data.transaction_currency, self.data.counter_currency,
+                                           self.data.start_cash, self.data.start_crypto,
+                                           self.data.start_time, self.data.end_time, self.data.source, 60, verbose=False)
+
+        else:
+            strategy = GeneticTickerStrategy(individual, self.data, self)
+            tick_provider = PriceDataframeTickProvider(self.data.price_data)
+
+            # create a new tick based backtester
+            evaluation = TickDrivenBacktester(
+                tick_provider=tick_provider,
+                strategy=strategy,
+                transaction_currency=self.data.transaction_currency,
+                counter_currency=self.data.counter_currency,
+                start_cash=self.data.start_cash,
+                start_crypto=self.data.start_crypto,
+                start_time=self.data.start_time,
+                end_time=self.data.end_time,
+                benchmark_backtest=self.data.build_buy_and_hold_benchmark(
+                    num_ticks_to_skip=self.grammar.longest_function_history_size
+                ),
+                time_delay=0,
+                slippage=0,
+                verbose=False
+            )
+
+        return evaluation
+
+
+    @staticmethod
+    def get_gen_best_filename(mating_prob, mutation_prob, run_id):
+        gen_best_name = "doge_{}_x-{}_m-{}-gen_best.p".format(run_id, mating_prob, mutation_prob)
+        return gen_best_name
+
+    @staticmethod
+    def get_hof_filename(mating_prob, mutation_prob, run_id):
+        hof_name = "doge_{}_x-{}_m-{}-hof.p".format(run_id, mating_prob, mutation_prob)
+        return hof_name
+
+    @staticmethod
+    def parse_evolution_filename(filename):
+        filename = filename.split("_")
+        run = int(filename[1])
+        mating_prob = float(filename[2].split("-")[1])
+        mutation_prob = float(filename[3].split("-")[1])
+        return run, mating_prob, mutation_prob
+
+    def load_evolution_file(self, file_path):
+        return pickle.load(open(file_path, "rb"))
 
 
 if __name__ == '__main__':
@@ -362,15 +341,34 @@ if __name__ == '__main__':
     source = 0
     history_size = 100
 
-    training_data = Data(start_time, end_time, transaction_currency, counter_currency, resample_period, horizon,
-                         start_cash,
+    training_data = Data(start_time, end_time, transaction_currency, counter_currency, resample_period, start_cash,
                          start_crypto, source)
 
     validation_data = Data(validation_start_time, validation_end_time, transaction_currency, counter_currency,
-                           resample_period, horizon,
-                           start_cash, start_crypto, source)
+                           resample_period, start_cash, start_crypto, source)
 
     data = training_data
-    gp = GeneticProgram(data)
-    gp.evolve(0.8, 0.8, 50, 5)
+    gprog = GeneticProgram(data)
+    #record = run_experiment.run(gprog=gprog, mating_prob=0.7, mutation_prob=0.5, population_size=50, num_generations=2)
+
+    #run_experiment.add_variant("test", gprog=gprog, mating_prob=0.7, mutation_prob=0.5, population_size=50, num_generations=2)
+    #ex = run_experiment.get_variant("test")
+    #record = ex.run(keep_record=True, display_results=True)
+
+    #print(record)
+    #run_experiment.add_variant(gprog=gprog, mating_prob=0.8, mutation_prob=0.8, population_size=50, num_generations=2)
+    #run_experiment.browse(close_after=False)
+
+    #records = run_experiment.get_records()
+    #print(records)
+    #result = records[0].get_result()
+
+    # Note: to make Artemis work
+    # change line 3 in persistent_ordered_dict.py to import dill as pickle (TODO: fork)
+
+    # gprog.evolve(0.8, 0.8, 50, 5)
+
+    # records = variants[0].get_records()
+    # print(records)
+
 

@@ -5,7 +5,8 @@ from signals import *
 from backtester_signals import SignalDrivenBacktester
 from abc import ABC, abstractmethod
 from config import transaction_cost_percents
-
+import logging
+log = logging.getLogger("strategies")
 
 class Strategy(ABC):
     """
@@ -345,16 +346,18 @@ class TickerBuyAndHold(TickerWrapperStrategy):
         :param signals: ITF signals, ignored.
         :return: StrategyDecision.BUY or StrategyDecision.SELL or StrategyDecision.IGNORE
         """
-        timestamp = price_data['timestamp']
+        timestamp = price_data.Index
+
         if timestamp >= self._start_time and timestamp <= self._end_time and not self._bought:
             if abs(timestamp - self._start_time) > 120:
-                logging.warning("Buy and hold BUY: ticker more than 2 mins after start time ({:.2f} mins)!"
+                log.warning("Buy and hold BUY: ticker more than 2 mins after start time ({:.2f} mins)!"
                                 .format(abs(timestamp - self._start_time)/60))
             self._bought = True
             return StrategyDecision.BUY, None
         elif timestamp >= self._end_time and not self._sold:
-            logging.warning("Buy and hold SELL: ticker more than 2 mins after end time ({:.2f} mins)!"
-                            .format(abs(timestamp - self._end_time) / 60))
+            if abs(timestamp - self._end_time) > 120:
+                log.warning("Buy and hold SELL: ticker more than 2 mins after end time ({:.2f} mins)!"
+                                .format(abs(timestamp - self._end_time) / 60))
             self._sold = True
             return StrategyDecision.SELL, None
         else:

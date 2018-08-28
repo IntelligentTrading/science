@@ -233,9 +233,13 @@ def get_price_nearest_to_timestamp(currency, timestamp, source, counter_currency
     future = cursor.fetchall()
 
     if len(history) == 0:
-        logging.error("No historical price data in {} minutes before timestamp {}...".format(max_delta_seconds_past/60, timestamp))
+
+        log_price_error(f"No historical price data for {currency}-{counter_currency} in "
+                        f"{max_delta_seconds_past/60} minutes before timestamp {timestamp}...",
+                        counter_currency)
+
         if len(future) == 0:
-            logging.error("No future data found.")
+            log_price_error("No future data found.", counter_currency)
             raise NoPriceDataException()
         else:
             logging.warning("Returning future price...")
@@ -246,6 +250,20 @@ def get_price_nearest_to_timestamp(currency, timestamp, source, counter_currency
               .format(timestamp,(timestamp - history[0][1])/60))
         return history[0][0]
 
+
+def log_price_error(msg, counter_currency):
+    """
+    If our counter currency is not BTC and we can't find prices, we're probably dealing with an altcoin
+    that trades only against BTC. In that case we output a debug-level msg. If price against BTC isn't
+    found, we output an error-level msg.
+    :param msg: message to output
+    :param counter_currency: counter currency for which we're finding the price
+    :return:
+    """
+    if counter_currency == "BTC":
+        logging.error(msg)
+    else:
+        logging.debug(msg)
 
 def get_prices_in_range(start_time, end_time, transaction_currency, counter_currency, source):
     counter_currency_id = CounterCurrency[counter_currency].value

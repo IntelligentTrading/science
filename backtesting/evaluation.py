@@ -1,13 +1,17 @@
-from data_sources import *
-from orders import *
-from utils import *
 import logging
-from config import transaction_cost_percents
-logging.getLogger().setLevel(logging.INFO)
-from abc import ABC, abstractmethod
 import empyrical
 import numpy as np
+import pandas as pd
+
+from data_sources import get_price, convert_value_to_USDT, NoPriceDataException, Horizon
+from orders import OrderType
+from utils import get_distinct_signal_types, datetime_from_timestamp
+from config import transaction_cost_percents
+from abc import ABC, abstractmethod
 from charting import BacktestingChart
+
+logging.getLogger().setLevel(logging.INFO)
+pd.options.mode.chained_assignment = None
 
 
 class Evaluation(ABC):
@@ -32,8 +36,9 @@ class Evaluation(ABC):
         self._slippage = slippage
 
         if benchmark_backtest is not None:
-            assert benchmark_backtest._start_time == self._start_time
-            assert benchmark_backtest._end_time == self._end_time
+            pass # TODO: fix assertions and delayed buy&hold
+            # assert benchmark_backtest._start_time == self._start_time
+            # assert benchmark_backtest._end_time == self._end_time
 
         # Init backtesting variables
         self._cash = start_cash
@@ -260,6 +265,10 @@ class Evaluation(ABC):
     def percent_unprofitable_trades(self):
         self.num_unprofitable_trades / self.num_buy_sell_pairs if self.num_buy_sell_pairs !=0 else np.nan
 
+    @property
+    def benchmark_backtest(self):
+        return self._benchmark_backtest
+
     def _write_trading_df_row(self):
         total_value = self._crypto * self._current_price + self._cash
 
@@ -274,6 +283,7 @@ class Evaluation(ABC):
             'signal': "" if self._current_order is None or self._current_signal is None else self._current_signal.signal_type})
         """
         self.trading_df_rows.append({
+            'timestamp': self._current_timestamp,
             'close_price': self._current_price,
             'cash': self._cash,
             'crypto': self._crypto,
@@ -286,8 +296,9 @@ class Evaluation(ABC):
 
         # self.trading_df = pd.DataFrame(columns=['close_price', 'signal', 'order', 'cash', 'crypto', 'total_value'],
         # columns=['close_price', 'signal', 'order', 'cash', 'crypto', 'total_value'])
-        self.trading_df = pd.DataFrame(self.trading_df_rows, columns=['close_price', 'signal', 'order', 'cash', 'crypto', 'total_value'])
-
+        self.trading_df = pd.DataFrame(self.trading_df_rows,
+                                       columns=['timestamp', 'close_price', 'signal', 'order', 'cash', 'crypto', 'total_value'])
+        self.trading_df = self.trading_df.set_index('timestamp')
         # set finishing variable values
         self._end_cash = self._cash
         self._end_crypto = self._crypto
@@ -461,6 +472,25 @@ class Evaluation(ABC):
             assert order.transaction_currency == self._buy_currency
             self._num_sells += 1
 
+    def to_primitive_types_dictionary(self):
+        import inspect
+        result = {}
+        members = inspect.getmembers(self)
+        for (name, value) in members:
+            if name.startswith("__"):
+                continue
+            if type(value) not in (int, str, bool, float, np.float64):
+                continue
+            if name.startswith("_"):
+                name = name[1:]
+            result[name] = value
+        if self._benchmark_backtest is not None:
+            result['benchmark_profit_percent'] = self._benchmark_backtest.profit_percent
+            result['benchmark_profit_percent_usdt'] = self._benchmark_backtest.profit_percent_usdt
+
+        return result
+
+
 
     def to_dictionary(self):
         dictionary = vars(self).copy()
@@ -468,7 +498,8 @@ class Evaluation(ABC):
         tmp = {(k[1:] if k.startswith("_") else k): dictionary[k] for k in dictionary.keys()}
         dictionary = tmp
         del dictionary["orders"]
-        del dictionary["signals"]
+        if "signals" in dictionary:
+            del dictionary["signals"]
         dictionary["strategy"] = dictionary["strategy"].get_short_summary()
         dictionary["utilized_signals"] = ", ".join(get_distinct_signal_types(self.order_signals))
         dictionary["start_time"] = datetime_from_timestamp(dictionary["start_time"])
@@ -512,7 +543,7 @@ class Evaluation(ABC):
         if self.trading_df.empty:
             return
         chart = BacktestingChart(self, self._benchmark_backtest)
-        chart.draw_returns_tear_sheet()
+        chart.draw_price_and_cumulative_returns()
 
     def plot_returns_tear_sheet(self):
         if self.trading_df.empty:
@@ -535,5 +566,5 @@ if __name__ == '__main__':
     start_cash = 10000000
     start_crypto = 0
     strategy = RSITickerStrategy(start_time, end_time, Horizon.short, None)
-    evaluation = Evaluation(strategy, 'BTC', 'USDT', start_cas, start_crypto, start_time, end_time)
+    evaluation = Evaluation(strategy, 'BTC', 'USDT', start_cash, start_crypto, start_time, end_time)
     #evaluation.simulate_events()
