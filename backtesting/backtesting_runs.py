@@ -50,10 +50,10 @@ def signals_of_the_week_summary():
         currency_pairs.append((transaction_currency, counter_currency))
 
     # for debugging
-    # currency_pairs = [("DOGE","BTC"),("ETH", "BTC"),("OMG","BTC")]
+    currency_pairs = [("DOGE","BTC"),("ETH", "BTC"),("OMG","BTC")]
 
-    start_time = datetime.datetime(2018, 7, 3, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
-    end_time = datetime.datetime(2018, 7, 7, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
+    start_time = datetime.datetime(2018, 7, 1, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
+    end_time = datetime.datetime(2018, 7, 17, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
 
     strategies = StrategyEvaluationSetBuilder.build_from_signal_set(
         buy_signals=['rsi_buy_3', 'rsi_buy_2', 'rsi_cumulat_buy_2', 'rsi_cumulat_buy_3', 'ichi_kumo_up', 'ann_simple_bull'],
@@ -65,7 +65,7 @@ def signals_of_the_week_summary():
     comparison = ComparativeEvaluation(
         strategy_set=strategies,
         currency_pairs=currency_pairs,
-        resample_periods=[60],
+        resample_periods=[60,240,1440],
         sources=[0],
         start_cash=1,
         start_crypto=0,

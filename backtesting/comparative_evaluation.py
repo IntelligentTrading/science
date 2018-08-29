@@ -229,13 +229,32 @@ class ComparativeReportBuilder:
     def _filter_df_based_on_currency_pairs(self, df, currency_pairs_to_keep):
         return df[df[["transaction_currency", "counter_currency"]].apply(tuple, 1).isin(currency_pairs_to_keep)]
 
+    def _get_description_stat_values(self, desc_df, field_name, row_name):
+        mean = desc_df[[(field_name, 'mean')]].loc[row_name][0]
+        std = desc_df[[(field_name, 'std')]].loc[row_name][0]
+        min = desc_df[[(field_name, 'min')]].loc[row_name][0]
+        max = desc_df[[(field_name, 'max')]].loc[row_name][0]
+        return mean, std, min, max
+
     def _describe_and_write(self, filtered_df, writer, sheet_prefix):
         # group by strategy, evaluate
-        filtered_df[["strategy", "profit_percent", "buy_and_hold_profit_percent"]].groupby(["strategy"]).describe().to_excel(writer, f'{sheet_prefix} by strategy')
+        by_strategy_df = filtered_df[["strategy", "resample_period", "profit_percent", "buy_and_hold_profit_percent"]]\
+            .groupby(["strategy", "resample_period"]).describe(percentiles=[])
+        # reorder columns and write
+        by_strategy_df[["profit_percent", "buy_and_hold_profit_percent"]].to_excel(writer, f'{sheet_prefix} by strategy')
+
+        # get buy and hold
+        # for i, key in enumerate(list(by_strategy_df.index)):
+        #    if i == 0:
+        #        mean, std, min, max = self._get_description_stats(by_strategy_df, 'buy_and_hold_profit_percent', key)
+        #    else:
+        #        assert self._get_description_stat_values(by_strategy_df, 'buy_and_hold_profit_percent', key) == (mean, std, min, max)
 
         # group by coin, evaluate
-        filtered_df[["transaction_currency", "profit_percent", "buy_and_hold_profit_percent"]].groupby(["transaction_currency"]).describe().\
-            to_excel(writer, f'{sheet_prefix} by coin')
+        by_coin_df = filtered_df[["transaction_currency", "profit_percent", "buy_and_hold_profit_percent"]]\
+            .groupby(["transaction_currency"]).describe(percentiles=[])
+        # reorder columns and write
+        by_coin_df[["profit_percent", "buy_and_hold_profit_percent"]].to_excel(writer, f'{sheet_prefix} by coin')
 
     def all_coins_report(self, report_path, currency_pairs_to_keep=None, group_strategy_variants=True):
         df = self.results_df.copy(deep=True)
@@ -259,8 +278,7 @@ class ComparativeReportBuilder:
 
         # top 10 best performing coins
         # top 10 worst performing coins
-
-        self.results_df[backtesting_report_columns].to_excel(writer, "Original data")
+        df[backtesting_report_columns].to_excel(writer, "Original data")
 
         writer.save()
         writer.close()
