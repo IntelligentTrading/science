@@ -31,7 +31,8 @@ class SignalDrivenBacktester(Evaluation):
                 end_time=self._end_time,
                 counter_currency=self._counter_currency,
                 transaction_currency=self._transaction_currency,
-                source=self._source
+                source=self._source,
+                resample_period=self._resample_period
             )
         else:
             self.signals = signals
