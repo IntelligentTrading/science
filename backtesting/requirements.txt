@@ -1,0 +1,6 @@
+empyrical==0.5.0
+matplotlib==2.1.1
+pandas==0.20.3
+TA_Lib==0.4.17
+scipy==1.1.0
+numpy==1.13.3

@@ -1,0 +1,9 @@
+pandas==0.20.3
+TA_Lib==0.4.17
+dill==0.2.8.2
+networkx==1.11
+matplotlib==2.1.1
+deap==1.2.2
+artemis_ml.egg==info
+numpy==1.13.3
+python_dateutil==2.7.3
