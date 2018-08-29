@@ -231,10 +231,10 @@ class ComparativeReportBuilder:
 
     def _describe_and_write(self, filtered_df, writer, sheet_prefix):
         # group by strategy, evaluate
-        filtered_df[["strategy", "profit_percent"]].groupby(["strategy"]).describe().to_excel(writer, f'{sheet_prefix} by strategy')
+        filtered_df[["strategy", "profit_percent", "buy_and_hold_profit_percent"]].groupby(["strategy"]).describe().to_excel(writer, f'{sheet_prefix} by strategy')
 
         # group by coin, evaluate
-        filtered_df[["transaction_currency", "profit_percent"]].groupby(["transaction_currency"]).describe().\
+        filtered_df[["transaction_currency", "profit_percent", "buy_and_hold_profit_percent"]].groupby(["transaction_currency"]).describe().\
             to_excel(writer, f'{sheet_prefix} by coin')
 
     def all_coins_report(self, report_path, currency_pairs_to_keep=None, group_strategy_variants=True):
