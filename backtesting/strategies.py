@@ -139,6 +139,7 @@ class SignalSignatureStrategy(SignalStrategy):
         return "Signal-set based strategy, trading according to signal set {}".format(str(self.signal_set))
 
 
+
 class SimpleRSIStrategy(SignalStrategy):
     """
     A strategy based on RSI thresholds.

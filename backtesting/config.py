@@ -35,3 +35,6 @@ transaction_cost_percents = {
     0: 0.0025,   # Poloniex
                 # TODO: add the rest
 }
+
+# top 20 altcoins on Coinmarketcap (USDT not included)
+COINMARKETCAP_TOP_20_ALTS = "ETH,XRP,BCH,EOS,XLM,LTC,ADA,MIOTA,XMR,TRX,DASH,ETC,NEO,BNB,VET,XEM,XTZ,ZEC,OMG,LSK".split(",")

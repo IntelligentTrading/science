@@ -5,6 +5,7 @@ from config import backtesting_report_columns
 from signals import ALL_SIGNALS
 from strategies import BuyAndHoldTimebasedStrategy, SignalSignatureStrategy, SimpleRSIStrategy
 from enum import Enum
+from config import COINMARKETCAP_TOP_20_ALTS
 
 
 class SignalCombinationMode(Enum):
@@ -108,7 +109,7 @@ class ComparativeEvaluation:
     """
 
     def __init__(self, strategy_set, currency_pairs, resample_periods, sources,
-                 start_cash, start_crypto, start_time, end_time, output_file, time_delay=0):
+                 start_cash, start_crypto, start_time, end_time, output_file=None, time_delay=0):
 
         self.strategy_set = strategy_set
         self.currency_pairs = currency_pairs
@@ -124,10 +125,11 @@ class ComparativeEvaluation:
         self.time_delay = time_delay
 
         self._run_backtests()
-        report = ComparativeReportBuilder(self.backtests, self.baselines)
-        best_backtest = report.get_best_performing_backtest()
+        self._report = ComparativeReportBuilder(self.backtests, self.baselines)
+        best_backtest = self._report.get_best_performing_backtest()
         logging.info(best_backtest.get_report())
-        report.write_summary(output_file)
+        if output_file is not None:
+            self._report.write_summary(output_file)
 
     def _run_backtests(self):
         self.backtests = []
@@ -135,13 +137,13 @@ class ComparativeEvaluation:
         for (transaction_currency, counter_currency), resample_period, source, strategy in \
                 itertools.product(self.currency_pairs, self.resample_periods, self.sources, self.strategy_set):
             try:
-                backtest, baseline = self.evaluate(strategy, transaction_currency, counter_currency, resample_period, source)
+                backtest, baseline = self._evaluate(strategy, transaction_currency, counter_currency, resample_period, source)
                 self.backtests.append(backtest)
                 self.baselines.append(baseline)
             except NoPriceDataException:
                 continue
 
-    def evaluate(self, strategy, transaction_currency, counter_currency, resample_period, source):
+    def _evaluate(self, strategy, transaction_currency, counter_currency, resample_period, source):
         logging.info("Evaluating strategy...")
 
         params = {}
@@ -161,6 +163,10 @@ class ComparativeEvaluation:
         evaluation = SignalDrivenBacktester(strategy=strategy, **params)
 
         return evaluation, baseline_evaluation
+
+    @property
+    def report(self):
+        return self._report
 
 
 class ComparativeReportBuilder:
@@ -219,6 +225,47 @@ class ComparativeReportBuilder:
         summary = summary[summary.num_trades != 0]
         summary.groupby(["strategy", "resample_period"]).describe().to_excel(writer, 'Results')
         writer.save()
+
+    def _filter_df_based_on_currency_pairs(self, df, currency_pairs_to_keep):
+        return df[df[["transaction_currency", "counter_currency"]].apply(tuple, 1).isin(currency_pairs_to_keep)]
+
+    def _describe_and_write(self, filtered_df, writer, sheet_prefix):
+        # group by strategy, evaluate
+        filtered_df[["strategy", "profit_percent"]].groupby(["strategy"]).describe().to_excel(writer, f'{sheet_prefix} by strategy')
+
+        # group by coin, evaluate
+        filtered_df[["transaction_currency", "profit_percent"]].groupby(["transaction_currency"]).describe().\
+            to_excel(writer, f'{sheet_prefix} by coin')
+
+    def all_coins_report(self, report_path, currency_pairs_to_keep=None, group_strategy_variants=True):
+        df = self.results_df.copy(deep=True)
+
+        if group_strategy_variants:
+            # clean up and structure strategy names
+            df.loc[df['strategy'].str.contains('rsi_buy'), 'strategy'] = 'RSI variant'
+            df.loc[df['strategy'].str.contains('rsi_cumulat'), 'strategy'] = 'RSI cumulative variant'
+            df.loc[df['strategy'].str.contains('ann_'), 'strategy'] = 'ANN'
+            df.loc[df['strategy'].str.contains('ichi_'), 'strategy'] = 'Ichimoku'
+
+        writer = pd.ExcelWriter(report_path)
+
+        if currency_pairs_to_keep is not None:
+            df = self._filter_df_based_on_currency_pairs(currency_pairs_to_keep)
+
+        self._describe_and_write(df, writer, "All coins")
+        top_20_alts = zip(COINMARKETCAP_TOP_20_ALTS, ["BTC"] * len(COINMARKETCAP_TOP_20_ALTS))
+        top20 = self._filter_df_based_on_currency_pairs(df, top_20_alts)
+        self._describe_and_write(top20, writer, "Top 20 alts")
+
+        # top 10 best performing coins
+        # top 10 worst performing coins
+
+        self.results_df[backtesting_report_columns].to_excel(writer, "Original data")
+
+        writer.save()
+        writer.close()
+
+
 
 
 

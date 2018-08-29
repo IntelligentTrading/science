@@ -63,7 +63,7 @@ price_query = """SELECT price FROM indicator_price
                             AND source = %s
                             AND counter_currency = %s;"""
 
-trading_against_counter_query = """SELECT DISTINCT(transaction_currency) FROM indicator_price WHERE counter_currency = %s AND source = 0"""
+trading_against_counter_query = """SELECT DISTINCT(transaction_currency) FROM indicator_price WHERE counter_currency = %s AND source = %s"""
 
 
 trading_against_counter_and_signal_query = """SELECT DISTINCT(transaction_currency) FROM signal_signal 
@@ -308,9 +308,9 @@ def convert_value_to_USDT(value, timestamp, transaction_currency, source):
         return value_BTC_in_USDT * value_transaction_currency_in_BTC * value
 
 
-def get_currencies_trading_against_counter(counter_currency):
+def get_currencies_trading_against_counter(counter_currency, source):
     counter_currency_id = CounterCurrency[counter_currency].value
-    cursor = dbc.execute(trading_against_counter_query, params=(counter_currency_id,))
+    cursor = dbc.execute(trading_against_counter_query, params=(counter_currency_id,source,))
     data = cursor.fetchall()
     currencies = []
     for currency in data:
@@ -326,6 +326,7 @@ def get_currencies_for_signal(counter_currency, signal):
     for currency in data:
         currencies.append(currency[0])
     return currencies
+
 
 
 def fetch_delayed_price(signal, source, time_delay):
