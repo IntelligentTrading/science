@@ -179,8 +179,8 @@ class Evaluation(ABC):
             r = returns.add(1).cumprod()
             dd = r.div(r.cummax()).sub(1)
             mdd = dd.min()
-            end = dd.argmin()
-            start = r.loc[:end].argmax()
+            end = dd.idxmin()
+            start = r.loc[:end].idxmax()
             return mdd, start, end
         except:
             return np.nan, np.nan, np.nan
