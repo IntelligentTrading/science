@@ -14,7 +14,7 @@ def run_evolution(experiment_id, data, function_provider, grammar_version, fitne
     grammar = Grammar.construct(grammar_version, function_provider, ephemeral_suffix=experiment_id)
     genetic_program = GeneticProgram(data=data, function_provider=function_provider,
                             grammar=grammar, fitness_function=fitness_function)
-    hof, best = genetic_program.evolve(mating_prob, mutation_prob, population_size, num_generations)
+    hof, best = genetic_program.evolve(mating_prob, mutation_prob, population_size, num_generations, verbose=False)
     return hof, best
 
 
@@ -23,10 +23,12 @@ class ExperimentManager:
     START_CASH = 1000
     START_CRYPTO = 0
 
-    def __init__(self, experiment_file_path):
-        with open(experiment_file_path) as f:
-            experiment_info = json.load(f)
-        self.experiment_json = experiment_info
+    def __init__(self, experiment_container, read_from_file=True):
+        if read_from_file:
+            with open(experiment_container) as f:
+                self.experiment_json = json.load(f)
+        else:
+            self.experiment_json = experiment_container
         # initialize data
         self.training_data = Data(start_cash=self.START_CASH, start_crypto=self.START_CRYPTO,
                                   **self.experiment_json["training_data"])
@@ -35,7 +37,7 @@ class ExperimentManager:
         # create function provider based on data
         self.function_provider = TAProvider(self.training_data)
         # initialize fitness function
-        self.fitness_function = FitnessFunction.construct(experiment_info["fitness_function"])
+        self.fitness_function = FitnessFunction.construct(self.experiment_json["fitness_function"])
         self._fill_experiment_db()
         self._register_variants()
 
@@ -67,14 +69,14 @@ class ExperimentManager:
             run_evolution.add_variant(variant_name=experiment_name, **experiment)
         self.variants = run_evolution.get_variants()
 
-    def run_experiments(self, rerun_existing=False):
+    def run_experiments(self, rerun_existing=False, display_results=True):
         for i, variant in enumerate(self.variants):
             if len(variant.get_records(only_completed=True)) > 0 and not rerun_existing:
                 logging.info(f">>> Variant {variant.name} already has completed records, skipping...")
                 continue
 
             logging.info(f"Running variant {i}")
-            variant.run(keep_record=True, display_results=True, saved_figure_ext='.fig.png')
+            variant.run(keep_record=True, display_results=display_results, saved_figure_ext='.fig.png')
 
     def explore_records(self, use_validation_data=True):
         if use_validation_data:

@@ -158,9 +158,8 @@ class FitnessFunction(ABC):
         raise Exception(f"Unknown function {fitness_function_name}!")
 
     @property
-    @abstractmethod
     def name(self):
-        pass
+        return self._name
 
     def __str__(self):
         return self._name
@@ -173,9 +172,6 @@ class FitnessFunctionV1(FitnessFunction):
         max_len = 3 ** genetic_program.tree_depth
         return evaluation.profit_percent + (max_len - len(individual)) / float(max_len) * 20 \
                + evaluation.num_sells * 5,
-    @property
-    def name(self):
-        return self._name
 
 class FitnessFunctionV2(FitnessFunction):
     _name = "ff_v2"
@@ -184,9 +180,6 @@ class FitnessFunctionV2(FitnessFunction):
         max_len = 1 ** genetic_program.tree_depth
         return evaluation.profit_percent + (max_len - len(individual)) / float(max_len) * 10 \
                + evaluation.num_sells * 4,
-    @property
-    def name(self):
-        return self._name
 
 class GeneticProgram:
     def __init__(self, data, **kwargs):
@@ -235,7 +228,7 @@ class GeneticProgram:
         mstats.register("max", np.max)
 
         pop, log, best = eaSimpleCustom(pop, self.toolbox, mating_prob, mutation_prob, num_generations, stats=mstats,
-                                        halloffame=hof, verbose=verbose)
+                                        halloffame=hof, verbose=True)
 
         if verbose:
             logging.info("Winners in each generation: ")
