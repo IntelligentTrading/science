@@ -33,7 +33,8 @@ backtesting_report_columns = [
 
 transaction_cost_percents = {
     0: 0.0025,   # Poloniex
-                # TODO: add the rest
+    1: 0.0025,   # Bittrex
+    2: 0.001     # Binance
 }
 
 # top 20 altcoins on Coinmarketcap (USDT not included)

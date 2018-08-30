@@ -238,8 +238,8 @@ class ComparativeReportBuilder:
 
     def _describe_and_write(self, filtered_df, writer, sheet_prefix):
         # group by strategy, evaluate
-        by_strategy_df = filtered_df[["strategy", "resample_period", "profit_percent", "buy_and_hold_profit_percent"]]\
-            .groupby(["strategy", "resample_period"]).describe(percentiles=[])
+        by_strategy_df = filtered_df[["source", "strategy", "resample_period", "profit_percent", "buy_and_hold_profit_percent"]]\
+            .groupby(["source", "strategy", "resample_period"]).describe(percentiles=[])
         # reorder columns and write
         by_strategy_df[["profit_percent", "buy_and_hold_profit_percent"]].to_excel(writer, f'{sheet_prefix} by strategy')
 
@@ -251,13 +251,20 @@ class ComparativeReportBuilder:
         #        assert self._get_description_stat_values(by_strategy_df, 'buy_and_hold_profit_percent', key) == (mean, std, min, max)
 
         # group by coin, evaluate
-        by_coin_df = filtered_df[["transaction_currency", "profit_percent", "buy_and_hold_profit_percent"]]\
-            .groupby(["transaction_currency"]).describe(percentiles=[])
+        by_coin_df = filtered_df[["source", "transaction_currency", "profit_percent", "buy_and_hold_profit_percent"]]\
+            .groupby(["source","transaction_currency"]).describe(percentiles=[])
         # reorder columns and write
         by_coin_df[["profit_percent", "buy_and_hold_profit_percent"]].to_excel(writer, f'{sheet_prefix} by coin')
+        g = by_coin_df.groupby(level=0, group_keys=False)
+        by_coin_sorted_df = g.apply(lambda x: x.sort_values([('profit_percent', 'mean')], ascending=False))
+        by_coin_sorted_df[["profit_percent", "buy_and_hold_profit_percent"]].to_excel(writer, f'{sheet_prefix} sorted by coin')
+
 
     def all_coins_report(self, report_path, currency_pairs_to_keep=None, group_strategy_variants=True):
         df = self.results_df.copy(deep=True)
+
+        # remove strategies without any trades - very important for averaging!
+        df = df[df.num_trades > 0]
 
         if group_strategy_variants:
             # clean up and structure strategy names

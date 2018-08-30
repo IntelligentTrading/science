@@ -66,7 +66,7 @@ def signals_of_the_week_summary():
         strategy_set=strategies,
         currency_pairs=currency_pairs,
         resample_periods=[60,240,1440],
-        sources=[0],
+        sources=[0,1,2],
         start_cash=1,
         start_crypto=0,
         start_time=start_time,
