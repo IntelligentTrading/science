@@ -5,6 +5,7 @@ from backtesting.orders import OrderType
 import pandas as pd
 import networkx as nx
 from deap import gp
+from string import Template
 
 
 def price(x):
@@ -93,30 +94,22 @@ def draw_tree(individual):
 ### IPython doge DNA visualizations
 
 def create_jupyter_dna_container(container_name):
-    from IPython.core.display import HTML, Javascript
-    from string import Template
     html_template = Template("""
     <div id="$container">< /div>
-
-    <style>
-
-    .node {stroke: #fff; stroke-width: 1.5px;}
-    .link {stroke: #999; stroke-opacity: .6;}
-
-    < /style>
+        <style>
+        .node {stroke: #fff; stroke-width: 1.5px;}
+        .link {stroke: #999; stroke-opacity: .6;}
+        < /style>
     """)
 
-    html = html_template.substitute({"container": container_name})
-    return html
+    return html_template.substitute({"container": container_name})
+
 
 def show_doge_dna(container_name, json_file):
-    from string import Template
-    from IPython.core.display import HTML, Javascript
 
     js_template = Template("""
     // We load the latest version of d3.js from the Web.
     require.config({paths: {d3: "https://d3js.org/d3.v3.min"}});
-
 
     require(["d3"], function(d3) {
 
@@ -195,9 +188,6 @@ def show_doge_dna(container_name, json_file):
             //    .text(function(d) { return d.name });
 
 
-
-
-
             // We bind the positions of the SVG elements
             // to the positions of the dynamic force-directed graph,
             // at each time step.
@@ -213,9 +203,7 @@ def show_doge_dna(container_name, json_file):
         });
     });
     """)
-    js = js_template.substitute({"container": container_name, "json_file": json_file})
-    #Javascript(js)
-    return js
+    return js_template.substitute({"container": container_name, "json_file": json_file})
 
 
 def write_graph_to_json(individual, json_file_name):
@@ -248,3 +236,14 @@ def networkx_graph(individual):
     nx.draw_networkx_edges(g, pos)
     nx.draw_networkx_labels(g, pos, labels)
     plt.show()
+
+class DogeDNACanvas:
+    def __init__(self, individual, container_name):
+        write_graph_to_json(individual, "tmp.json")
+        self.container_name = container_name
+
+    def create_container(self):
+        return create_jupyter_dna_container(self.container_name)
+
+    def show(self):
+        return show_doge_dna(self.container_name, "tmp.json")
