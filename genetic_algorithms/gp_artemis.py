@@ -145,6 +145,18 @@ class ExperimentManager:
 
         return performance_info
 
+    def performance_df_row_info(self, performance_df_row):
+        print(f'Experiment id: {performance_df_row.experiment_id}\n')
+        individual = performance_df_row.individual
+        evaluation = performance_df_row.evaluation
+        print(f'String representation:\n{str(individual)}\n')
+        draw_tree(individual)
+        networkx_graph(individual)
+
+        print(f'Backtesting report:\n {evaluation.get_report()}\n')
+        print(f'Benchmark backtesting report:\n {evaluation.benchmark_backtest.get_report()}\n')
+        return individual
+
     def browse_variants(self):
         run_evolution.browse()
 

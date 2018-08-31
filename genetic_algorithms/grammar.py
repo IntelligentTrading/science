@@ -61,8 +61,6 @@ class Grammar(ABC):
         pset.addPrimitive(self.function_provider.identity, [bool], bool, name="identity_bool")
         pset.addPrimitive(self.function_provider.identity, [list], list, name="identity_list")
         pset.addPrimitive(self.function_provider.identity, [float], float, name="identity_float")
-        pset.addEphemeralConstant(f"rsi_overbought_threshold_{self._ephemeral_suffix}", lambda: random.uniform(70, 100), float)
-        pset.addEphemeralConstant(f"rsi_oversold_threshold_{self._ephemeral_suffix}", lambda: random.uniform(0, 30), float)
         return pset
 
 
@@ -81,8 +79,10 @@ class GrammarV1(Grammar):
 
     def _build_grammar(self):
         pset = super()._init_basic_grammar()
+        pset.addEphemeralConstant(f"rsi_overbought_threshold_{self._ephemeral_suffix}", lambda: random.uniform(70, 100), float)
+        pset.addEphemeralConstant(f"rsi_oversold_threshold_{self._ephemeral_suffix}", lambda: random.uniform(0, 30), float)
         pset.addPrimitive(self.function_provider.rsi, [list], float)
-        pset.addPrimitive(self.function_provider.sma50, [list], float)
+#        pset.addPrimitive(self.function_provider.sma50, [list], float)
 #        pset.addPrimitive(self.function_provider.ema50, [list], float)
 #        pset.addPrimitive(self.function_provider.sma200, [list], float)
         self._pset = pset
@@ -107,6 +107,9 @@ class GrammarV2(Grammar):
 
     def _build_grammar(self):
         pset = super()._init_basic_grammar()
+        pset.addPrimitive(self.function_provider.sma50, [list], float)
+        pset.addPrimitive(self.function_provider.sma200, [list], float)
+        pset.addPrimitive(self.function_provider.ema50, [list], float)
         pset.addPrimitive(self.function_provider.ema200, [list], float)
         pset.addPrimitive(self.function_provider.price, [list], float)
         self._pset = pset
@@ -114,7 +117,6 @@ class GrammarV2(Grammar):
     @property
     def longest_function_history_size(self):
         return 200
-
 
 
 
