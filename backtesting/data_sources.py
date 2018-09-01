@@ -124,7 +124,8 @@ def get_resampled_prices_in_range(start_time, end_time, transaction_currency, co
 def get_filtered_signals(signal_type=None, transaction_currency=None, start_time=None, end_time=None, horizon=Horizon.any,
                          counter_currency=None, strength=Strength.any, source=None, resample_period=60, return_df = False):
     query = """ SELECT signal_signal.signal, trend, horizon, strength_value, strength_max, price, price_change, 
-                timestamp, rsi_value, transaction_currency, counter_currency, source, resample_period FROM signal_signal """
+                timestamp, rsi_value, transaction_currency, counter_currency, source, resample_period FROM signal_signal 
+                 """
     additions = []
     params = []
     if signal_type is not None:
@@ -159,7 +160,7 @@ def get_filtered_signals(signal_type=None, transaction_currency=None, start_time
     if len(additions) > 0:
         query += "WHERE {}".format(" AND ".join(additions))
         params = tuple(params)
-
+    query += ' ORDER BY timestamp'
     if return_df:
         connection = dbc.get_connection()
         signals_df = pd.read_sql(query, con=connection, params=params, index_col="timestamp")
