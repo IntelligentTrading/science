@@ -60,7 +60,7 @@ class GeneticTickerStrategy(TickerStrategy):
         price = price_data.close_price
         timestamp = price_data.Index
 
-        if self.i < self.history_size:
+        if self.i <= self.history_size:
             # outcomes.append("skipped")
             return StrategyDecision.IGNORE, None
         outcome = self.func([timestamp])
@@ -268,13 +268,17 @@ class GeneticProgram:
 
     def build_evaluation_object(self, individual, ticker=True):
         if not ticker:
-            strategy = GeneticSignalStrategy(individual, self.data, self)
+            strategy = GeneticSignalStrategy(individual, self.data, self,
+                                             history_size=self.grammar.longest_function_history_size)
             evaluation = strategy.evaluate(self.data.transaction_currency, self.data.counter_currency,
                                            self.data.start_cash, self.data.start_crypto,
                                            self.data.start_time, self.data.end_time, self.data.source, 60, verbose=False)
 
         else:
-            strategy = GeneticTickerStrategy(individual, self.data, self)
+            strategy = GeneticTickerStrategy(tree=individual,
+                                             data=self.data,
+                                             gp_object=self,
+                                             history_size=self.grammar.longest_function_history_size)
             tick_provider = PriceDataframeTickProvider(self.data.price_data)
 
             # create a new tick based backtester
