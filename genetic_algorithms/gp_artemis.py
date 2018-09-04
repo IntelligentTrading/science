@@ -12,8 +12,8 @@ from chart_plotter import *
 def run_evolution(experiment_id, data, function_provider, grammar_version, fitness_function, mating_prob,
                   mutation_prob, population_size, num_generations):
     grammar = Grammar.construct(grammar_version, function_provider[0], ephemeral_suffix=experiment_id)
-    genetic_program = GeneticProgram(data=data, function_provider=function_provider,
-                            grammar=grammar, fitness_function=fitness_function)
+    genetic_program = GeneticProgram(data_collection=data, function_provider=function_provider,
+                                     grammar=grammar, fitness_function=fitness_function)
     hof, best = genetic_program.evolve(mating_prob, mutation_prob, population_size, num_generations, verbose=False)
     return hof, best
 
@@ -119,6 +119,8 @@ class ExperimentManager:
         if data is None:
             data = self.training_data[0]
 
+        assert function_provider.data == data
+
         performance_rows = []
 
         # we'll go through all variants and record performance
@@ -175,8 +177,8 @@ class ExperimentManager:
             ephemeral_suffix=db_record['experiment_id']
         )
         genetic_program = GeneticProgram(
-            data=data,
-            function_provider=self.function_provider,
+            data_collection=[data],
+            function_providers=[function_provider],
             grammar=grammar,
             fitness_function=self.fitness_function
         )
@@ -210,14 +212,14 @@ class ExperimentDB:
             yield k, v
 
     def build_experiment_id(self, **kwargs):
-        return f"data_{kwargs['data'][0]};" \
-               f"provider_{kwargs['function_provider'][0]};" \
+        return f"data_{'-'.join(map(str,kwargs['data']))};" \
                f"grammar_{kwargs['grammar_version']};" \
                f"fitness_{kwargs['fitness_function']};" \
                f"matingprob_{kwargs['mating_prob']};" \
                f"mutationprob_{kwargs['mutation_prob']};" \
                f"populationsize_{kwargs['population_size']};" \
                f"generations_{kwargs['num_generations']}"
+    #          f"provider_{kwargs['function_provider']};" \
 
     def __getitem__(self, key):
         return self._experiments[key]

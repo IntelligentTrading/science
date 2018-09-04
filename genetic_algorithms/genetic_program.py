@@ -6,12 +6,11 @@ from backtesting.signals import Signal
 from backtesting.strategies import SignalStrategy, Horizon, Strength, TickerStrategy, StrategyDecision
 from chart_plotter import *
 from custom_deap_algorithms import combined_mutation, eaSimpleCustom
-from gp_data import Data
+from leaf_functions import TAProvider
 from backtester_ticks import TickDrivenBacktester
 from tick_provider import PriceDataframeTickProvider
 from abc import ABC, abstractmethod
 import dill as pickle
-from matplotlib import pyplot as plt
 
 creator.create("FitnessMax", base.Fitness, weights=(1.0,))
 creator.create("Individual", gp.PrimitiveTree, fitness=creator.FitnessMax)
@@ -183,16 +182,13 @@ class FitnessFunctionV2(FitnessFunction):
 
 
 class GeneticProgram:
-    def __init__(self, data, **kwargs):
-        self.data = data
-        self.data_collection = data
-        self.function_provider = kwargs.get('function_provider')
-        self.function_providers = kwargs.get('function_provider')
-
+    def __init__(self, data_collection, **kwargs):
+        self.data_collection = data_collection
+        self.function_providers = kwargs.get('function_providers', [TAProvider(data) for data in data_collection])
         self.grammar = kwargs.get('grammar')
-#        assert self.function_provider == self.grammar.function_provider
         self.fitness = kwargs.get('fitness_function', FitnessFunctionV1())
         self.tree_depth = kwargs.get('tree_depth', 5)
+        self.combined_fitness_operator = kwargs.get('combined_fitness_operator', min)
         self._build_toolbox()
 
     @property
@@ -271,11 +267,11 @@ class GeneticProgram:
         return self.fitness.compute(individual, evaluation, self)
     
     def compute_fitness_over_datasets(self, individual):
-        fitness = 0
+        fitnesses = []
         for i, data in enumerate(self.data_collection):
             self.grammar.function_provider = self.function_providers[i]
-            fitness += self.compute_fitness(individual, data, self.grammar.function_provider)[0]
-        return fitness,
+            fitnesses.append(self.compute_fitness(individual, data, self.grammar.function_provider)[0])
+        return self.combined_fitness_operator(fitnesses),
         
 
     def build_evaluation_object(self, individual, data, function_provider, ticker=True):
