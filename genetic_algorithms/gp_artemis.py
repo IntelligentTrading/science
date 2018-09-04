@@ -11,7 +11,7 @@ from chart_plotter import *
 @experiment_root
 def run_evolution(experiment_id, data, function_provider, grammar_version, fitness_function, mating_prob,
                   mutation_prob, population_size, num_generations):
-    grammar = Grammar.construct(grammar_version, function_provider, ephemeral_suffix=experiment_id)
+    grammar = Grammar.construct(grammar_version, function_provider[0], ephemeral_suffix=experiment_id)
     genetic_program = GeneticProgram(data=data, function_provider=function_provider,
                             grammar=grammar, fitness_function=fitness_function)
     hof, best = genetic_program.evolve(mating_prob, mutation_prob, population_size, num_generations, verbose=False)
@@ -30,12 +30,12 @@ class ExperimentManager:
         else:
             self.experiment_json = experiment_container
         # initialize data
-        self.training_data = Data(start_cash=self.START_CASH, start_crypto=self.START_CRYPTO,
-                                  **self.experiment_json["training_data"])
-        self.validation_data = Data(start_cash=self.START_CASH, start_crypto=self.START_CRYPTO,
-                                  **self.experiment_json["validation_data"])
-        # create function provider based on data
-        self.function_provider = TAProvider(self.training_data)
+        self.training_data = [Data(start_cash=self.START_CASH, start_crypto=self.START_CRYPTO,
+                                  **dataset) for dataset in self.experiment_json["training_data"]]
+        self.validation_data = [Data(start_cash=self.START_CASH, start_crypto=self.START_CRYPTO,
+                                  **dataset) for dataset in self.experiment_json["validation_data"]]
+        # create function provider objects based on data
+        self.function_provider = [TAProvider(dataset) for dataset in self.training_data]
         # initialize fitness function
         self.fitness_function = FitnessFunction.construct(self.experiment_json["fitness_function"])
         self._fill_experiment_db()
@@ -62,7 +62,7 @@ class ExperimentManager:
         if rebuild_grammar:
             for experiment_name, experiment in self.experiment_db.get_all():
                 Grammar.construct(experiment['grammar_version'],
-                                  experiment['function_provider'],
+                                  experiment['function_provider'][0],
                                   experiment['experiment_id'])
 
         for experiment_name, experiment in self.experiment_db.get_all():
@@ -203,8 +203,8 @@ class ExperimentDB:
             yield k, v
 
     def build_experiment_id(self, **kwargs):
-        return f"data_{kwargs['data']};" \
-               f"provider_{kwargs['function_provider']};" \
+        return f"data_{kwargs['data'][0]};" \
+               f"provider_{kwargs['function_provider'][0]};" \
                f"grammar_{kwargs['grammar_version']};" \
                f"fitness_{kwargs['fitness_function']};" \
                f"matingprob_{kwargs['mating_prob']};" \

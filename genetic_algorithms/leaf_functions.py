@@ -9,12 +9,15 @@ class FunctionProvider:
         except:
             return output1
 
+    @classmethod
     def buy(self):
         pass
 
+    @classmethod
     def sell(self):
         pass
 
+    @classmethod
     def ignore(self):
         pass
 

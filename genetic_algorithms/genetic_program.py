@@ -67,15 +67,15 @@ class GeneticTickerStrategy(TickerStrategy):
 
         decision = StrategyDecision.IGNORE
         signal = None
-        if outcome == self.gp_object.function_provider.buy:
+        if outcome == self.gp_object.grammar.function_provider.buy:
             decision = StrategyDecision.BUY
             signal = Signal("Genetic", 1, None, 3, 3, price, 0, timestamp, None, self.transaction_currency,
                             self.counter_currency, self.source, self.resample_period)
-        elif outcome == self.gp_object.function_provider.sell:
+        elif outcome == self.gp_object.grammar.function_provider.sell:
             decision = StrategyDecision.SELL
             signal = Signal("Genetic", -1, None, 3, 3, price, 0, timestamp, None, self.transaction_currency,
                             self.counter_currency, self.source, self.resample_period)
-        elif not outcome == self.gp_object.function_provider.ignore:
+        elif not outcome == self.gp_object.grammar.function_provider.ignore:
             logging.warning("Invalid outcome encountered")
 
         return decision, signal
@@ -181,12 +181,16 @@ class FitnessFunctionV2(FitnessFunction):
         return evaluation.profit_percent + (max_len - len(individual)) / float(max_len) * 10 \
                + evaluation.num_sells * 4,
 
+
 class GeneticProgram:
     def __init__(self, data, **kwargs):
         self.data = data
+        self.data_collection = data
         self.function_provider = kwargs.get('function_provider')
+        self.function_providers = kwargs.get('function_provider')
+
         self.grammar = kwargs.get('grammar')
-        assert self.function_provider == self.grammar.function_provider
+#        assert self.function_provider == self.grammar.function_provider
         self.fitness = kwargs.get('fitness_function', FitnessFunctionV1())
         self.tree_depth = kwargs.get('tree_depth', 5)
         self._build_toolbox()
@@ -202,7 +206,7 @@ class GeneticProgram:
         toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.expr)
         toolbox.register("population", tools.initRepeat, list, toolbox.individual)
         toolbox.register("compile", gp.compile, pset=self.pset)
-        toolbox.register("evaluate", self.compute_fitness)
+        toolbox.register("evaluate", self.compute_fitness_over_datasets)
         toolbox.register("select", tools.selTournament, tournsize=3)
         toolbox.register("mate", gp.cxOnePoint)
         toolbox.register("expr_mut", combined_mutation, min_=0, max_=self.tree_depth)
@@ -255,8 +259,8 @@ class GeneticProgram:
 
 
     #@time_performance
-    def compute_fitness(self, individual, super_verbose=False):
-        evaluation = self.build_evaluation_object(individual)
+    def compute_fitness(self, individual, data, super_verbose=False):
+        evaluation = self.build_evaluation_object(individual, data)
 
         if evaluation.num_trades > 1 and super_verbose:
             draw_price_chart(self.data.timestamps, self.data.prices, evaluation.orders)
@@ -265,33 +269,41 @@ class GeneticProgram:
             draw_tree(individual)
 
         return self.fitness.compute(individual, evaluation, self)
+    
+    def compute_fitness_over_datasets(self, individual):
+        fitness = 0
+        for i, data in enumerate(self.data_collection):
+            self.grammar.function_provider = self.function_providers[i]
+            fitness += self.compute_fitness(individual, data)[0]
+        return fitness,
+        
 
-    def build_evaluation_object(self, individual, ticker=True):
+    def build_evaluation_object(self, individual, data, ticker=True):
         if not ticker:
-            strategy = GeneticSignalStrategy(individual, self.data, self,
+            strategy = GeneticSignalStrategy(individual, data, self,
                                              history_size=self.grammar.longest_function_history_size)
-            evaluation = strategy.evaluate(self.data.transaction_currency, self.data.counter_currency,
-                                           self.data.start_cash, self.data.start_crypto,
-                                           self.data.start_time, self.data.end_time, self.data.source, 60, verbose=False)
+            evaluation = strategy.evaluate(data.transaction_currency, data.counter_currency,
+                                           data.start_cash, data.start_crypto,
+                                           data.start_time, data.end_time, data.source, 60, verbose=False)
 
         else:
             strategy = GeneticTickerStrategy(tree=individual,
-                                             data=self.data,
+                                             data=data,
                                              gp_object=self,
                                              history_size=self.grammar.longest_function_history_size)
-            tick_provider = PriceDataframeTickProvider(self.data.price_data)
+            tick_provider = PriceDataframeTickProvider(data.price_data)
 
             # create a new tick based backtester
             evaluation = TickDrivenBacktester(
                 tick_provider=tick_provider,
                 strategy=strategy,
-                transaction_currency=self.data.transaction_currency,
-                counter_currency=self.data.counter_currency,
-                start_cash=self.data.start_cash,
-                start_crypto=self.data.start_crypto,
-                start_time=self.data.start_time,
-                end_time=self.data.end_time,
-                benchmark_backtest=self.data.build_buy_and_hold_benchmark(
+                transaction_currency=data.transaction_currency,
+                counter_currency=data.counter_currency,
+                start_cash=data.start_cash,
+                start_crypto=data.start_crypto,
+                start_time=data.start_time,
+                end_time=data.end_time,
+                benchmark_backtest=data.build_buy_and_hold_benchmark(
                     num_ticks_to_skip=self.grammar.longest_function_history_size
                 ),
                 time_delay=0,
@@ -322,50 +334,5 @@ class GeneticProgram:
 
     def load_evolution_file(self, file_path):
         return pickle.load(open(file_path, "rb"))
-
-
-if __name__ == '__main__':
-    transaction_currency = "OMG"
-    counter_currency = "BTC"
-    end_time = 1526637600
-    start_time = end_time - 60 * 60 * 24 * 30
-    validation_start_time = start_time - 60 * 60 * 24 * 30
-    validation_end_time = start_time
-    horizon = Horizon.short
-    resample_period = 60
-    start_cash = 1
-    start_crypto = 0
-    source = 0
-    history_size = 100
-
-    training_data = Data(start_time, end_time, transaction_currency, counter_currency, resample_period, start_cash,
-                         start_crypto, source)
-
-    validation_data = Data(validation_start_time, validation_end_time, transaction_currency, counter_currency,
-                           resample_period, start_cash, start_crypto, source)
-
-    data = training_data
-    gprog = GeneticProgram(data)
-    #record = run_experiment.run(gprog=gprog, mating_prob=0.7, mutation_prob=0.5, population_size=50, num_generations=2)
-
-    #run_experiment.add_variant("test", gprog=gprog, mating_prob=0.7, mutation_prob=0.5, population_size=50, num_generations=2)
-    #ex = run_experiment.get_variant("test")
-    #record = ex.run(keep_record=True, display_results=True)
-
-    #print(record)
-    #run_experiment.add_variant(gprog=gprog, mating_prob=0.8, mutation_prob=0.8, population_size=50, num_generations=2)
-    #run_experiment.browse(close_after=False)
-
-    #records = run_experiment.get_records()
-    #print(records)
-    #result = records[0].get_result()
-
-    # Note: to make Artemis work
-    # change line 3 in persistent_ordered_dict.py to import dill as pickle (TODO: fork)
-
-    # gprog.evolve(0.8, 0.8, 50, 5)
-
-    # records = variants[0].get_records()
-    # print(records)
 
 
