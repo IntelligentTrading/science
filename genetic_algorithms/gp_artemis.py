@@ -108,9 +108,16 @@ class ExperimentManager:
             logging.info("== Experiment output log:")
             logging.info(latest.get_log())
 
-    def analyze_and_find_best(self, data=None):
+    def analyze_all_datasets(self):
+        result = []
+        for i, dataset in enumerate(self.training_data):
+            function_provider = self.function_provider[i]
+            result.append(self.analyze_and_find_best(function_provider, dataset))
+        return result
+
+    def analyze_and_find_best(self, function_provider, data=None,):
         if data is None:
-            data = self.training_data
+            data = self.training_data[0]
 
         performance_rows = []
 
@@ -124,7 +131,7 @@ class ExperimentManager:
             hof, best = latest.get_result()
 
             for rank, individual in enumerate(hof):
-                evaluation = self._build_evaluation_object(individual, variant, data)
+                evaluation = self._build_evaluation_object(individual, variant, data, function_provider)
                 # draw_price_chart(data.timestamps, data.prices, evaluation.orders)
                 # draw_tree(individual)
                 row = evaluation.to_primitive_types_dictionary()
@@ -160,11 +167,11 @@ class ExperimentManager:
     def browse_variants(self):
         run_evolution.browse()
 
-    def _build_evaluation_object(self, individual, variant, data):
+    def _build_evaluation_object(self, individual, variant, data, function_provider):
         db_record = self.experiment_db[variant.name[len("run_evolution."):]]
         grammar = Grammar.construct(
             grammar_name=db_record['grammar_version'],
-            function_provider=self.function_provider,
+            function_provider=function_provider,
             ephemeral_suffix=db_record['experiment_id']
         )
         genetic_program = GeneticProgram(
@@ -173,7 +180,7 @@ class ExperimentManager:
             grammar=grammar,
             fitness_function=self.fitness_function
         )
-        return genetic_program.build_evaluation_object(individual)
+        return genetic_program.build_evaluation_object(individual, data, function_provider)
 
 
 class ExperimentDB:

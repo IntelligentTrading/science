@@ -259,8 +259,8 @@ class GeneticProgram:
 
 
     #@time_performance
-    def compute_fitness(self, individual, data, super_verbose=False):
-        evaluation = self.build_evaluation_object(individual, data)
+    def compute_fitness(self, individual, data, function_provider, super_verbose=False):
+        evaluation = self.build_evaluation_object(individual, data, function_provider)
 
         if evaluation.num_trades > 1 and super_verbose:
             draw_price_chart(self.data.timestamps, self.data.prices, evaluation.orders)
@@ -274,11 +274,12 @@ class GeneticProgram:
         fitness = 0
         for i, data in enumerate(self.data_collection):
             self.grammar.function_provider = self.function_providers[i]
-            fitness += self.compute_fitness(individual, data)[0]
+            fitness += self.compute_fitness(individual, data, self.grammar.function_provider)[0]
         return fitness,
         
 
-    def build_evaluation_object(self, individual, data, ticker=True):
+    def build_evaluation_object(self, individual, data, function_provider, ticker=True):
+        self.grammar.function_provider = function_provider
         if not ticker:
             strategy = GeneticSignalStrategy(individual, data, self,
                                              history_size=self.grammar.longest_function_history_size)
