@@ -215,10 +215,10 @@ class ExperimentDB:
         return f"data_{'-'.join(map(str,kwargs['data']))};" \
                f"grammar_{kwargs['grammar_version']};" \
                f"fitness_{kwargs['fitness_function']};" \
-               f"matingprob_{kwargs['mating_prob']};" \
-               f"mutationprob_{kwargs['mutation_prob']};" \
-               f"populationsize_{kwargs['population_size']};" \
-               f"generations_{kwargs['num_generations']}"
+               f"x_{kwargs['mating_prob']};" \
+               f"m_{kwargs['mutation_prob']};" \
+               f"n_{kwargs['population_size']};" \
+               f"gen_{kwargs['num_generations']}"
     #          f"provider_{kwargs['function_provider']};" \
 
     def __getitem__(self, key):
