@@ -6,18 +6,8 @@ from backtesting_helpers import find_num_cumulative_outperforms
 from data_sources import get_currencies_trading_against_counter
 
 def best_performing_signals_of_the_week():
-    # for John - best performing signals of the week
-    counter_currency = "BTC"
-    transaction_currencies = get_currencies_trading_against_counter(counter_currency, 0)
-    currency_pairs = []
-    for transaction_currency in transaction_currencies:
-        currency_pairs.append((transaction_currency, counter_currency))
-
-    # for debugging
-    # currency_pairs = [("DOGE","BTC"),("ETH", "BTC")]
-
-    start_time = datetime.datetime(2018, 7, 3, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
-    end_time = datetime.datetime(2018, 7, 7, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
+    start_time = datetime.datetime(2018, 8, 1, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
+    end_time = datetime.datetime(2018, 8, 31, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
 
     strategies = StrategyEvaluationSetBuilder.build_from_signal_set(
         buy_signals=['rsi_buy_3', 'rsi_buy_2', 'rsi_cumulat_buy_2', 'rsi_cumulat_buy_3', 'ichi_kumo_up', 'ann_simple_bull'],
@@ -28,43 +18,7 @@ def best_performing_signals_of_the_week():
 
     comparison = ComparativeEvaluation(
         strategy_set=strategies,
-        currency_pairs=currency_pairs,
-        resample_periods=[60,240,1440],
-        sources=[0],
-        start_cash=1,
-        start_crypto=0,
-        start_time=start_time,
-        end_time=end_time,
-        output_file=f"best_performing_{datetime.datetime.utcfromtimestamp(end_time).strftime('%Y-%m-%d')}.xlsx"
-    )
-
-    # for debugging
-    # comparison.write_comparative_summary("description.xlsx")
-
-
-def signals_of_the_week_summary():
-    counter_currency = "BTC"
-    transaction_currencies = get_currencies_trading_against_counter(counter_currency, 0)
-    currency_pairs = []
-    for transaction_currency in transaction_currencies:
-        currency_pairs.append((transaction_currency, counter_currency))
-
-    # for debugging
-    currency_pairs = [("DOGE","BTC"),("ETH", "BTC"),("OMG","BTC")]
-
-    start_time = datetime.datetime(2018, 7, 1, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
-    end_time = datetime.datetime(2018, 7, 17, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
-
-    strategies = StrategyEvaluationSetBuilder.build_from_signal_set(
-        buy_signals=['rsi_buy_3', 'rsi_buy_2', 'rsi_cumulat_buy_2', 'rsi_cumulat_buy_3', 'ichi_kumo_up', 'ann_simple_bull'],
-        sell_signals=['rsi_sell_3', 'rsi_sell_2', 'rsi_cumulat_sell_2', 'rsi_cumulat_sell_3', 'ichi_kumo_down', 'ann_simple_bear'],
-        num_buy=2,
-        num_sell=2,
-        signal_combination_mode=SignalCombinationMode.SAME_TYPE)
-
-    comparison = ComparativeEvaluation(
-        strategy_set=strategies,
-        currency_pairs=currency_pairs,
+        counter_currencies=["BTC"],
         resample_periods=[60,240,1440],
         sources=[0,1,2],
         start_cash=1,
@@ -74,10 +28,7 @@ def signals_of_the_week_summary():
         output_file=f"best_performing_{datetime.datetime.utcfromtimestamp(end_time).strftime('%Y-%m-%d')}.xlsx"
     )
 
-    comparison.report.all_coins_report("all_coins.xlsx") #, currency_pairs_to_keep=[('OMG','BTC')])#,('DOGE','BTC')])
-
-    # for debugging
-    # comparison.write_comparative_summary("description.xlsx")
+    comparison.report.all_coins_report("all_coins.xlsx")
 
 
 
@@ -277,11 +228,8 @@ if __name__ == "__main__":
     # Delayed trading
     # delayed_trading_stats()
 
-    # Signals of the week summary
-    signals_of_the_week_summary()
-
     # Best performing signals
-    # best_performing_signals_of_the_week()
+    best_performing_signals_of_the_week()
 
     # RSI vs RSI cumulative
     # start_time = 1518523200  # first instance of RSI_Cumulative signal

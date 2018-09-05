@@ -108,11 +108,11 @@ class ComparativeEvaluation:
     Uses SignalDrivenBacktester.
     """
 
-    def __init__(self, strategy_set, currency_pairs, resample_periods, sources,
-                 start_cash, start_crypto, start_time, end_time, output_file=None, time_delay=0):
+    def __init__(self, strategy_set, counter_currencies, resample_periods, sources,
+                 start_cash, start_crypto, start_time, end_time, output_file=None, time_delay=0, debug=False):
 
         self.strategy_set = strategy_set
-        self.currency_pairs = currency_pairs
+        self.counter_currencies = counter_currencies
         self.resample_periods = resample_periods
         self.sources = sources
         self.start_time = start_time
@@ -134,14 +134,15 @@ class ComparativeEvaluation:
     def _run_backtests(self):
         self.backtests = []
         self.baselines = []
-        for (transaction_currency, counter_currency), resample_period, source, strategy in \
-                itertools.product(self.currency_pairs, self.resample_periods, self.sources, self.strategy_set):
-            try:
-                backtest, baseline = self._evaluate(strategy, transaction_currency, counter_currency, resample_period, source)
-                self.backtests.append(backtest)
-                self.baselines.append(baseline)
-            except NoPriceDataException:
-                continue
+        for counter_currency, resample_period, source, strategy in \
+                itertools.product(self.counter_currencies, self.resample_periods, self.sources, self.strategy_set):
+            for transaction_currency in get_currencies_trading_against_counter(counter_currency, source):
+                try:
+                    backtest, baseline = self._evaluate(strategy, transaction_currency, counter_currency, resample_period, source)
+                    self.backtests.append(backtest)
+                    self.baselines.append(baseline)
+                except NoPriceDataException:
+                    continue
 
     def _evaluate(self, strategy, transaction_currency, counter_currency, resample_period, source):
         logging.info("Evaluating strategy...")
@@ -196,8 +197,12 @@ class ComparativeReportBuilder:
         # drop index
         output.reset_index(inplace=True, drop=True)
 
+        # reformat sources to human readable format
+        output.source.replace([0, 1, 2], ['Poloniex', 'Bittrex', 'Binance'], inplace=True)
+
         # save full results
         self.results_df = output
+
 
     def _create_row_dict(self, evaluation, baseline):
         evaluation_dict = evaluation.to_dictionary()
