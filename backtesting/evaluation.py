@@ -551,6 +551,12 @@ class Evaluation(ABC):
         chart = BacktestingChart(self, self._benchmark_backtest)
         chart.draw_returns_tear_sheet()
 
+    def plot_price_and_orders(self):
+        if self.trading_df.empty:
+            return
+        chart = BacktestingChart(self, self._benchmark_backtest)
+        chart.draw_price_chart()
+
 
 class StrategyDecision:
     BUY = "BUY"

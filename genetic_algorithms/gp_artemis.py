@@ -1,7 +1,7 @@
 from artemis.experiments import experiment_root
 from gp_data import Data
 from genetic_program import GeneticProgram, FitnessFunction
-from leaf_functions import TAProvider
+from leaf_functions import TAProviderCollection
 import logging
 from grammar import Grammar
 import json
@@ -11,7 +11,7 @@ from chart_plotter import *
 @experiment_root
 def run_evolution(experiment_id, data, function_provider, grammar_version, fitness_function, mating_prob,
                   mutation_prob, population_size, num_generations):
-    grammar = Grammar.construct(grammar_version, function_provider[0], ephemeral_suffix=experiment_id)
+    grammar = Grammar.construct(grammar_version, function_provider, ephemeral_suffix=experiment_id)
     genetic_program = GeneticProgram(data_collection=data, function_provider=function_provider,
                                      grammar=grammar, fitness_function=fitness_function)
     hof, best = genetic_program.evolve(mating_prob, mutation_prob, population_size, num_generations, verbose=False)
@@ -35,7 +35,7 @@ class ExperimentManager:
         self.validation_data = [Data(start_cash=self.START_CASH, start_crypto=self.START_CRYPTO,
                                   **dataset) for dataset in self.experiment_json["validation_data"]]
         # create function provider objects based on data
-        self.function_provider = [TAProvider(dataset) for dataset in self.training_data]
+        self.function_provider = TAProviderCollection(self.training_data)
         # initialize fitness function
         self.fitness_function = FitnessFunction.construct(self.experiment_json["fitness_function"])
         self._fill_experiment_db()
@@ -62,7 +62,7 @@ class ExperimentManager:
         if rebuild_grammar:
             for experiment_name, experiment in self.experiment_db.get_all():
                 Grammar.construct(experiment['grammar_version'],
-                                  experiment['function_provider'][0],
+                                  experiment['function_provider'],
                                   experiment['experiment_id'])
 
         for experiment_name, experiment in self.experiment_db.get_all():
@@ -102,7 +102,7 @@ class ExperimentManager:
                 print(individual)
             best_individual = hof[0]
             evaluation = self._build_evaluation_object(best_individual, variant, data)
-            draw_price_chart(data.timestamps, data.prices, evaluation.orders)
+            evaluation.plot_price_and_orders()
             draw_tree(best_individual)
 
             logging.info("== Experiment output log:")
@@ -111,21 +111,36 @@ class ExperimentManager:
     def analyze_all_datasets(self):
         result = []
         for i, dataset in enumerate(self.training_data):
-            function_provider = self.function_provider[i]
-            result.append(self.analyze_and_find_best(function_provider, dataset))
+            result.append(self.analyze_and_find_best(dataset))
         return result
 
-    def analyze_and_find_best(self, function_provider, data=None,):
+    def get_best_performing_across_datasets(self):
+        best_individuals = []
+        for variant in self.variants:
+            print(f"Best performing individual across datasets in variant {variant}:\n")
+            latest = variant.get_latest_record(only_completed=True)
+            if latest is None:
+                logging.warning(f">>> No records found for variant {variant.name}, skipping...")
+                continue
+            hof, best = latest.get_result()
+            best_individual = hof[0]
+            for data in self.training_data:
+                evaluation = self._build_evaluation_object(best_individual, variant, data)
+                evaluation.plot_price_and_orders()
+                self._print_individual_info(best_individual, evaluation)
+            best_individuals.append(best_individual)
+        return best_individuals
+
+
+
+    def analyze_and_find_best(self, data=None,):
         if data is None:
             data = self.training_data[0]
-
-        assert function_provider.data == data
 
         performance_rows = []
 
         # we'll go through all variants and record performance
         for variant in self.variants:
-            records = variant.get_records()
             latest = variant.get_latest_record(only_completed=True)
             if latest is None:
                 logging.warning(f">>> No records found for variant {variant.name}, skipping...")
@@ -133,7 +148,7 @@ class ExperimentManager:
             hof, best = latest.get_result()
 
             for rank, individual in enumerate(hof):
-                evaluation = self._build_evaluation_object(individual, variant, data, function_provider)
+                evaluation = self._build_evaluation_object(individual, variant, data)
                 # draw_price_chart(data.timestamps, data.prices, evaluation.orders)
                 # draw_tree(individual)
                 row = evaluation.to_primitive_types_dictionary()
@@ -149,7 +164,7 @@ class ExperimentManager:
 
         # show the best doge baby
         best = performance_info.iloc[0]
-        draw_price_chart(data.timestamps, data.prices, best['evaluation'].orders)
+        best['evaluation'].plot_price_and_orders()
         draw_tree(best['individual'])
 
         return performance_info
@@ -158,31 +173,36 @@ class ExperimentManager:
         print(f'Experiment id: {performance_df_row.experiment_id}\n')
         individual = performance_df_row.individual
         evaluation = performance_df_row.evaluation
+        self._print_individual_info(individual, evaluation)
+        return individual
+
+    def _print_individual_info(self, individual, evaluation):
         print(f'String representation:\n{str(individual)}\n')
         draw_tree(individual)
-        networkx_graph(individual)
-
+        try:
+            networkx_graph(individual)
+        except:
+            logging.warning("Failed to plot networkx graph (not installed?), skipping...")
         print(f'Backtesting report:\n {evaluation.get_report()}\n')
         print(f'Benchmark backtesting report:\n {evaluation.benchmark_backtest.get_report()}\n')
-        return individual
 
     def browse_variants(self):
         run_evolution.browse()
 
-    def _build_evaluation_object(self, individual, variant, data, function_provider):
+    def _build_evaluation_object(self, individual, variant, data):
         db_record = self.experiment_db[variant.name[len("run_evolution."):]]
         grammar = Grammar.construct(
             grammar_name=db_record['grammar_version'],
-            function_provider=function_provider,
+            function_provider=self.function_provider,
             ephemeral_suffix=db_record['experiment_id']
         )
         genetic_program = GeneticProgram(
             data_collection=[data],
-            function_providers=[function_provider],
+            function_provider=self.function_provider,
             grammar=grammar,
             fitness_function=self.fitness_function
         )
-        return genetic_program.build_evaluation_object(individual, data, function_provider)
+        return genetic_program.build_evaluation_object(individual, data)
 
 
 class ExperimentDB:
@@ -244,8 +264,8 @@ if __name__ == "__main__":
     e = ExperimentManager("sample_experiment.json")
     e.run_experiments()
     #e.explore_records()
-    df = e.analyze_and_find_best()
-    df.iloc[3].evaluation.plot_cumulative_returns()
+    #df = e.analyze_and_find_best()
+    #df.iloc[3].evaluation.plot_cumulative_returns()
     #e.browse_variants()
 
 

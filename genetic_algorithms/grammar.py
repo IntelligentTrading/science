@@ -37,6 +37,7 @@ class Grammar(ABC):
         key = (grammar_name, str(function_provider), ephemeral_suffix)
         if key in Grammar.__grammars:
             logging.debug("Hey! You requested a grammar that was initialized previously, returning the original instance...")
+            Grammar.__grammars[key].function_provider = function_provider
             return Grammar.__grammars[key]
         for subclass in Grammar.__subclasses__():
             if subclass._name == grammar_name:
@@ -117,6 +118,36 @@ class GrammarV2(Grammar):
     @property
     def longest_function_history_size(self):
         return 200
+
+
+class GrammarV3(Grammar):
+
+    _name = "gv3"
+
+    def __init__(self, function_provider, ephemeral_suffix=""):
+        super(GrammarV3, self).__init__(function_provider)
+        self._ephemeral_suffix = ephemeral_suffix  # we need this because Deap stores the grammar in global namespace
+                                                   # this creates issues if re-running evolution with unchanged
+                                                   # ephemeral constant names!
+                                                   # see https://github.com/DEAP/deap/issues/108
+        self._build_grammar()
+
+    def _build_grammar(self):
+        pset = super()._init_basic_grammar()
+        pset.addEphemeralConstant(f"rsi_overbought_threshold_{self._ephemeral_suffix}", lambda: random.uniform(70, 100), float)
+        pset.addEphemeralConstant(f"rsi_oversold_threshold_{self._ephemeral_suffix}", lambda: random.uniform(0, 30), float)
+        pset.addPrimitive(self.function_provider.rsi, [list], float)
+        pset.addPrimitive(self.function_provider.sma50, [list], float)
+        pset.addPrimitive(self.function_provider.sma200, [list], float)
+        pset.addPrimitive(self.function_provider.ema50, [list], float)
+        pset.addPrimitive(self.function_provider.ema200, [list], float)
+        pset.addPrimitive(self.function_provider.price, [list], float)
+        self._pset = pset
+
+    @property
+    def longest_function_history_size(self):
+        return 200
+
 
 
 

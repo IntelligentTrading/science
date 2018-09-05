@@ -1,80 +1,11 @@
-import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
 from backtesting.orders import OrderType
 import pandas as pd
-import networkx as nx
 from deap import gp
 from string import Template
+import networkx as nx
 
 
-def price(x):
-    return '$%1.2f' % x
-
-
-def plot_orders(ax, orders):
-    for order in orders:
-        if order.order_type == OrderType.BUY:
-            color = "g"
-        else:
-            color = "r"
-        timestamp = pd.to_datetime(order.timestamp, unit="s")
-        price = order.unit_price
-        circle = plt.Circle((timestamp, price), 0.02, color=color)
-        ax.add_artist(circle)
-
-
-def draw_chart_from_dataframe(df, data_column_name):
-    timestamps = pd.to_datetime(df.index.values, unit='s')
-    data = df.as_matrix(columns=[data_column_name])
-    draw_price_chart(timestamps, data, None)
-
-
-def draw_price_chart(timestamps, prices, orders):
-
-    years = mdates.YearLocator()   # every year
-    months = mdates.MonthLocator()  # every month
-    weeks = mdates.WeekdayLocator()
-    days = mdates.DayLocator() # every day
-    daysFmt = mdates.DateFormatter('%m/%d')
-    monthsFmt = mdates.DateFormatter('%m')
-
-    fig, ax = plt.subplots()
-    ax.plot(timestamps, prices)
-
-    #circle1 = plt.Circle((timestamps[100], prices[100]), 0.02, color='r')
-    #ax.add_artist(circle1)
-
-    if orders != None:
-        plot_orders(ax, orders)
-
-
-
-    # format the ticks
-    ax.xaxis.set_major_locator(years)
-    ax.xaxis.set_minor_locator(days)
-    ax.xaxis.set_minor_formatter(daysFmt)
-    plt.setp(ax.xaxis.get_minorticklabels(), rotation=90)
-
-    datemin = np.datetime64(timestamps[0])
-    datemax = np.datetime64(timestamps[-1])
-    ax.set_xlim(datemin, datemax)
-
-
-    # format the coords message box
-    ax.format_xdata = daysFmt
-    ax.format_ydata = price
-    ax.grid(False)
-
-    plt.ylabel("Price", fontsize=14)
-
-
-
-    # rotates and right aligns the x labels, and moves the bottom of the
-    # axes up to make room for them
-    fig.autofmt_xdate()
-
-    plt.show()
 
 
 def draw_tree(individual):
@@ -219,9 +150,6 @@ def write_graph_to_json(individual, json_file_name):
 
 
 def networkx_graph(individual):
-    from deap import gp
-    import matplotlib.pyplot as plt
-    import networkx as nx
     from networkx.drawing.nx_agraph import graphviz_layout
     import pylab
     pylab.figure(1, figsize=(18, 12))

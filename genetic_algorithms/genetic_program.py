@@ -3,10 +3,9 @@ import os
 import logging
 from deap import creator, tools, base
 from backtesting.signals import Signal
-from backtesting.strategies import SignalStrategy, Horizon, Strength, TickerStrategy, StrategyDecision
+from backtesting.strategies import SignalStrategy, Strength, TickerStrategy, StrategyDecision
 from chart_plotter import *
 from custom_deap_algorithms import combined_mutation, eaSimpleCustom
-from leaf_functions import TAProvider
 from backtester_ticks import TickDrivenBacktester
 from tick_provider import PriceDataframeTickProvider
 from abc import ABC, abstractmethod
@@ -62,19 +61,19 @@ class GeneticTickerStrategy(TickerStrategy):
         if self.i <= self.history_size:
             # outcomes.append("skipped")
             return StrategyDecision.IGNORE, None
-        outcome = self.func([timestamp])
+        outcome = self.func([timestamp, self.data.transaction_currency, self.data.counter_currency])
 
         decision = StrategyDecision.IGNORE
         signal = None
-        if outcome == self.gp_object.grammar.function_provider.buy:
+        if outcome == self.gp_object.function_provider.buy:
             decision = StrategyDecision.BUY
             signal = Signal("Genetic", 1, None, 3, 3, price, 0, timestamp, None, self.transaction_currency,
                             self.counter_currency, self.source, self.resample_period)
-        elif outcome == self.gp_object.grammar.function_provider.sell:
+        elif outcome == self.gp_object.function_provider.sell:
             decision = StrategyDecision.SELL
             signal = Signal("Genetic", -1, None, 3, 3, price, 0, timestamp, None, self.transaction_currency,
                             self.counter_currency, self.source, self.resample_period)
-        elif not outcome == self.gp_object.grammar.function_provider.ignore:
+        elif not outcome == self.gp_object.function_provider.ignore:
             logging.warning("Invalid outcome encountered")
 
         return decision, signal
@@ -184,7 +183,7 @@ class FitnessFunctionV2(FitnessFunction):
 class GeneticProgram:
     def __init__(self, data_collection, **kwargs):
         self.data_collection = data_collection
-        self.function_providers = kwargs.get('function_providers', [TAProvider(data) for data in data_collection])
+        self.function_provider = kwargs.get('function_provider')
         self.grammar = kwargs.get('grammar')
         self.fitness = kwargs.get('fitness_function', FitnessFunctionV1())
         self.tree_depth = kwargs.get('tree_depth', 5)
@@ -194,6 +193,7 @@ class GeneticProgram:
     @property
     def pset(self):
         return self.grammar.pset
+
 
     def _build_toolbox(self):
 
@@ -255,8 +255,8 @@ class GeneticProgram:
 
 
     #@time_performance
-    def compute_fitness(self, individual, data, function_provider, super_verbose=False):
-        evaluation = self.build_evaluation_object(individual, data, function_provider)
+    def compute_fitness(self, individual, data, super_verbose=False):
+        evaluation = self.build_evaluation_object(individual, data)
 
         if evaluation.num_trades > 1 and super_verbose:
             draw_price_chart(self.data.timestamps, self.data.prices, evaluation.orders)
@@ -269,13 +269,11 @@ class GeneticProgram:
     def compute_fitness_over_datasets(self, individual):
         fitnesses = []
         for i, data in enumerate(self.data_collection):
-            self.grammar.function_provider = self.function_providers[i]
-            fitnesses.append(self.compute_fitness(individual, data, self.grammar.function_provider)[0])
+            fitnesses.append(self.compute_fitness(individual, data)[0])
         return self.combined_fitness_operator(fitnesses),
         
 
-    def build_evaluation_object(self, individual, data, function_provider, ticker=True):
-        self.grammar.function_provider = function_provider
+    def build_evaluation_object(self, individual, data, ticker=True):
         if not ticker:
             strategy = GeneticSignalStrategy(individual, data, self,
                                              history_size=self.grammar.longest_function_history_size)
