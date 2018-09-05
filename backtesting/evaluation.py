@@ -135,7 +135,7 @@ class Evaluation(ABC):
     @property
     def end_value(self):
         try:
-            return self.end_cash + self.end_price * self.end_crypto
+            return self.end_cash + (self.end_price * self.end_crypto) * (1-transaction_cost_percents[self._source])
         except:
             return None
 

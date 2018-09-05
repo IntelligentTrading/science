@@ -330,9 +330,9 @@ class TickerBuyAndHold(TickerWrapperStrategy):
 
     def __init__(self, start_time, end_time):
         """
-        Builds the ticker-based but
-        :param start_time:
-        :param end_time:
+        Builds the ticker-based buy and hold strategy.
+        :param start_time: time of buying
+        :param end_time: time of selling
         """
         self._start_time = start_time
         self._end_time = end_time
@@ -379,7 +379,6 @@ class RandomTradingStrategy(SimpleTrendBasedStrategy):
         self.source = source
         self.signal_type = "Generic"
         self.signals = self.build_signals()
-
 
     def get_orders(self, signals, start_cash, start_crypto, source, time_delay=0, slippage=0):
         return SignalStrategy.get_orders(self, self.signals, start_cash, start_crypto, source, time_delay, slippage)
