@@ -299,6 +299,7 @@ class Evaluation(ABC):
         self.trading_df = pd.DataFrame(self.trading_df_rows,
                                        columns=['timestamp', 'close_price', 'signal', 'order', 'cash', 'crypto', 'total_value'])
         self.trading_df = self.trading_df.set_index('timestamp')
+        assert self.trading_df.index.is_monotonic_increasing
         # set finishing variable values
         self._end_cash = self._cash
         self._end_crypto = self._crypto
