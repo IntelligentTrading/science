@@ -188,7 +188,7 @@ class ExperimentManager:
             performance_dfs.append(self.get_performance_df_for_dataset_and_variant(variant, data))
         return performance_dfs
 
-    def get_joined_performance_dfs_over_all_variants(self):
+    def get_joined_performance_dfs_over_all_variants(self, verbose=True):
         """
         Produces a list of N dataframes, where N is the number of training sets in the training collection.
         Each dataframe shows profits on the the corresponding training set across all experiment variants.
@@ -200,17 +200,13 @@ class ExperimentManager:
             performance_info = pd.DataFrame()
             for variant in self.variants:
                 df = self.get_performance_df_for_dataset_and_variant(variant, data)
-                performance_info.append(df)
+                performance_info = performance_info.append(df)
 
             performance_info = performance_info.sort_values(by=['profit_percent'], ascending=False)
+            if verbose:
+                self.performance_df_row_info(performance_info.iloc[0])
             joined_dfs.append(performance_info)
-
-        # show the best doge baby
-        best = performance_info.iloc[0]
-        best['evaluation'].plot_price_and_orders()
-        draw_tree(best['individual'])
-
-        return performance_info
+        return joined_dfs
 
     def performance_df_row_info(self, performance_df_row):
         print(f'Experiment id: {performance_df_row.experiment_id}\n')
@@ -308,6 +304,7 @@ if __name__ == "__main__":
     e = ExperimentManager("sample_experiment.json")
     #e.run_experiments()
     #e.explore_records()
+    dfs = e.get_joined_performance_dfs_over_all_variants()
     df = e.analyze_and_find_best_in_dataset()
     from chart_plotter import rewrite_graph_as_tree
     rewrite_graph_as_tree(df.iloc[3].individual, "")
