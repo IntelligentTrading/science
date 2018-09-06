@@ -1,6 +1,7 @@
 import operator
 import os
 import logging
+import numpy as np
 from deap import creator, tools, base
 from backtesting.signals import Signal
 from backtesting.strategies import SignalStrategy, Strength, TickerStrategy, StrategyDecision

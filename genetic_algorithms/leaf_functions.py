@@ -74,6 +74,7 @@ class TAProviderCollection(TAProvider):
 
     def __init__(self, data_collection):
         self.providers = {(data.transaction_currency, data.counter_currency) : TAProvider(data) for data in data_collection}
+        # TODO: ensure that same currency pairs can be used for training and validation
 
     def __str__(self):
         return("TAproviderCollection")

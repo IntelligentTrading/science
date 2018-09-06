@@ -27,7 +27,7 @@
     ],
 
     "validation_data": [{
-        "transaction_currency": "OMG",
+        "transaction_currency": "DASH",
         "counter_currency": "BTC",
         "start_time": "2018/03/01 00:00:00 UTC",
         "end_time": "2018/03/31 00:00:00 UTC",

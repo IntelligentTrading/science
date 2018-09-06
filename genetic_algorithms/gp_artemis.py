@@ -35,7 +35,7 @@ class ExperimentManager:
         self.validation_data = [Data(start_cash=self.START_CASH, start_crypto=self.START_CRYPTO,
                                   **dataset) for dataset in self.experiment_json["validation_data"]]
         # create function provider objects based on data
-        self.function_provider = TAProviderCollection(self.training_data)
+        self.function_provider = TAProviderCollection(self.training_data + self.validation_data)
         # initialize fitness function
         self.fitness_function = FitnessFunction.construct(self.experiment_json["fitness_function"])
         self._fill_experiment_db()
@@ -68,6 +68,9 @@ class ExperimentManager:
         for experiment_name, experiment in self.experiment_db.get_all():
             run_evolution.add_variant(variant_name=experiment_name, **experiment)
         self.variants = run_evolution.get_variants()
+
+    def get_variants(self):
+        return run_evolution.get_variants()
 
     def run_experiments(self, rerun_existing=False, display_results=True):
         for i, variant in enumerate(self.variants):
@@ -108,59 +111,99 @@ class ExperimentManager:
             logging.info("== Experiment output log:")
             logging.info(latest.get_log())
 
-    def analyze_all_datasets(self):
-        result = []
-        for i, dataset in enumerate(self.training_data):
-            result.append(self.analyze_and_find_best(dataset))
-        return result
 
-    def get_best_performing_across_datasets(self):
-        best_individuals = []
+
+    def print_best_individual_statistics(self, variant):
+        best_individual, evaluations = self.get_best_performing_across_datasets(variant)
+        print(f"Best performing individual across datasets in variant {variant}:\n")
+        for evaluation in evaluations:
+            self._print_individual_info(best_individual, evaluation)
+
+
+    def get_best_performing_across_datasets(self, variant):
+        """
+        Finds the best performing individual in an experiment variant, across all training datasets.
+        :param variant: experiment variant
+        :return: individual (DEAP object) and its corresponding evaluations across datasets
+                 (a list of Evaluation objects)
+        """
+        latest = variant.get_latest_record(only_completed=True)
+        if latest is None:
+            logging.warning(f">>> No records found for variant {variant.name}, skipping...")
+            return
+        hof, best = latest.get_result()
+        best_individual = hof[0]
+        evaluations = []
+        for data in self.training_data:
+            evaluation = self._build_evaluation_object(best_individual, variant, data)
+            evaluations.append(evaluation)
+        return best_individual, evaluations
+
+    def get_best_performing_across_variants_and_datasets(self):
+        """
+        Returns a list of best performing individuals, one per experiment variant.
+        :return:
+        """
+        best_individuals = {}
         for variant in self.variants:
-            print(f"Best performing individual across datasets in variant {variant}:\n")
-            latest = variant.get_latest_record(only_completed=True)
-            if latest is None:
-                logging.warning(f">>> No records found for variant {variant.name}, skipping...")
-                continue
-            hof, best = latest.get_result()
-            best_individual = hof[0]
-            for data in self.training_data:
-                evaluation = self._build_evaluation_object(best_individual, variant, data)
-                evaluation.plot_price_and_orders()
-                self._print_individual_info(best_individual, evaluation)
-            best_individuals.append(best_individual)
+            best_individual, evaluation = self.get_best_performing_across_datasets(variant)
+            best_individuals[variant] = (best_individual, evaluation)
         return best_individuals
 
-
-
-    def analyze_and_find_best(self, data=None,):
-        if data is None:
-            data = self.training_data[0]
-
+    def get_performance_df_for_dataset_and_variant(self, variant, data):
+        """
+        Produces a performance dataframe for the given training set and experiment variant.
+        :param variant: experiment variant (get a list of all by invoking get_variants() on this object)
+        :param data: a Data object, part of the training_data collection
+        :return: a dataframe showing performance
+        """
         performance_rows = []
+        latest = variant.get_latest_record(only_completed=True)
+        if latest is None:
+            logging.warning(f">>> No records found for variant {variant.name}, skipping...")
+            return
+        hof, best = latest.get_result()
 
-        # we'll go through all variants and record performance
-        for variant in self.variants:
-            latest = variant.get_latest_record(only_completed=True)
-            if latest is None:
-                logging.warning(f">>> No records found for variant {variant.name}, skipping...")
-                continue
-            hof, best = latest.get_result()
-
-            for rank, individual in enumerate(hof):
-                evaluation = self._build_evaluation_object(individual, variant, data)
-                # draw_price_chart(data.timestamps, data.prices, evaluation.orders)
-                # draw_tree(individual)
-                row = evaluation.to_primitive_types_dictionary()
-                #row = evaluation.to_dictionary()
-                row['experiment_id'] = variant.name
-                row['hof_ranking'] = rank
-                row["individual"] = individual
-                row["evaluation"] = evaluation
-                performance_rows.append(row)
+        for rank, individual in enumerate(hof):
+            evaluation = self._build_evaluation_object(individual, variant, data)
+            row = evaluation.to_primitive_types_dictionary()
+            row['experiment_id'] = variant.name
+            row['hof_ranking'] = rank
+            row["individual"] = individual
+            row["evaluation"] = evaluation
+            performance_rows.append(row)
 
         performance_info = pd.DataFrame(performance_rows)
         performance_info = performance_info.sort_values(by=['profit_percent'], ascending=False)
+        return performance_info
+
+    def get_performance_dfs_for_variant(self, variant):
+        """
+        Gets performance dataframes for an experiment variant, one per training subset.
+        :param variant: Experiment variant
+        :return: a list of performance dataframes
+        """
+        performance_dfs = []
+        for data in self.training_data:
+            performance_dfs.append(self.get_performance_df_for_dataset_and_variant(variant, data))
+        return performance_dfs
+
+    def get_joined_performance_dfs_over_all_variants(self):
+        """
+        Produces a list of N dataframes, where N is the number of training sets in the training collection.
+        Each dataframe shows profits on the the corresponding training set across all experiment variants.
+        :return: a list of dataframes
+        """
+        joined_dfs = []
+
+        for data in self.training_data:
+            performance_info = pd.DataFrame()
+            for variant in self.variants:
+                df = self.get_performance_df_for_dataset_and_variant(variant, data)
+                performance_info.append(df)
+
+            performance_info = performance_info.sort_values(by=['profit_percent'], ascending=False)
+            joined_dfs.append(performance_info)
 
         # show the best doge baby
         best = performance_info.iloc[0]
@@ -177,6 +220,7 @@ class ExperimentManager:
         return individual
 
     def _print_individual_info(self, individual, evaluation):
+        evaluation.plot_price_and_orders()
         print(f'String representation:\n{str(individual)}\n')
         draw_tree(individual)
         try:
@@ -262,10 +306,11 @@ class ExperimentDB:
 
 if __name__ == "__main__":
     e = ExperimentManager("sample_experiment.json")
-    e.run_experiments()
+    #e.run_experiments()
     #e.explore_records()
-    #df = e.analyze_and_find_best()
-    #df.iloc[3].evaluation.plot_cumulative_returns()
+    df = e.analyze_and_find_best_in_dataset()
+    from chart_plotter import rewrite_graph_as_tree
+    rewrite_graph_as_tree(df.iloc[3].individual, "")
     #e.browse_variants()
 
 
