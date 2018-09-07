@@ -172,13 +172,25 @@ class FitnessFunctionV1(FitnessFunction):
         return evaluation.profit_percent + (max_len - len(individual)) / float(max_len) * 20 \
                + evaluation.num_sells * 5,
 
-class FitnessFunctionV2(FitnessFunction):
-    _name = "ff_v2"
+class BenchmarkDiffFitness(FitnessFunction):
+    _name = "ff_benchmarkdiff"
 
     def compute(self, individual, evaluation, genetic_program):
-        max_len = 1 ** genetic_program.tree_depth
-        return evaluation.profit_percent + (max_len - len(individual)) / float(max_len) * 10 \
-               + evaluation.num_sells * 4,
+        return evaluation.profit_percent - evaluation.benchmark_backtest.profit_percent,
+
+class BenchmarkDiffTrades(FitnessFunction):
+    _name = "ff_benchmarkdiff_trades"
+
+    def compute(self, individual, evaluation, genetic_program):
+        return (evaluation.profit_percent - evaluation.benchmark_backtest.profit_percent)*evaluation.num_profitable_trades,
+
+class BenchmarkLengthControlFitness(FitnessFunction):
+    _name = "ff_benchlenctrl"
+
+    def compute(self, individual, evaluation, genetic_program):
+        max_len = 3 ** genetic_program.tree_depth
+        return (evaluation.profit_percent - evaluation.benchmark_backtest.profit_percent) + \
+               (max_len - len(individual)) / float(max_len) * 20,
 
 
 class GeneticProgram:

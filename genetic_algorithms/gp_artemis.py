@@ -140,20 +140,22 @@ class ExperimentManager:
             evaluations.append(evaluation)
         return best_individual, evaluations
 
-    def get_best_performing_across_variants_and_datasets(self, datasets):
+    def get_best_performing_across_variants_and_datasets(self, datasets, sort_by=["mean_profit"]):
         """
         Returns a list of best performing individuals, one per experiment variant.
         :return:
         """
-        df = pd.DataFrame(columns=["experiment_name", "doge", "fitness", "mean_profit", "std_profit",
-                                   "max_profit", "min_profit", "variant", "evaluations", "individual"])
+        df = pd.DataFrame(columns=["experiment_name", "doge", "fitness_function", "fitness_value",
+                                   "mean_profit", "std_profit", "max_profit", "min_profit", "variant",
+                                   "evaluations", "individual"])
         best_individuals = []
         for variant in self.get_variants():
             best_individual, evaluations = self.get_best_performing_across_datasets(variant, datasets)
             profits = [evaluation.profit_percent for evaluation in evaluations]
             df = df.append({"experiment_name": str(variant.name),
                        "doge": str(best_individual),
-                       "fitness" : self._get_fitness(best_individual, variant, datasets),
+                       "fitness_function": self.get_db_record(variant)["fitness_function"]._name,
+                       "fitness_value" : self._get_fitness(best_individual, variant, datasets),
                        "mean_profit": np.mean(profits),
                        "std_profit": np.std(profits),
                        "max_profit": np.max(profits),
@@ -163,7 +165,7 @@ class ExperimentManager:
                        "evaluations": evaluations,
                        "individual": best_individual}, ignore_index=True)
 
-        df = df.sort_values(by=["fitness"])
+        df = df.sort_values(by=sort_by, ascending=False)
         return df
 
 
@@ -257,8 +259,11 @@ class ExperimentManager:
     def browse_variants(self):
         run_evolution.browse()
 
+    def get_db_record(self, variant):
+        return self.experiment_db[variant.name[len("run_evolution."):]]
+
     def _build_genetic_program(self, variant, data):
-        db_record = self.experiment_db[variant.name[len("run_evolution."):]]
+        db_record = self.get_db_record(variant)
         grammar = Grammar.construct(
             grammar_name=db_record['grammar_version'],
             function_provider=self.function_provider,
