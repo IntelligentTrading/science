@@ -6,6 +6,7 @@ import logging
 from grammar import Grammar
 import json
 import itertools
+import numpy as np
 from chart_plotter import *
 
 @experiment_root
@@ -112,18 +113,18 @@ class ExperimentManager:
             logging.info(latest.get_log())
 
 
-
-    def print_best_individual_statistics(self, variant):
-        best_individual, evaluations = self.get_best_performing_across_datasets(variant)
+    def print_best_individual_statistics(self, variant, datasets):
+        best_individual, evaluations = self.get_best_performing_across_datasets(variant, datasets)
         print(f"Best performing individual across datasets in variant {variant}:\n")
         for evaluation in evaluations:
             self._print_individual_info(best_individual, evaluation)
 
 
-    def get_best_performing_across_datasets(self, variant):
+    def get_best_performing_across_datasets(self, variant, datasets):
         """
-        Finds the best performing individual in an experiment variant, across all training datasets.
+        Finds the best performing individual in an experiment variant, across all datasets.
         :param variant: experiment variant
+        :param datasets: a collection of Data objects
         :return: individual (DEAP object) and its corresponding evaluations across datasets
                  (a list of Evaluation objects)
         """
@@ -134,21 +135,37 @@ class ExperimentManager:
         hof, best = latest.get_result()
         best_individual = hof[0]
         evaluations = []
-        for data in self.training_data:
+        for data in datasets:
             evaluation = self._build_evaluation_object(best_individual, variant, data)
             evaluations.append(evaluation)
         return best_individual, evaluations
 
-    def get_best_performing_across_variants_and_datasets(self):
+    def get_best_performing_across_variants_and_datasets(self, datasets):
         """
         Returns a list of best performing individuals, one per experiment variant.
         :return:
         """
-        best_individuals = {}
-        for variant in self.variants:
-            best_individual, evaluation = self.get_best_performing_across_datasets(variant)
-            best_individuals[variant] = (best_individual, evaluation)
-        return best_individuals
+        df = pd.DataFrame(columns=["experiment_name", "doge", "fitness", "mean_profit", "std_profit",
+                                   "max_profit", "min_profit", "variant", "evaluations", "individual"])
+        best_individuals = []
+        for variant in self.get_variants():
+            best_individual, evaluations = self.get_best_performing_across_datasets(variant, datasets)
+            profits = [evaluation.profit_percent for evaluation in evaluations]
+            df = df.append({"variant": str(variant.name),
+                       "doge": str(best_individual),
+                       "fitness" : self._get_fitness(best_individual, variant, datasets),
+                       "mean_profit": np.mean(profits),
+                       "std_profit": np.std(profits),
+                       "max_profit": np.max(profits),
+                       "min_profit": np.min(profits),
+                       "all_profits": ", ".join(map(str,profits)),
+                       "variant" : variant,
+                       "evaluations": evaluations,
+                       "individual": best_individual}, ignore_index=True)
+
+        df = df.sort_values(by=["fitness"])
+        return df
+
 
     def get_performance_df_for_dataset_and_variant(self, variant, data):
         """
@@ -165,17 +182,28 @@ class ExperimentManager:
         hof, best = latest.get_result()
 
         for rank, individual in enumerate(hof):
-            evaluation = self._build_evaluation_object(individual, variant, data)
-            row = evaluation.to_primitive_types_dictionary()
-            row['experiment_id'] = variant.name
-            row['hof_ranking'] = rank
-            row["individual"] = individual
-            row["evaluation"] = evaluation
+            row = self.generate_performance_df_row(data, individual, variant, rank)
             performance_rows.append(row)
 
         performance_info = pd.DataFrame(performance_rows)
         performance_info = performance_info.sort_values(by=['profit_percent'], ascending=False)
         return performance_info
+
+    def generate_performance_df_row(self, data, individual, variant, rank=None):
+        evaluation = self._build_evaluation_object(individual, variant, data)
+        row = evaluation.to_primitive_types_dictionary()
+        row['experiment_id'] = variant.name
+        row['hof_ranking'] = rank
+        row["individual"] = individual
+        row["evaluation"] = evaluation
+        return row
+
+    def evaluate_individual_on_data_collection(self, individual, variant, data_collection):
+        performance_df = pd.DataFrame()
+        for data in data_collection:
+            row = self.generate_performance_df_row(data, individual, variant)
+            performance_df = performance_df.append(row, ignore_index=True)
+        return performance_df
 
     def get_performance_dfs_for_variant(self, variant):
         """
@@ -229,7 +257,7 @@ class ExperimentManager:
     def browse_variants(self):
         run_evolution.browse()
 
-    def _build_evaluation_object(self, individual, variant, data):
+    def _build_genetic_program(self, variant, data):
         db_record = self.experiment_db[variant.name[len("run_evolution."):]]
         grammar = Grammar.construct(
             grammar_name=db_record['grammar_version'],
@@ -237,12 +265,25 @@ class ExperimentManager:
             ephemeral_suffix=db_record['experiment_id']
         )
         genetic_program = GeneticProgram(
-            data_collection=[data],
+            data_collection=data,
             function_provider=self.function_provider,
             grammar=grammar,
             fitness_function=self.fitness_function
         )
+        return genetic_program
+
+    def _build_evaluation_object(self, individual, variant, data):
+        genetic_program = self._build_genetic_program(variant, data)
         return genetic_program.build_evaluation_object(individual, data)
+
+    def _get_fitness(self, individual, variant, data):
+        genetic_program = self._build_genetic_program(variant, data)
+        return genetic_program.compute_fitness_over_datasets(individual)[0]
+
+
+
+
+
 
 
 class ExperimentDB:
@@ -304,6 +345,7 @@ if __name__ == "__main__":
     e = ExperimentManager("sample_experiment.json")
     #e.run_experiments()
     #e.explore_records()
+    e.best_individuals_across_variants_and_datasets = e.get_best_performing_across_variants_and_datasets(e.training_data)
     dfs = e.get_joined_performance_dfs_over_all_variants()
     df = e.analyze_and_find_best_in_dataset()
     from chart_plotter import rewrite_graph_as_tree
