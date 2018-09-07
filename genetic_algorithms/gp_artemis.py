@@ -37,8 +37,7 @@ class ExperimentManager:
                                   **dataset) for dataset in self.experiment_json["validation_data"]]
         # create function provider objects based on data
         self.function_provider = TAProviderCollection(self.training_data + self.validation_data)
-        # initialize fitness function
-        self.fitness_function = FitnessFunction.construct(self.experiment_json["fitness_function"])
+        # generate and register variants
         self._fill_experiment_db()
         self._register_variants()
 
@@ -47,13 +46,14 @@ class ExperimentManager:
 
         variants = itertools.product(self.experiment_json["mating_probabilities"],
                                      self.experiment_json["mutation_probabilities"],
-                                     self.experiment_json["population_sizes"])
-        for mating_prob, mutation_prob, population_size in variants:
+                                     self.experiment_json["population_sizes"],
+                                     self.experiment_json["fitness_functions"])
+        for mating_prob, mutation_prob, population_size, fitness_function in variants:
             self.experiment_db.add(
                 data=self.training_data,
                 function_provider=self.function_provider,
                 grammar_version=self.experiment_json["grammar_version"],
-                fitness_function=self.fitness_function,
+                fitness_function=FitnessFunction.construct(fitness_function),
                 mating_prob=mating_prob,
                 mutation_prob=mutation_prob,
                 population_size=population_size,
@@ -151,7 +151,7 @@ class ExperimentManager:
         for variant in self.get_variants():
             best_individual, evaluations = self.get_best_performing_across_datasets(variant, datasets)
             profits = [evaluation.profit_percent for evaluation in evaluations]
-            df = df.append({"variant": str(variant.name),
+            df = df.append({"experiment_name": str(variant.name),
                        "doge": str(best_individual),
                        "fitness" : self._get_fitness(best_individual, variant, datasets),
                        "mean_profit": np.mean(profits),
@@ -268,7 +268,7 @@ class ExperimentManager:
             data_collection=data,
             function_provider=self.function_provider,
             grammar=grammar,
-            fitness_function=self.fitness_function
+            fitness_function=db_record['fitness_function']
         )
         return genetic_program
 

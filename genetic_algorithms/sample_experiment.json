@@ -35,7 +35,7 @@
         "source": 0
     }],
 
-    "fitness_function": "ff_v1",
+    "fitness_functions": ["ff_v1"],
     "grammar_version": "gv3",
     "num_generations": 3,
 
