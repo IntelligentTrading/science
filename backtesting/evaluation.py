@@ -135,7 +135,7 @@ class Evaluation(ABC):
     @property
     def end_value(self):
         try:
-            return self.end_cash + self.end_price * self.end_crypto
+            return self.end_cash + (self.end_price * self.end_crypto) * (1-transaction_cost_percents[self._source])
         except:
             return None
 
@@ -299,6 +299,7 @@ class Evaluation(ABC):
         self.trading_df = pd.DataFrame(self.trading_df_rows,
                                        columns=['timestamp', 'close_price', 'signal', 'order', 'cash', 'crypto', 'total_value'])
         self.trading_df = self.trading_df.set_index('timestamp')
+        assert self.trading_df.index.is_monotonic_increasing
         # set finishing variable values
         self._end_cash = self._cash
         self._end_crypto = self._crypto
@@ -550,6 +551,12 @@ class Evaluation(ABC):
             return
         chart = BacktestingChart(self, self._benchmark_backtest)
         chart.draw_returns_tear_sheet()
+
+    def plot_price_and_orders(self):
+        if self.trading_df.empty:
+            return
+        chart = BacktestingChart(self, self._benchmark_backtest)
+        chart.draw_price_chart()
 
 
 class StrategyDecision:

@@ -85,7 +85,8 @@ resampled_price_range_query = """SELECT timestamp, close_price
                                  AND source = %s 
                                  AND timestamp >= %s AND timestamp <= %s
                                  AND resample_period = %s
-                                 AND close_price is not null"""
+                                 AND close_price is not null
+                                 ORDER BY timestamp ASC"""
 
 class PostgresDatabaseConnection:
     def __init__(self):

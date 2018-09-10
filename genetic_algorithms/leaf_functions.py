@@ -9,12 +9,15 @@ class FunctionProvider:
         except:
             return output1
 
+    @classmethod
     def buy(self):
         pass
 
+    @classmethod
     def sell(self):
         pass
 
+    @classmethod
     def ignore(self):
         pass
 
@@ -64,3 +67,42 @@ class TAProvider(FunctionProvider):
     def price(self, input):
         timestamp = input[0]
         return self.data.price_data.loc[timestamp,"close_price"]
+
+
+class TAProviderCollection(TAProvider):
+    # TODO: figure out how to write this shorter and DRY
+
+    def __init__(self, data_collection):
+        self.providers = {(data.transaction_currency, data.counter_currency) : TAProvider(data) for data in data_collection}
+        # TODO: ensure that same currency pairs can be used for training and validation
+
+    def __str__(self):
+        return("TAproviderCollection")
+
+    def rsi(self, input):
+        timestamp, transaction_currency, counter_currency = input
+        return self.providers[(transaction_currency, counter_currency)].rsi([timestamp])
+
+
+    def sma50(self, input):
+        timestamp, transaction_currency, counter_currency = input
+        return self.providers[(transaction_currency, counter_currency)].sma50([timestamp])
+
+
+    def ema50(self, input):
+        timestamp, transaction_currency, counter_currency = input
+        return self.providers[(transaction_currency, counter_currency)].ema50([timestamp])
+
+    def sma200(self, input):
+        timestamp, transaction_currency, counter_currency = input
+        return self.providers[(transaction_currency, counter_currency)].sma200([timestamp])
+
+
+    def ema200(self, input):
+        timestamp, transaction_currency, counter_currency = input
+        return self.providers[(transaction_currency, counter_currency)].ema200([timestamp])
+
+
+    def price(self, input):
+        timestamp, transaction_currency, counter_currency = input
+        return self.providers[(transaction_currency, counter_currency)].price([timestamp])

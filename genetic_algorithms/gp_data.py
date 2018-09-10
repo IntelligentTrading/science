@@ -16,7 +16,6 @@ strategy_logger.setLevel(logging.ERROR)
 
 class Data:
 
-
     def _parse_time(self, time_input):
         if isinstance(time_input, str):
             time_object = parser.parse(time_input)

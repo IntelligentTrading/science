@@ -5,6 +5,7 @@ from chart_plotter import *
 import pandas as pd
 import os
 import time
+
 from gp_data import Data
 import sys
 import logging
@@ -13,7 +14,7 @@ SUPER_VERBOSE = False
 start_cash = 1
 start_crypto = 0
 
-from genetic_program import GeneticProgram, GeneticTickerStrategy
+from genetic_program import GeneticProgram
 
 
 def evaluate_buy_and_hold(data, history_size, verbose_eval, **params):
