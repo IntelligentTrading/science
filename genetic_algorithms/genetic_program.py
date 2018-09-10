@@ -192,6 +192,21 @@ class BenchmarkLengthControlFitness(FitnessFunction):
         return (evaluation.profit_percent - evaluation.benchmark_backtest.profit_percent) + \
                (max_len - len(individual)) / float(max_len) * 20,
 
+class BenchmarkLengthControlFitnessV2(FitnessFunction):
+    _name = "ff_benchlenctrl_v2"
+
+    def compute(self, individual, evaluation, genetic_program):
+        max_len = 3 ** genetic_program.tree_depth
+        return (evaluation.profit_percent - evaluation.benchmark_backtest.profit_percent) * \
+               (max_len - len(individual)) / float(max_len),
+
+class BenchmarkLengthControlFitnessV3(FitnessFunction):
+    _name = "ff_benchlenctrl_v3"
+
+    def compute(self, individual, evaluation, genetic_program):
+        max_len = 3 ** genetic_program.tree_depth
+        return (evaluation.profit_percent - evaluation.benchmark_backtest.profit_percent) * \
+               (1+0.1*(max_len - len(individual)) / float(max_len)),
 
 class GeneticProgram:
     def __init__(self, data_collection, **kwargs):
@@ -199,7 +214,7 @@ class GeneticProgram:
         self.function_provider = kwargs.get('function_provider')
         self.grammar = kwargs.get('grammar')
         self.fitness = kwargs.get('fitness_function', FitnessFunctionV1())
-        self.tree_depth = kwargs.get('tree_depth', 5)
+        self.tree_depth = kwargs.get('tree_depth', 15)
         self.combined_fitness_operator = kwargs.get('combined_fitness_operator', min)
         self._build_toolbox()
 
