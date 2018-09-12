@@ -1,11 +1,9 @@
 import matplotlib.pyplot as plt
-from backtesting.orders import OrderType
-import pandas as pd
 from deap import gp
 from string import Template
 import networkx as nx
 
-
+from gp_utils import recompute_tree_graph
 
 
 def draw_tree(individual):
@@ -336,23 +334,6 @@ def write_graph_to_json(individual, json_file_name):
     with open(json_file_name, 'w') as f:
         json.dump({'nodes': edited_nodes, 'links': edited_edges},
                   f, indent=4, )
-
-
-
-def recompute_tree_graph(nodes, edges):
-	children = {node: [] for node in nodes}
-	for a, b in edges:
-		children[a].append(b)
-		#children[b].append(a)
-	return children
-
-
-def visit_node(graph, node, parent = None):
-    header = f"(name={node}, children: ["
-    children = [visit_node(graph, child, node)
-                for child in graph[node]
-                if child != parent]
-    return header + ', '.join(children) + "])"
 
 
 """

@@ -287,7 +287,6 @@ class GeneticProgram:
         evaluation = self.build_evaluation_object(individual, data)
 
         if evaluation.num_trades > 1 and super_verbose:
-            draw_price_chart(self.data.timestamps, self.data.prices, evaluation.orders)
             logging.info(str(individual))
             logging.info(evaluation.get_report())
             draw_tree(individual)
@@ -357,5 +356,70 @@ class GeneticProgram:
 
     def load_evolution_file(self, file_path):
         return pickle.load(open(file_path, "rb"))
+
+    @staticmethod
+    def compress_individual(individual):
+        for i, element in enumerate(individual):
+
+            if individual == 'True':
+                return True
+            if individual == 'False':
+                return False
+            if individual == 'identity':
+                return 'identity'
+
+            if individual.arity == 0:
+                return individual
+            elements = individual[i:i+element.arity]
+            if str(individual) == 'if_then_else':
+                if GeneticProgram.compress_individual(elements[1]) == False:
+                    return GeneticProgram.compress_individual(elements[2])
+                elif GeneticProgram.compress_individual(elements[1]) == True:
+                    return GeneticProgram.compress_individual(elements[1])
+                else:
+                    return 'if_then_else'
+
+def visit_node(graph, node, labels, parent = None):
+    children = [visit_node(graph, child, labels, node)
+                for child in graph[node]
+                if child != parent]
+    return [labels[node], children]
+
+def compress(individual):
+    nodes, edges, labels = gp.graph(individual)
+    from gp_utils import recompute_tree_graph
+    graph = recompute_tree_graph(nodes, edges)
+    root = visit_node(graph, 0, labels)
+    optimized = optimize(root)
+    return wrap_children(optimized)
+
+def wrap_children(optimized):
+    node, children = optimized
+    if len(children) == 0:
+        return node
+    s = f'{str(node)}('
+    for child in children:
+        s += wrap_children(child)
+        s += ','
+    s = s[:-1]
+    s += ')'
+    return s
+
+def optimize(node):
+    node_type, children = node
+    # optimize all children
+    for i in range(len(children)):
+        children[i] = optimize(children[i])
+    if node_type == "if_then_else":
+        cond_type = children[0][0]
+        if cond_type == True:
+            return children[1]
+        if cond_type == False:
+            return children[2]
+    # can't optimize this node
+    # (and children are already optimized)
+    return node
+
+
 
 

@@ -75,7 +75,7 @@ class BacktestingChart:
         daysFmt = mdates.DateFormatter('%m/%d')
         monthsFmt = mdates.DateFormatter('%m')
 
-        fig, ax = plt.subplots()
+        fig, ax = plt.subplots(figsize=(20, 8))
         ax.plot(timestamps, prices)
 
         #circle1 = plt.Circle((timestamps[100], prices[100]), 0.02, color='r')

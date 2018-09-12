@@ -8,6 +8,7 @@ import json
 import itertools
 import numpy as np
 from chart_plotter import *
+import pandas as pd
 
 @experiment_root
 def run_evolution(experiment_id, data, function_provider, grammar_version, fitness_function, mating_prob,
@@ -197,6 +198,7 @@ class ExperimentManager:
         row['experiment_id'] = variant.name
         row['hof_ranking'] = rank
         row["individual"] = individual
+        row["individual_str"] = str(individual)
         row["evaluation"] = evaluation
         return row
 
@@ -350,11 +352,11 @@ if __name__ == "__main__":
     e = ExperimentManager("sample_experiment.json")
     #e.run_experiments()
     #e.explore_records()
-    e.best_individuals_across_variants_and_datasets = e.get_best_performing_across_variants_and_datasets(e.training_data)
-    dfs = e.get_joined_performance_dfs_over_all_variants()
-    df = e.analyze_and_find_best_in_dataset()
-    from chart_plotter import rewrite_graph_as_tree
-    rewrite_graph_as_tree(df.iloc[3].individual, "")
+    #e.best_individuals_across_variants_and_datasets = e.get_best_performing_across_variants_and_datasets(e.training_data)
+    #dfs = e.get_joined_performance_dfs_over_all_variants()
+    df = e.get_best_performing_across_variants_and_datasets(e.training_data)
+    from genetic_program import compress
+    compress(df.iloc[0].individual)
     #e.browse_variants()
 
 
