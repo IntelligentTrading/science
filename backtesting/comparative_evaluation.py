@@ -124,25 +124,38 @@ class ComparativeEvaluation:
         self.output_file = output_file
         self.time_delay = time_delay
 
-        self._run_backtests()
+        self._run_backtests(debug)
         self._report = ComparativeReportBuilder(self.backtests, self.baselines)
         best_backtest = self._report.get_best_performing_backtest()
         logging.info(best_backtest.get_report())
         if output_file is not None:
             self._report.write_summary(output_file)
 
-    def _run_backtests(self):
+    def _run_backtests(self, debug):
         self.backtests = []
         self.baselines = []
+        transaction_currencies_cache = {}
+
         for counter_currency, resample_period, source, strategy in \
                 itertools.product(self.counter_currencies, self.resample_periods, self.sources, self.strategy_set):
-            for transaction_currency in get_currencies_trading_against_counter(counter_currency, source):
+
+            # performance optimization, ensure we get each list of transaction_currencies only once
+            # per counter and source
+            if (counter_currency, source) not in transaction_currencies_cache:
+                transaction_currencies_cache[(counter_currency, source)] \
+                    = get_currencies_trading_against_counter(counter_currency, source)
+            transaction_currencies = transaction_currencies_cache[(counter_currency, source)]
+
+            for transaction_currency in transaction_currencies:
                 try:
                     backtest, baseline = self._evaluate(strategy, transaction_currency, counter_currency, resample_period, source)
                     self.backtests.append(backtest)
                     self.baselines.append(baseline)
+                    if debug:
+                        break
                 except NoPriceDataException:
                     continue
+
 
     def _evaluate(self, strategy, transaction_currency, counter_currency, resample_period, source):
         logging.info("Evaluating strategy...")
@@ -242,27 +255,27 @@ class ComparativeReportBuilder:
         return mean, std, min, max
 
     def _describe_and_write(self, filtered_df, writer, sheet_prefix):
+        if filtered_df.empty:
+            return
+
         # group by strategy, evaluate
-        by_strategy_df = filtered_df[["source", "strategy", "resample_period", "profit_percent", "buy_and_hold_profit_percent"]]\
+        by_strategy_df = filtered_df[["source", "strategy", "resample_period", "profit_percent",
+                                      "buy_and_hold_profit_percent", "num_trades"]]\
             .groupby(["source", "strategy", "resample_period"]).describe(percentiles=[])
         # reorder columns and write
-        by_strategy_df[["profit_percent", "buy_and_hold_profit_percent"]].to_excel(writer, f'{sheet_prefix} by strategy')
+        by_strategy_df[["profit_percent", "buy_and_hold_profit_percent", "num_trades"]].to_excel(writer, f'{sheet_prefix} by strategy')
 
-        # get buy and hold
-        # for i, key in enumerate(list(by_strategy_df.index)):
-        #    if i == 0:
-        #        mean, std, min, max = self._get_description_stats(by_strategy_df, 'buy_and_hold_profit_percent', key)
-        #    else:
-        #        assert self._get_description_stat_values(by_strategy_df, 'buy_and_hold_profit_percent', key) == (mean, std, min, max)
 
         # group by coin, evaluate
-        by_coin_df = filtered_df[["source", "transaction_currency", "profit_percent", "buy_and_hold_profit_percent"]]\
-            .groupby(["source","transaction_currency"]).describe(percentiles=[])
+        by_coin_df = filtered_df[["source", "transaction_currency", "profit_percent",
+                                  "buy_and_hold_profit_percent", "num_trades"]]\
+            .groupby(["source", "transaction_currency"]).describe(percentiles=[])
         # reorder columns and write
-        by_coin_df[["profit_percent", "buy_and_hold_profit_percent"]].to_excel(writer, f'{sheet_prefix} by coin')
+        by_coin_df[["profit_percent", "buy_and_hold_profit_percent", "num_trades"]].to_excel(writer, f'{sheet_prefix} by coin')
+
         g = by_coin_df.groupby(level=0, group_keys=False)
         by_coin_sorted_df = g.apply(lambda x: x.sort_values([('profit_percent', 'mean')], ascending=False))
-        by_coin_sorted_df[["profit_percent", "buy_and_hold_profit_percent"]].to_excel(writer, f'{sheet_prefix} sorted by coin')
+        by_coin_sorted_df[["profit_percent", "buy_and_hold_profit_percent", "num_trades"]].to_excel(writer, f'{sheet_prefix} sorted by coin')
 
 
     def all_coins_report(self, report_path, currency_pairs_to_keep=None, group_strategy_variants=True):
