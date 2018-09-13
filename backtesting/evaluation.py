@@ -10,6 +10,8 @@ from config import transaction_cost_percents
 from abc import ABC, abstractmethod
 from charting import BacktestingChart
 
+from trader import AlternatingBuySellTrading
+
 logging.getLogger().setLevel(logging.INFO)
 pd.options.mode.chained_assignment = None
 
