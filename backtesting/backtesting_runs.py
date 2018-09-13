@@ -6,15 +6,32 @@ from backtesting_helpers import find_num_cumulative_outperforms
 from data_sources import get_currencies_trading_against_counter
 
 def best_performing_signals_of_the_week():
-    start_time = datetime.datetime(2018, 8, 1, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
-    end_time = datetime.datetime(2018, 8, 31, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
+    start_time = datetime.datetime(2018, 7, 1, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
+    end_time = datetime.datetime(2018, 7, 31, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
 
-    strategies = StrategyEvaluationSetBuilder.build_from_signal_set(
+    basic_strategies = StrategyEvaluationSetBuilder.build_from_signal_set(
         buy_signals=['rsi_buy_3', 'rsi_buy_2', 'rsi_cumulat_buy_2', 'rsi_cumulat_buy_3', 'ichi_kumo_up', 'ann_simple_bull'],
         sell_signals=['rsi_sell_3', 'rsi_sell_2', 'rsi_cumulat_sell_2', 'rsi_cumulat_sell_3', 'ichi_kumo_down', 'ann_simple_bear'],
         num_buy=2,
         num_sell=2,
         signal_combination_mode=SignalCombinationMode.SAME_TYPE)
+
+    vbi_strategies = StrategyEvaluationSetBuilder.build_from_signal_set(
+        buy_signals=['vbi_buy'],
+        sell_signals=['rsi_sell_1', 'rsi_sell_2', 'rsi_sell_3'],
+        num_buy=1,
+        num_sell=1,
+        signal_combination_mode=SignalCombinationMode.ANY
+    )
+
+    ann_rsi_strategies = StrategyEvaluationSetBuilder.build_from_signal_set(
+        buy_signals=['rsi_buy_1', 'rsi_buy_2', 'rsi_buy_3'],
+        sell_signals=["ann_simple_bear"],
+        num_buy=1,
+        num_sell=1,
+        signal_combination_mode=SignalCombinationMode.ANY
+    )
+    strategies = basic_strategies + vbi_strategies + ann_rsi_strategies
 
     comparison = ComparativeEvaluation(
         strategy_set=strategies,
@@ -25,10 +42,11 @@ def best_performing_signals_of_the_week():
         start_crypto=0,
         start_time=start_time,
         end_time=end_time,
-        output_file=f"best_performing_{datetime.datetime.utcfromtimestamp(end_time).strftime('%Y-%m-%d')}.xlsx"
+        output_file=f"best_performing_{datetime.datetime.utcfromtimestamp(end_time).strftime('%Y-%m-%d')}.xlsx",
+        debug=True
     )
 
-    comparison.report.all_coins_report("all_coins.xlsx")
+    comparison.report.all_coins_report("full_report_{datetime.datetime.utcfromtimestamp(end_time).strftime('%Y-%m-%d')}", group_strategy_variants=False)
 
 
 
