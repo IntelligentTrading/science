@@ -492,7 +492,6 @@ class Evaluation(ABC):
         return result
 
 
-
     def to_dictionary(self):
         dictionary = vars(self).copy()
         # remove trailing underscores

@@ -114,7 +114,9 @@ class SignalStrategy(Strategy):
                 if strategy.belongs_to_this_strategy(signal) and strategy.indicates_sell(signal)]
 
 
+from functools import total_ordering
 
+@total_ordering
 class SignalSignatureStrategy(SignalStrategy):
     """
     A strategy based on ITF signal signatures (see a list of signatures in the field ALL_SIGNALS).
@@ -135,9 +137,23 @@ class SignalSignatureStrategy(SignalStrategy):
         output.append("  description: trading according to signal set {}".format(str(self.signal_set)))
         return "\n".join(output)
 
-    def get_short_summary(self):
-        return "Signal-set based strategy, trading according to signal set {}".format(str(self.signal_set))
 
+    def get_short_summary(self):
+        return ' + '.join([pretty_print_signal(s) for s in self.signal_set])
+
+    def __lt__(self, other):
+        signal_types_self = {ALL_SIGNALS[s].signal for s in self.signal_set}
+        signal_types_other = {ALL_SIGNALS[s].signal for s in other.signal_set}
+
+        if len(signal_types_self) < len(signal_types_other):
+            return True
+        elif len(signal_types_self) > len(signal_types_other):
+            return False
+        else:
+            return list(sorted(signal_types_self))[0] < list(sorted(signal_types_other))[0]
+
+    def __eq__(self, other):
+        return self.signal_set == other.signal_set
 
 
 class SimpleRSIStrategy(SignalStrategy):

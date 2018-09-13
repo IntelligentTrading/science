@@ -61,6 +61,23 @@ def get_signal_type(signal_record):
     assert len(id) == 1
     return id[0]
 
+def pretty_print_signal(signal_type):
+    s = ALL_SIGNALS[signal_type]
+    decision = 'buy' if s.trend == 1 else 'sell'
+    if s.signal == 'RSI':
+        return f'RSI{s.strength} {decision}'
+    elif s.signal == 'ANN_Simple':
+        return f'ANN {decision}'
+    elif s.signal == 'kumo_breakout':
+        return f'Ichimoku {decision}'
+    elif s.signal == 'VBI':
+        return f'VBI {decision}'
+    elif s.signal == 'RSI_Cumulative':
+        return f'RSIComb{s.strength} {decision}'
+    else:
+        # unknown or don't care
+        return signal_type
+
 
 SignalType = namedtuple('SignalType', 'signal, trend, strength')
 ALL_SIGNALS = {
@@ -103,6 +120,5 @@ ALL_SIGNALS = {
 
     'generic_up': SignalType('Generic', 1, 3),
     'generic_down': SignalType('Generic', -1, 3)
-
 
 }

@@ -1,4 +1,5 @@
 import itertools
+import numpy as np
 from data_sources import *
 from backtester_signals import SignalDrivenBacktester
 from config import backtesting_report_columns
@@ -111,7 +112,7 @@ class ComparativeEvaluation:
     def __init__(self, strategy_set, counter_currencies, resample_periods, sources,
                  start_cash, start_crypto, start_time, end_time, output_file=None, time_delay=0, debug=False):
 
-        self.strategy_set = strategy_set
+        self.strategy_set = sorted(strategy_set)
         self.counter_currencies = counter_currencies
         self.resample_periods = resample_periods
         self.sources = sources
@@ -136,8 +137,8 @@ class ComparativeEvaluation:
         self.baselines = []
         transaction_currencies_cache = {}
 
-        for counter_currency, resample_period, source, strategy in \
-                itertools.product(self.counter_currencies, self.resample_periods, self.sources, self.strategy_set):
+        for strategy, counter_currency, resample_period, source in \
+                itertools.product(self.strategy_set, self.counter_currencies, self.resample_periods, self.sources):
 
             # performance optimization, ensure we get each list of transaction_currencies only once
             # per counter and source
@@ -205,7 +206,7 @@ class ComparativeReportBuilder:
             logging.warning("No strategies evaluated.")
             return
         # sort results by profit
-        output = output.sort_values(by=['profit_percent'], ascending=False)
+        # output = output.sort_values(by=['profit_percent'], ascending=False)
 
         # drop index
         output.reset_index(inplace=True, drop=True)
@@ -233,7 +234,8 @@ class ComparativeReportBuilder:
     def write_summary(self, output_file):
         writer = pd.ExcelWriter(output_file)
         # filter so that only report columns remain
-        self.results_df[backtesting_report_columns].to_excel(writer, 'Results')
+        self.results_df[backtesting_report_columns]. \
+            sort_values(by=['profit_percent'], ascending=False).to_excel(writer, 'Results')
         writer.save()
 
     def write_comparative_summary(self, summary_path):
@@ -261,9 +263,25 @@ class ComparativeReportBuilder:
         # group by strategy, evaluate
         by_strategy_df = filtered_df[["source", "strategy", "resample_period", "profit_percent",
                                       "buy_and_hold_profit_percent", "num_trades"]]\
-            .groupby(["source", "strategy", "resample_period"]).describe(percentiles=[])
+            .groupby(["source", "strategy", "resample_period"], sort=False).describe(percentiles=[])
+
+        # add outperformance stat
+        outperforms = pd.Series(by_strategy_df[('profit_percent', 'mean')]) > \
+                      pd.Series(by_strategy_df[('buy_and_hold_profit_percent', 'mean')])
+
+        by_strategy_df["outperforms"] = outperforms
+
         # reorder columns and write
-        by_strategy_df[["profit_percent", "buy_and_hold_profit_percent", "num_trades"]].to_excel(writer, f'{sheet_prefix} by strategy')
+        by_strategy_df[["profit_percent", "buy_and_hold_profit_percent", "num_trades", "outperforms"]]\
+            .to_excel(writer, f'{sheet_prefix} by strategy')
+
+        # add outperformance percent at the top
+        sheet = writer.sheets[f'{sheet_prefix} by strategy']
+        sheet.write(1, ord('V')-ord('A'), np.mean(outperforms))
+
+
+
+        #writer.cur_sheet.write()
 
 
         # group by coin, evaluate
