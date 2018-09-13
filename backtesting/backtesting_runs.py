@@ -46,7 +46,7 @@ def best_performing_signals_of_the_week():
         debug=True
     )
 
-    comparison.report.all_coins_report("full_report_{datetime.datetime.utcfromtimestamp(end_time).strftime('%Y-%m-%d')}", group_strategy_variants=False)
+    comparison.report.all_coins_report(f"full_report_{datetime.datetime.utcfromtimestamp(end_time).strftime('%Y-%m-%d')}.xlsx", group_strategy_variants=False)
 
 
 
