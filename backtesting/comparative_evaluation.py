@@ -312,12 +312,16 @@ class ComparativeReportBuilder:
                                   "buy_and_hold_profit_percent", "num_trades"]]\
             .groupby(["source", "transaction_currency"]).describe(percentiles=[])
         # reorder columns and write
-        by_coin_df[["profit_percent", "buy_and_hold_profit_percent", "num_trades"]].to_excel(writer, f'{sheet_prefix} by coin')
+        # by_coin_df[["profit_percent", "buy_and_hold_profit_percent", "num_trades"]].to_excel(writer, f'{sheet_prefix} by coin')
 
         g = by_coin_df.groupby(level=0, group_keys=False)
         by_coin_sorted_df = g.apply(lambda x: x.sort_values([('profit_percent', 'mean')], ascending=False))
         by_coin_sorted_df[["profit_percent", "buy_and_hold_profit_percent", "num_trades"]].to_excel(writer, f'{sheet_prefix} sorted by coin')
 
+        sheet = writer.sheets[f'{sheet_prefix} sorted by coin']
+        sheet.set_column('D:H', None, percent_format)
+        sheet.set_column('J:N', None, percent_format)
+        sheet.set_column('P:T', None, number_format)
 
     def all_coins_report(self, report_path, currency_pairs_to_keep=None, group_strategy_variants=True):
         df = self.results_df.copy(deep=True)
