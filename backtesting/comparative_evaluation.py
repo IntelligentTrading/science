@@ -273,13 +273,36 @@ class ComparativeReportBuilder:
 
         # reorder columns and write
         by_strategy_df[["profit_percent", "buy_and_hold_profit_percent", "num_trades", "outperforms"]]\
-            .to_excel(writer, f'{sheet_prefix} by strategy')
+            .to_excel(writer, f'{sheet_prefix} by strategy', header=False)
 
         # add outperformance percent at the top
         sheet = writer.sheets[f'{sheet_prefix} by strategy']
         sheet.write(1, ord('V')-ord('A'), np.mean(outperforms))
 
+        # format
+        workbook = writer.book
+        percent_format = workbook.add_format({'num_format': '0.00\%'})
+        number_format = workbook.add_format({'num_format': '0.00'})
+        bold_red = workbook.add_format({'bold': True, 'font_color':'red'})
 
+
+        header_format = workbook.add_format({
+            'bold': True,
+            'text_wrap': True,
+            'valign': 'middle',
+            'fg_color': '#FF0000',
+#            'bg_color': '808080',
+            'border': 1})
+        sheet.set_column('E:I', None, percent_format)
+        sheet.set_column('K:O', None, percent_format)
+        sheet.set_column('Q:U', None, number_format)
+
+        #sheet.set_row(0, None, header_format)
+
+        # Write the column headers with the defined format.
+        # for col_num, value in enumerate(by_strategy_df.columns.values):
+        #    sheet.write(0, col_num + 1, value[0], header_format)
+        #    sheet.write(1, col_num + 1, value[1], header_format)
 
         #writer.cur_sheet.write()
 
