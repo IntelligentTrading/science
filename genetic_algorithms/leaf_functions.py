@@ -1,5 +1,5 @@
 import numpy as np
-
+from collections import namedtuple
 
 class FunctionProvider:
 
@@ -24,7 +24,7 @@ class FunctionProvider:
     def identity(self, x):
         return x
 
-
+DataKey = namedtuple('DataKey', 'transaction_currency counter_currency start_time end_time')
 
 class TAProvider(FunctionProvider):
 
@@ -66,43 +66,57 @@ class TAProvider(FunctionProvider):
 
     def price(self, input):
         timestamp = input[0]
-        return self.data.price_data.loc[timestamp,"close_price"]
+        try:
+            return self.data.price_data.loc[timestamp,"close_price"]
+        except:
+            print('OMG!!!')
 
 
 class TAProviderCollection(TAProvider):
     # TODO: figure out how to write this shorter and DRY
 
     def __init__(self, data_collection):
-        self.providers = {(data.transaction_currency, data.counter_currency) : TAProvider(data) for data in data_collection}
-        # TODO: ensure that same currency pairs can be used for training and validation
+        self.providers = {DataKey(data.transaction_currency, data.counter_currency,
+                                  data.start_time, data.end_time) : TAProvider(data) for data in data_collection}
 
     def __str__(self):
         return("TAproviderCollection")
 
+
+    def get_provider(self, timestamp, transaction_currency, counter_currency):
+        for key in self.providers.keys():
+            if key.transaction_currency == transaction_currency \
+                    and key.counter_currency == counter_currency \
+                    and key.end_time >= timestamp >= key.start_time:
+                return self.providers[key]
+        raise Exception(f'No data loaded for {transaction_currency} {counter_currency} at {timestamp}!')
+
+
     def rsi(self, input):
         timestamp, transaction_currency, counter_currency = input
-        return self.providers[(transaction_currency, counter_currency)].rsi([timestamp])
+        return self.get_provider(timestamp, transaction_currency, counter_currency).rsi([timestamp])
 
 
     def sma50(self, input):
         timestamp, transaction_currency, counter_currency = input
-        return self.providers[(transaction_currency, counter_currency)].sma50([timestamp])
+        return self.get_provider(timestamp, transaction_currency, counter_currency).sma50([timestamp])
 
 
     def ema50(self, input):
         timestamp, transaction_currency, counter_currency = input
-        return self.providers[(transaction_currency, counter_currency)].ema50([timestamp])
+        return self.get_provider(timestamp, transaction_currency, counter_currency).ema50([timestamp])
+
 
     def sma200(self, input):
         timestamp, transaction_currency, counter_currency = input
-        return self.providers[(transaction_currency, counter_currency)].sma200([timestamp])
+        return self.get_provider(timestamp, transaction_currency, counter_currency).sma200([timestamp])
 
 
     def ema200(self, input):
         timestamp, transaction_currency, counter_currency = input
-        return self.providers[(transaction_currency, counter_currency)].ema200([timestamp])
+        return self.get_provider(timestamp, transaction_currency, counter_currency).ema200([timestamp])
 
 
     def price(self, input):
         timestamp, transaction_currency, counter_currency = input
-        return self.providers[(transaction_currency, counter_currency)].price([timestamp])
+        return self.get_provider(timestamp, transaction_currency, counter_currency).price([timestamp])

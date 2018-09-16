@@ -65,7 +65,7 @@ class Data:
         return df
 
     def __str__(self):
-        return f"{self.transaction_currency}-{self.counter_currency}-{self.start_time}-{self.end_time}"
+        return f"{self.transaction_currency}-{self.counter_currency}-{int(self.start_time)}-{int(self.end_time)}"
 
     def build_buy_and_hold_benchmark(self, num_ticks_to_skip):
 

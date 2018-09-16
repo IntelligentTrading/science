@@ -289,10 +289,6 @@ class ExperimentManager:
 
 
 
-
-
-
-
 class ExperimentDB:
 
     def __init__(self):
@@ -320,9 +316,9 @@ class ExperimentDB:
             yield k, v
 
     def build_experiment_id(self, **kwargs):
-        return f"data_{'-'.join(map(str,kwargs['data']))};" \
-               f"grammar_{kwargs['grammar_version']};" \
-               f"fitness_{kwargs['fitness_function']};" \
+        return f"d_{'-'.join(map(str,kwargs['data']))};" \
+               f"{kwargs['grammar_version']};" \
+               f"{kwargs['fitness_function']};" \
                f"x_{kwargs['mating_prob']};" \
                f"m_{kwargs['mutation_prob']};" \
                f"n_{kwargs['population_size']};" \
