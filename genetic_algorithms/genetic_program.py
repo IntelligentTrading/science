@@ -214,7 +214,7 @@ class GeneticProgram:
         self.function_provider = kwargs.get('function_provider')
         self.grammar = kwargs.get('grammar')
         self.fitness = kwargs.get('fitness_function', FitnessFunctionV1())
-        self.tree_depth = kwargs.get('tree_depth', 15)
+        self.tree_depth = kwargs.get('tree_depth', 5)
         self.combined_fitness_operator = kwargs.get('combined_fitness_operator', min)
         self._build_toolbox()
 
