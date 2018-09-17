@@ -6,6 +6,8 @@ from backtester_signals import SignalDrivenBacktester
 from abc import ABC, abstractmethod
 from config import transaction_cost_percents
 import logging
+from trader import AlternatingOrderGenerator
+
 log = logging.getLogger("strategies")
 
 class Strategy(ABC):
@@ -33,52 +35,13 @@ class SignalStrategy(Strategy):
     Base class for trading strategies that build orders based on a given list of signals.
     """
 
+    def __init__(self, order_generator):
+        if order_generator is None:
+            order_generator = AlternatingOrderGenerator()
+        self.order_generator = order_generator
+
     def get_orders(self, signals, start_cash, start_crypto, source, time_delay=0, slippage=0):
-        """
-        Produces a list of buy-sell orders based on input signals.
-        :param signals: A list of input signals.
-        :param start_cash: Starting amount of counter_currency (counter_currency is read from first signal).
-        :param start_crypto: Starting amount of transaction_currency (transaction_currency is read from first signal).
-        :param source: ITF exchange code.
-        :param time_delay: Parameter specifying the delay applied when fetching price info (in seconds).
-        :param slippage: Parameter specifying the slippage percentage, applied in the direction of the trade.
-        :return: A list of orders produced by the strategy.
-        """
-        orders = []
-        order_signals = []
-        cash = start_cash
-        crypto = start_crypto
-        buy_currency = None
-        for i, signal in enumerate(signals):
-            if not self.belongs_to_this_strategy(signal):
-                continue
-
-            if self.indicates_sell(signal) and crypto > 0 and signal.transaction_currency == buy_currency:
-                price = fetch_delayed_price(signal, source, time_delay)
-                order = Order(OrderType.SELL, signal.transaction_currency, signal.counter_currency,
-                              signal.timestamp, crypto, price, transaction_cost_percents[source], time_delay, slippage,
-                              signal.price)
-                orders.append(order)
-                order_signals.append(signal)
-                delta_crypto, delta_cash = order.execute()
-                cash = cash + delta_cash
-                crypto = crypto + delta_crypto
-                assert crypto == 0
-
-            elif self.indicates_buy(signal) and cash > 0:
-                price = fetch_delayed_price(signal, source, time_delay)
-                buy_currency = signal.transaction_currency
-                order = Order(OrderType.BUY, signal.transaction_currency, signal.counter_currency,
-                              signal.timestamp, cash, price, transaction_cost_percents[source], time_delay, slippage,
-                              signal.price)
-                orders.append(order)
-                order_signals.append(signal)
-                delta_crypto, delta_cash = order.execute()
-                cash = cash + delta_cash
-                crypto = crypto + delta_crypto
-                assert cash == 0
-
-        return orders, order_signals
+        return self.order_generator.get_orders(self, signals, start_cash, start_crypto, source, time_delay, slippage)
 
     def evaluate(self, transaction_currency, counter_currency, start_cash, start_crypto, start_time, end_time,
                  source, resample_period, evaluate_profit_on_last_order=False, verbose=True, time_delay=0):
@@ -121,11 +84,12 @@ class SignalSignatureStrategy(SignalStrategy):
     """
     A strategy based on ITF signal signatures (see a list of signatures in the field ALL_SIGNALS).
     """
-    def __init__(self, signal_set):
+    def __init__(self, signal_set, order_generator=None):
         """
         Builds the signal signature strategy.
         :param signal_set: A list of ITF signal signatures to be used in the strategy.
         """
+        super(SignalSignatureStrategy, self).__init__(order_generator)
         self.signal_set = signal_set
 
     def belongs_to_this_strategy(self, signal):
@@ -160,13 +124,14 @@ class SimpleRSIStrategy(SignalStrategy):
     """
     A strategy based on RSI thresholds.
     """
-    def __init__(self, overbought_threshold=80, oversold_threshold=25, signal_type="RSI"):
+    def __init__(self, overbought_threshold=80, oversold_threshold=25, signal_type="RSI", order_generator=None):
         """
         Builds the RSI strategy.
         :param overbought_threshold: The RSI overbought threshold.
         :param oversold_threshold: The RSI oversold threshold.
         :param signal_type: signal type: Set to "RSI" or "RSI_Cumulative".
         """
+        super(SimpleRSIStrategy, self).__init__(order_generator)
         self.overbought_threshold = overbought_threshold
         self.oversold_threshold = oversold_threshold
         self.signal_type = signal_type
@@ -199,11 +164,12 @@ class SimpleTrendBasedStrategy(SignalStrategy):
     """
     A strategy that decides on buys and sells based on signal trend information.
     """
-    def __init__(self, signal_type):
+    def __init__(self, signal_type, order_generator=None):
         """
         Builds the trend-based strategy.
         :param signal_type: The underlying signal type to use with the strategy (e.g. "SMA", "RSI", "ANN").
         """
+        super(SimpleTrendBasedStrategy, self).__init__(order_generator)
         self.signal_type = signal_type
 
     def __str__(self):

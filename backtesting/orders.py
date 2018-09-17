@@ -32,8 +32,8 @@ class Order:
 
     def __str__(self):
         delta_currency, delta_cash = self.execute()
-        return "{0}  \t {1: <16} \t cash_balance -> {2:13.2f} {3} \t " \
-               "currency_balance -> {4:13.6f} {5} \t (1 {6} = {7:.8f} {8} {9}), slippage = {10:.2f}". format(
+        return "{0}  \t {1: <16} \t delta_cash -> {2:13.2f} {3} \t " \
+               "delta_currency -> {4:13.6f} {5} \t (1 {6} = {7:.8f} {8} {9}), slippage = {10:.2f}". format(
                 datetime_from_timestamp(self.timestamp),
                 self.order_type,
                 delta_cash,

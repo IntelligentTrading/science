@@ -78,6 +78,14 @@ def evaluate_rsi_any_currency(overbought_threshold, oversold_threshold, **kwargs
     return SignalDrivenBacktester(strategy=rsi_strategy, **kwargs)
 
 
+def position_based_order_test(**kwargs):
+    from trader import PositionBasedOrderGenerator
+    rsi_strategy = SignalSignatureStrategy(
+        ['rsi_buy_2', 'rsi_sell_2','rsi_buy_1', 'rsi_sell_1','rsi_buy_3', 'rsi_sell_3'],
+        order_generator=PositionBasedOrderGenerator())
+    return SignalDrivenBacktester(strategy=rsi_strategy, **kwargs)
+
+
 if __name__ == "__main__":
     end_time = 1531699200
     start_time = end_time - 60*60*24*70
@@ -94,9 +102,10 @@ if __name__ == "__main__":
     kwargs['time_delay'] = 0
     kwargs['slippage'] = 0
 
-    evaluate_rsi_any_currency(75, 25, **kwargs)
-    evaluate_rsi_signature(**kwargs)
-    evaluate_rsi(75, 25, **kwargs)
-    evaluate_trend_based("SMA", **kwargs)
-    find_num_cumulative_outperforms((("BTC", "USDT"), ("DOGE","BTC")), **kwargs)
+    position_based_order_test(**kwargs)
+    #evaluate_rsi_any_currency(75, 25, **kwargs)
+    #evaluate_rsi_signature(**kwargs)
+    #evaluate_rsi(75, 25, **kwargs)
+    #evaluate_trend_based("SMA", **kwargs)
+    #find_num_cumulative_outperforms((("BTC", "USDT"), ("DOGE","BTC")), **kwargs)
 

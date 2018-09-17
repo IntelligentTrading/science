@@ -10,7 +10,7 @@ from config import transaction_cost_percents
 from abc import ABC, abstractmethod
 from charting import BacktestingChart
 
-from trader import AlternatingBuySellTrading
+from trader import AlternatingOrderGenerator
 
 logging.getLogger().setLevel(logging.INFO)
 pd.options.mode.chained_assignment = None
@@ -36,6 +36,10 @@ class Evaluation(ABC):
         self._benchmark_backtest = benchmark_backtest
         self._time_delay = time_delay
         self._slippage = slippage
+        self._order_generator = AlternatingOrderGenerator()
+        self._infinite_cash = True
+        self._infinite_crypto = True
+
 
         if benchmark_backtest is not None:
             pass # TODO: fix assertions and delayed buy&hold
@@ -43,6 +47,10 @@ class Evaluation(ABC):
             # assert benchmark_backtest._end_time == self._end_time
 
         # Init backtesting variables
+        self._init_backtesting(start_cash, start_crypto)
+        #self.trading_df = pd.DataFrame(columns=['close_price', 'signal', 'order', 'cash', 'crypto', 'total_value'])
+
+    def _init_backtesting(self, start_cash, start_crypto):
         self._cash = start_cash
         self._crypto = start_crypto
         self._num_trades = 0
@@ -51,8 +59,6 @@ class Evaluation(ABC):
         self.orders = []
         self.order_signals = []
         self.trading_df_rows = []  # optimization for speed
-        #self.trading_df = pd.DataFrame(columns=['close_price', 'signal', 'order', 'cash', 'crypto', 'total_value'])
-
 
     @property
     def noncumulative_returns(self):
@@ -306,6 +312,22 @@ class Evaluation(ABC):
         self._end_cash = self._cash
         self._end_crypto = self._crypto
 
+        rerun = False
+        if self._infinite_cash and self._end_cash < 0:
+            self._start_cash = self._start_cash - self.end_cash   # assume we had all that money when we started
+            self._end_cash = 0
+            rerun = True
+
+        if self._infinite_crypto and self._crypto < 0:
+            self._start_crypto = self._start_crypto + self.end_crypto
+            self.end_crypto = 0 # just assuming we have an infinite supply of cash and crypto and not trading
+            rerun = True
+
+        if rerun:
+            self._init_backtesting(self._start_cash, self._start_crypto)
+            self.run()
+            return
+
         # compute returns for stats
         self.trading_df = self._fill_returns(self.trading_df)
         returns = np.array(self.trading_df['return_relative_to_past_tick'])
@@ -474,6 +496,8 @@ class Evaluation(ABC):
             # the currency we're selling must match the bought currency
             assert order.transaction_currency == self._buy_currency
             self._num_sells += 1
+        print(f'Executed order... {str(order)}')
+        print(f'Total cash: {self._cash}, total crypto: {self._crypto}')
 
     def to_primitive_types_dictionary(self):
         import inspect

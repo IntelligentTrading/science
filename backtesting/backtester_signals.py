@@ -2,7 +2,6 @@ from evaluation import Evaluation
 from orders import OrderType
 import logging
 from data_sources import get_price, get_filtered_signals, NoPriceDataException
-from trader import AlternatingBuySellTrading
 
 class SignalDrivenBacktester(Evaluation):
 
@@ -39,18 +38,12 @@ class SignalDrivenBacktester(Evaluation):
 
         self._buy_currency = self._start_crypto_currency = self._transaction_currency
 
-        trading_simulator = AlternatingBuySellTrading(strategy=self._strategy,
-                                                      signals=self.signals,
-                                                      start_cash=self._start_cash,
-                                                      start_crypto=self._start_crypto,
-                                                      source=self._source,
-                                                      time_delay=self._time_delay,
-                                                      slippage=self._slippage,
-                                                      endless_budget=False)
-
-        self.orders = trading_simulator.orders
-        self.order_signals = trading_simulator.order_signals
         self.run()
+
+
+    def _init_backtesting(self, start_cash, start_crypto):
+        super()._init_backtesting(start_cash, start_crypto)
+
 
 
     def fill_trading_df(self, orders):
@@ -74,5 +67,14 @@ class SignalDrivenBacktester(Evaluation):
 
 
     def run(self):
+        self.orders, self.order_signals = self._strategy.get_orders(
+            signals=self.signals,
+            start_cash=self._start_cash,
+            start_crypto=self._start_crypto,
+            source=self._source,
+            time_delay=self._time_delay,
+            slippage=self._slippage
+        )
+
         self.fill_trading_df(self.orders)
         #self.execute_orders(self.orders)

@@ -1,69 +1,117 @@
 from orders import OrderType, Order
-#from strategies import StrategyDecision
 from config import transaction_cost_percents
-
-class TradingSimulator:
-
-    def __init__(self, strategy, signals, start_cash, start_crypto, source, time_delay=0, slippage=0, endless_budget=False):
-        self._strategy = strategy
-        self._signals = signals
-        self._start_cash = start_cash
-        self._start_crypto = start_crypto
-        self._source = source
-        self._time_delay = time_delay
-        self._slippage = slippage
-        self._endless_budget = endless_budget
-        self._orders = []
-        self._order_signals = []
-        self._crypto = start_crypto
-        self._cash = start_cash
-        self._transaction_cost_percent = transaction_cost_percents[source]
+from data_sources import fetch_delayed_price
 
 
-class AlternatingBuySellTrading(TradingSimulator):
+class AlternatingOrderGenerator:
 
-    def __init__(self, **kwargs):
-        super(AlternatingBuySellTrading, self).__init__(**kwargs)
+    @staticmethod
+    def get_orders(strategy, signals, start_cash, start_crypto, source, time_delay=0, slippage=0):
+        """
+        Produces a list of buy-sell orders based on input signals.
+        :param strategy: The strategy for which to produce the orders.
+        :param signals: A list of input signals.
+        :param start_cash: Starting amount of counter_currency (counter_currency is read from first signal).
+        :param start_crypto: Starting amount of transaction_currency (transaction_currency is read from first signal).
+        :param source: ITF exchange code.
+        :param time_delay: Parameter specifying the delay applied when fetching price info (in seconds).
+        :param slippage: Parameter specifying the slippage percentage, applied in the direction of the trade.
+        :return: A list of orders produced by the strategy.
+        """
+        orders = []
+        order_signals = []
+        cash = start_cash
+        crypto = start_crypto
+        buy_currency = None
+        for i, signal in enumerate(signals):
+            if not strategy.belongs_to_this_strategy(signal):
+                continue
 
-        # if we received signals, process all of them and generate orders
-        # otherwise we depend on external source to call process_strategy_decision
-        if 'signals' in kwargs:
-            for signal in self._signals:
-                if self._strategy.indicates_sell(signal):
-                    self.process_strategy_decision('SELL', signal.transaction_currency,
-                                                   signal.counter_currency, signal.timestamp, signal.price, signal)
-                elif self._strategy.indicates_buy(signal):
-                    self.process_strategy_decision('BUY', signal.transaction_currency,
-                                                   signal.counter_currency, signal.timestamp, signal.price, signal)
+            if strategy.indicates_sell(signal) and crypto > 0 and signal.transaction_currency == buy_currency:
+                price = fetch_delayed_price(signal, source, time_delay)
+                order = Order(OrderType.SELL, signal.transaction_currency, signal.counter_currency,
+                              signal.timestamp, crypto, price, transaction_cost_percents[source], time_delay, slippage,
+                              signal.price)
+                orders.append(order)
+                order_signals.append(signal)
+                delta_crypto, delta_cash = order.execute()
+                cash = cash + delta_cash
+                crypto = crypto + delta_crypto
+                assert crypto == 0
 
-    def process_strategy_decision(self, decision, transaction_currency, counter_currency, timestamp, price, signal=None):
-        order = None
-        if decision == 'SELL' and self._crypto > 0:
-            order = Order(OrderType.SELL, transaction_currency, counter_currency,
-                          timestamp, self._crypto, price, self._transaction_cost_percent, self._time_delay,
-                          self._slippage)
-            self._orders.append(order)
-            self._order_signals.append(signal)
-        elif decision == 'BUY' and self._cash > 0:
-            order = Order(OrderType.BUY, transaction_currency, counter_currency,
-                          timestamp, self._cash, price, self._transaction_cost_percent, self._time_delay,
-                          self._slippage)
-            self._orders.append(order)
-            self._order_signals.append(signal)
-        if order is not None:
-            delta_crypto, delta_cash = order.execute()
-            self._cash += delta_cash
-            self._crypto += delta_crypto
+            elif strategy.indicates_buy(signal) and cash > 0:
+                price = fetch_delayed_price(signal, source, time_delay)
+                buy_currency = signal.transaction_currency
+                order = Order(OrderType.BUY, signal.transaction_currency, signal.counter_currency,
+                              signal.timestamp, cash, price, transaction_cost_percents[source], time_delay, slippage,
+                              signal.price)
+                orders.append(order)
+                order_signals.append(signal)
+                delta_crypto, delta_cash = order.execute()
+                cash = cash + delta_cash
+                crypto = crypto + delta_crypto
+                assert cash == 0
 
-    @property
-    def orders(self):
-        return self._orders
-
-    @property
-    def order_signals(self):
-        return self._order_signals
+        return orders, order_signals
 
 
+class PositionBasedOrderGenerator:
+    '''
+    This order generator ensures that for each buy signal we buy 1 coin, and for each sell signal we sell 1 coin.
+    Shorting is allowed, and we assume we have an unlimited supply of cash and crypto.
+    '''
 
+    def __init__(self, quantity=1):
+        self._quantity = quantity
+
+    def get_orders(self, strategy, signals, start_cash, start_crypto, source, time_delay=0, slippage=0):
+        """
+        Produces a list of buy-sell orders based on input signals.
+        :param strategy: The strategy for which to produce the orders.
+        :param signals: A list of input signals.
+        :param start_cash: Starting amount of counter_currency (counter_currency is read from first signal).
+        :param start_crypto: Starting amount of transaction_currency (transaction_currency is read from first signal).
+        :param source: ITF exchange code.
+        :param time_delay: Parameter specifying the delay applied when fetching price info (in seconds).
+        :param slippage: Parameter specifying the slippage percentage, applied in the direction of the trade.
+        :return: A list of orders produced by the strategy.
+        """
+        orders = []
+        order_signals = []
+
+        cash = start_cash
+        crypto = start_crypto
+
+        transaction_currency = None
+        for i, signal in enumerate(signals):
+            if not strategy.belongs_to_this_strategy(signal):
+                continue
+
+            if transaction_currency is None:
+                transaction_currency = signal.transaction_currency  # we will trade with this currency
+
+            if strategy.indicates_sell(signal) and signal.transaction_currency == transaction_currency:
+                price = fetch_delayed_price(signal, source, time_delay)
+                order = Order(OrderType.SELL, signal.transaction_currency, signal.counter_currency,
+                              signal.timestamp, self._quantity, price, transaction_cost_percents[source], time_delay, slippage,
+                              signal.price)
+                orders.append(order)
+                order_signals.append(signal)
+                delta_crypto, delta_cash = order.execute()
+                cash = cash + delta_cash
+                crypto = crypto + delta_crypto
+
+            elif strategy.indicates_buy(signal) and signal.transaction_currency == transaction_currency:
+                price = fetch_delayed_price(signal, source, time_delay)
+                order = Order(OrderType.BUY, signal.transaction_currency, signal.counter_currency,
+                              signal.timestamp, price, price, transaction_cost_percents[source], time_delay, slippage,
+                              signal.price)
+                orders.append(order)
+                order_signals.append(signal)
+                delta_crypto, delta_cash = order.execute()
+                cash = cash + delta_cash
+                crypto = crypto + delta_crypto
+
+        return orders, order_signals
 
 
