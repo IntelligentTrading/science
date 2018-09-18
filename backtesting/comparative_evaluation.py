@@ -8,6 +8,10 @@ from strategies import BuyAndHoldTimebasedStrategy, SignalSignatureStrategy, Sim
 from enum import Enum
 from config import COINMARKETCAP_TOP_20_ALTS
 
+import pandas.io.formats.excel
+
+pandas.io.formats.excel.header_style = None
+
 
 class SignalCombinationMode(Enum):
     ANY = 0
@@ -257,6 +261,7 @@ class ComparativeReportBuilder:
         return mean, std, min, max
 
     def _describe_and_write(self, filtered_df, writer, sheet_prefix):
+
         if filtered_df.empty:
             return
 
@@ -273,29 +278,89 @@ class ComparativeReportBuilder:
 
         # reorder columns and write
         by_strategy_df[["profit_percent", "buy_and_hold_profit_percent", "num_trades", "outperforms"]]\
-            .to_excel(writer, f'{sheet_prefix} by strategy', header=False)
+            .to_excel(writer, f'{sheet_prefix} by strategy', header=False, startrow=4)
 
-        # add outperformance percent at the top
-        sheet = writer.sheets[f'{sheet_prefix} by strategy']
-        sheet.write(1, ord('V')-ord('A'), np.mean(outperforms))
 
         # format
         workbook = writer.book
         percent_format = workbook.add_format({'num_format': '0.00\%'})
+        gray_percent_format = workbook.add_format({'num_format': '0.00\%', 'pattern': 1, 'bg_color' : '#D9D9D9'})
+
         number_format = workbook.add_format({'num_format': '0.00'})
-        bold_red = workbook.add_format({'bold': True, 'font_color':'red'})
+        bold_red_percent = workbook.add_format({'bold': True, 'font_color':'red', 'num_format': '0.00\%'})
+        bold_red_number = workbook.add_format({'bold': True, 'font_color': 'red', 'num_format': '0.00'})
+        large_bold_red = workbook.add_format({'bold': True, 'font_color': 'red', 'font_size': 16, 'num_format': '0.00%',
+                                              'border': 1, 'pattern': 1, 'bg_color': '#BFBFBF', 'align': 'center',
+                                              'valign': 'vcenter'})
+
+        gray_bold_red_percent = workbook.add_format({'bold': True, 'font_color': 'red', 'num_format': '0.00\%',
+                                                     'pattern': 1, 'bg_color' : '#D9D9D9'})
+
 
 
         header_format = workbook.add_format({
             'bold': True,
             'text_wrap': True,
-            'valign': 'middle',
-            'fg_color': '#FF0000',
-#            'bg_color': '808080',
-            'border': 1})
+            'align': 'center',
+            'valign': 'vcenter',
+            'bg_color': '#808080',
+            'font_color': '#FFFFFF',
+            'border': 1,
+            'pattern': 1
+        })
+
+        aux_header_format = workbook.add_format({
+            'bold': True,
+            'text_wrap': True,
+            'align': 'center',
+            'valign': 'vcenter',
+            'bg_color': '#BFBFBF',
+            'font_color': '#FFFFFF',
+            'border': 1,
+            'pattern': 1
+        })
+
+        mid_bold = workbook.add_format({
+            'bold': True,
+            'text_wrap': True,
+            'align': 'center',
+            'valign': 'vcenter',
+        })
+
+        top_bold = workbook.add_format({
+            'bold': True,
+            'text_wrap': True,
+            'align': 'center',
+            'valign': 'top'
+        })
+
+        # add outperformance percent at the top
+        sheet = writer.sheets[f'{sheet_prefix} by strategy']
+        sheet.write('V4', np.mean(outperforms), large_bold_red)
+
+        # apply this to all header cells and reinit header
+        sheet.merge_range('D3:I3', 'Profit percent', header_format)
+        sheet.merge_range('J3:O3', 'Buy and hold profit percent', header_format)
+        sheet.merge_range('P3:U3', 'Number of trades', header_format)
+        sheet.write('V3', 'Outperforms', header_format)
+
+        sheet.write_row('D4', ['number of tests (coin, strategy)',
+                               'mean', 'std', 'min', 'median', 'max'] * 3, aux_header_format)
+        sheet.write_row('A5', ['exchange',
+                               'strategy', 'resample period (minutes)'], header_format)
+
         sheet.set_column('E:I', None, percent_format)
-        sheet.set_column('K:O', None, percent_format)
+        sheet.set_column('L:O', None, gray_percent_format)
         sheet.set_column('Q:U', None, number_format)
+        sheet.set_column('E:E', None, bold_red_percent)
+        sheet.set_column('K:K', None, gray_bold_red_percent)
+        sheet.set_column('V:V', 15, gray_percent_format)
+        sheet.set_column('B:C', None, mid_bold)
+        sheet.set_column('A:A', None, top_bold)
+
+        #sheet.set_column('')
+        sheet.set_column('Q:Q', None, bold_red_number)
+
 
         #sheet.set_row(0, None, header_format)
 
