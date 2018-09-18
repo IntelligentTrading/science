@@ -2,11 +2,10 @@ import itertools
 import numpy as np
 from data_sources import *
 from backtester_signals import SignalDrivenBacktester
-from config import backtesting_report_columns
+from config import backtesting_report_columns, backtesting_report_column_names, COINMARKETCAP_TOP_20_ALTS
 from signals import ALL_SIGNALS
 from strategies import BuyAndHoldTimebasedStrategy, SignalSignatureStrategy, SimpleRSIStrategy
 from enum import Enum
-from config import COINMARKETCAP_TOP_20_ALTS
 
 import pandas.io.formats.excel
 
@@ -131,8 +130,12 @@ class ComparativeEvaluation:
 
         self._run_backtests(debug)
         self._report = ComparativeReportBuilder(self.backtests, self.baselines)
-        best_backtest = self._report.get_best_performing_backtest()
-        logging.info(best_backtest.get_report())
+        try:
+            best_backtest = self._report.get_best_performing_backtest()
+            logging.info(best_backtest.get_report())
+        except Exception as e:
+            logging.error(f'Error in finding best backtest: {str(e)}')
+
         if output_file is not None:
             self._report.write_summary(output_file)
 
@@ -260,7 +263,7 @@ class ComparativeReportBuilder:
         max = desc_df[[(field_name, 'max')]].loc[row_name][0]
         return mean, std, min, max
 
-    def _describe_and_write(self, filtered_df, writer, sheet_prefix):
+    def _describe_and_write(self, filtered_df, writer, sheet_prefix, formats):
 
         if filtered_df.empty:
             return
@@ -281,96 +284,9 @@ class ComparativeReportBuilder:
             .to_excel(writer, f'{sheet_prefix} by strategy', header=False, startrow=4)
 
 
-        # format
-        workbook = writer.book
-        percent_format = workbook.add_format({'num_format': '0.00\%'})
-        gray_percent_format = workbook.add_format({'num_format': '0.00\%', 'pattern': 1, 'bg_color' : '#D9D9D9'})
-
-        number_format = workbook.add_format({'num_format': '0.00'})
-        bold_red_percent = workbook.add_format({'bold': True, 'font_color':'red', 'num_format': '0.00\%'})
-        bold_red_number = workbook.add_format({'bold': True, 'font_color': 'red', 'num_format': '0.00'})
-        large_bold_red = workbook.add_format({'bold': True, 'font_color': 'red', 'font_size': 16, 'num_format': '0.00%',
-                                              'border': 1, 'pattern': 1, 'bg_color': '#BFBFBF', 'align': 'center',
-                                              'valign': 'vcenter'})
-
-        gray_bold_red_percent = workbook.add_format({'bold': True, 'font_color': 'red', 'num_format': '0.00\%',
-                                                     'pattern': 1, 'bg_color' : '#D9D9D9'})
-
-
-
-        header_format = workbook.add_format({
-            'bold': True,
-            'text_wrap': True,
-            'align': 'center',
-            'valign': 'vcenter',
-            'bg_color': '#808080',
-            'font_color': '#FFFFFF',
-            'border': 1,
-            'pattern': 1
-        })
-
-        aux_header_format = workbook.add_format({
-            'bold': True,
-            'text_wrap': True,
-            'align': 'center',
-            'valign': 'vcenter',
-            'bg_color': '#BFBFBF',
-            'font_color': '#FFFFFF',
-            'border': 1,
-            'pattern': 1
-        })
-
-        mid_bold = workbook.add_format({
-            'bold': True,
-            'text_wrap': True,
-            'align': 'center',
-            'valign': 'vcenter',
-        })
-
-        top_bold = workbook.add_format({
-            'bold': True,
-            'text_wrap': True,
-            'align': 'center',
-            'valign': 'top'
-        })
-
-        # add outperformance percent at the top
         sheet = writer.sheets[f'{sheet_prefix} by strategy']
-        sheet.write('V4', np.mean(outperforms), large_bold_red)
 
-        # apply this to all header cells and reinit header
-        sheet.merge_range('D3:I3', 'Profit percent', header_format)
-        sheet.merge_range('J3:O3', 'Buy and hold profit percent', header_format)
-        sheet.merge_range('P3:U3', 'Number of trades', header_format)
-        sheet.write('V3', 'Outperforms', header_format)
-
-        sheet.write_row('D4', ['number of tests (coin, strategy)',
-                               'mean', 'std', 'min', 'median', 'max'] * 3, aux_header_format)
-        sheet.write_row('A5', ['exchange',
-                               'strategy', 'resample period (minutes)'], header_format)
-
-        sheet.set_column('E:I', None, percent_format)
-        sheet.set_column('L:O', None, gray_percent_format)
-        sheet.set_column('Q:U', None, number_format)
-        sheet.set_column('E:E', None, bold_red_percent)
-        sheet.set_column('K:K', None, gray_bold_red_percent)
-        sheet.set_column('V:V', 15, gray_percent_format)
-        sheet.set_column('B:C', None, mid_bold)
-        sheet.set_column('A:A', None, top_bold)
-
-        #sheet.set_column('')
-        sheet.set_column('Q:Q', None, bold_red_number)
-
-
-        #sheet.set_row(0, None, header_format)
-
-        # Write the column headers with the defined format.
-        # for col_num, value in enumerate(by_strategy_df.columns.values):
-        #    sheet.write(0, col_num + 1, value[0], header_format)
-        #    sheet.write(1, col_num + 1, value[1], header_format)
-
-        #writer.cur_sheet.write()
-
+        self._reformat_sheet_grouped_by_strategy(formats, outperforms, sheet)
 
         # group by coin, evaluate
         by_coin_df = filtered_df[["source", "transaction_currency", "profit_percent",
@@ -381,14 +297,135 @@ class ComparativeReportBuilder:
 
         g = by_coin_df.groupby(level=0, group_keys=False)
         by_coin_sorted_df = g.apply(lambda x: x.sort_values([('profit_percent', 'mean')], ascending=False))
-        by_coin_sorted_df[["profit_percent", "buy_and_hold_profit_percent", "num_trades"]].to_excel(writer, f'{sheet_prefix} sorted by coin')
+        by_coin_sorted_df[["profit_percent", "buy_and_hold_profit_percent", "num_trades"]].to_excel(writer, f'{sheet_prefix} sorted by coin',
+                                                                                                    header=False, startrow=4)
 
         sheet = writer.sheets[f'{sheet_prefix} sorted by coin']
-        sheet.set_column('D:H', None, percent_format)
-        sheet.set_column('J:N', None, percent_format)
-        sheet.set_column('P:T', None, number_format)
+        self._reformat_sheet_grouped_by_coin(formats, sheet)
 
-    def all_coins_report(self, report_path, currency_pairs_to_keep=None, group_strategy_variants=True):
+    def _reformat_sheet_grouped_by_strategy(self, formats, outperforms, sheet):
+        # add outperformance percent at the top
+        sheet.write('V4', np.mean(outperforms), formats['large_bold_red'])
+
+        # apply this to all header cells and reinit header
+        sheet.merge_range('D3:I3', 'Profit percent', formats['header_format'])
+        sheet.merge_range('J3:O3', 'Buy and hold profit percent', formats['header_format'])
+        sheet.merge_range('P3:U3', 'Number of trades', formats['header_format'])
+        sheet.write('V3', 'Outperforms', formats['header_format'])
+        sheet.write_row('D4', ['number of tests (coin, strategy)',
+                               'mean', 'std', 'min', 'median', 'max'] * 3, formats['aux_header_format'])
+        sheet.write_row('A5', ['exchange',
+                               'strategy', 'resample period (minutes)'], formats['header_format'])
+        # set up column formatting
+        sheet.set_column('E:I', None, formats['percent_format'])
+        sheet.set_column('J:J', None, formats['gray_bg_format'])
+        sheet.set_column('L:O', None, formats['gray_percent_format'])
+        sheet.set_column('Q:U', None, formats['number_format'])
+        sheet.set_column('E:E', None, formats['bold_red_percent'])
+        sheet.set_column('K:K', None, formats['gray_bold_red_percent'])
+        sheet.set_column('V:V', 15, formats['gray_percent_format'])
+        sheet.set_column('B:C', None, formats['mid_bold'])
+        sheet.set_column('A:A', None, formats['top_bold'])
+        sheet.set_column('Q:Q', None, formats['bold_red_number'])
+
+        sheet.set_row(0, None, formats['white_bold'])
+        sheet.set_row(1, None, formats['white_bold'])
+
+        sheet.write('A1', 'Mean profits, buy and hold profits and trades for all coins and signals in our database, grouped by strategy')
+
+
+    def _reformat_sheet_grouped_by_coin(self, formats, sheet):
+
+        # apply this to all header cells and reinit header
+        sheet.merge_range('C3:H3', 'Profit percent', formats['header_format'])
+        sheet.merge_range('I3:N3', 'Buy and hold profit percent', formats['header_format'])
+        sheet.merge_range('O3:T3', 'Number of trades', formats['header_format'])
+        sheet.write_row('C4', ['number of tests (coin, strategy)',
+                               'mean', 'std', 'min', 'median', 'max'] * 3, formats['aux_header_format'])
+        sheet.write_row('A5', ['exchange', 'coin'], formats['header_format'])
+        # set up column formatting
+        sheet.set_column('D:H', None, formats['percent_format'])
+        sheet.set_column('I:I', None, formats['gray_bg_format'])
+        sheet.set_column('K:N', None, formats['gray_percent_format'])
+        sheet.set_column('P:T', None, formats['number_format'])
+        sheet.set_column('D:D', None, formats['bold_red_percent'])
+        sheet.set_column('J:J', None, formats['gray_bold_red_percent'])
+        sheet.set_column('P:P', 15, formats['gray_percent_format'])
+        sheet.set_column('B:B', None, formats['mid_bold'])
+        sheet.set_column('A:A', None, formats['top_bold'])
+        sheet.set_column('P:P', None, formats['bold_red_number'])
+
+        # clear formatting of the first two rows
+        sheet.set_row(0, None, formats['white_bold'])
+        sheet.set_row(1, None, formats['white_bold'])
+
+        sheet.write('A1', 'Mean profits, buy and hold profits and number of trades for all coins and signals in our database, grouped by coin')
+
+    def _init_worksheet_formats(self, workbook):
+        formats = {}
+        formats['percent_format'] = workbook.add_format({'num_format': '0.00\%'})
+        formats['gray_percent_format'] = workbook.add_format({'num_format': '0.00\%', 'pattern': 1, 'bg_color': '#D9D9D9'})
+        formats['gray_bg_format'] = workbook.add_format({'pattern': 1, 'bg_color': '#D9D9D9'})
+        formats['number_format'] = workbook.add_format({'num_format': '0.00'})
+        formats['bold_red_percent'] = workbook.add_format({'bold': True, 'font_color': 'red', 'num_format': '0.00\%'})
+        formats['bold_red_number'] = workbook.add_format({'bold': True, 'font_color': 'red', 'num_format': '0.00'})
+        formats['large_bold_red'] = workbook.add_format(
+            {'bold': True, 'font_color': 'red', 'font_size': 16, 'num_format': '0.00%',
+             'border': 1, 'pattern': 1, 'bg_color': '#BFBFBF', 'align': 'center',
+             'valign': 'vcenter'})
+        formats['gray_bold_red_percent'] = workbook.add_format({'bold': True, 'font_color': 'red', 'num_format': '0.00\%',
+                                                          'pattern': 1, 'bg_color': '#D9D9D9'})
+        formats['header_format'] = workbook.add_format({
+            'bold': True,
+            'text_wrap': True,
+            'align': 'center',
+            'valign': 'vcenter',
+            'bg_color': '#808080',
+            'font_color': '#FFFFFF',
+            'border': 1,
+            'pattern': 1
+        })
+        formats['aux_header_format'] = workbook.add_format({
+            'bold': True,
+            'text_wrap': True,
+            'align': 'center',
+            'valign': 'vcenter',
+            'bg_color': '#BFBFBF',
+            'font_color': '#FFFFFF',
+            'border': 1,
+            'pattern': 1
+        })
+        formats['mid_bold'] = workbook.add_format({
+            'bold': True,
+            'text_wrap': True,
+            'align': 'center',
+            'valign': 'vcenter',
+        })
+        formats['top_bold'] = workbook.add_format({
+            'bold': True,
+            'text_wrap': True,
+            'align': 'center',
+            'valign': 'top'
+        })
+        formats['white_bold'] = workbook.add_format({
+            'bold': True,
+            'font_size': 14,
+            'bg_color': '#FFFFFF',
+            'pattern': 1
+        })
+
+        return formats
+
+    def _reformat_original_data(self, sheet, formats):
+        sheet.write_row('A1', backtesting_report_column_names, formats['header_format'])
+        sheet.set_column('A:A', 20)
+        sheet.set_column('F:I', None, formats['percent_format'])
+        sheet.set_column('M:M', None, formats['percent_format'])
+
+
+
+    def all_coins_report(self, report_path=None, currency_pairs_to_keep=None, group_strategy_variants=True, writer=None,
+                         sheet_prefix=''):
         df = self.results_df.copy(deep=True)
 
         # remove strategies without any trades - very important for averaging!
@@ -401,22 +438,32 @@ class ComparativeReportBuilder:
             df.loc[df['strategy'].str.contains('ann_'), 'strategy'] = 'ANN'
             df.loc[df['strategy'].str.contains('ichi_'), 'strategy'] = 'Ichimoku'
 
-        writer = pd.ExcelWriter(report_path)
+        if report_path is None and writer is None:
+            logging.error('Please specify writer or a report path!')
+            return
+
+        close_on_exit = False
+        if writer is None:
+            writer = pd.ExcelWriter(report_path)
+            close_on_exit = True
+
+        workbook = writer.book
+        formats = self._init_worksheet_formats(workbook)
 
         if currency_pairs_to_keep is not None:
             df = self._filter_df_based_on_currency_pairs(currency_pairs_to_keep)
 
-        self._describe_and_write(df, writer, "All coins")
+        self._describe_and_write(df, writer, f"{sheet_prefix}All", formats)
         top_20_alts = zip(COINMARKETCAP_TOP_20_ALTS, ["BTC"] * len(COINMARKETCAP_TOP_20_ALTS))
         top20 = self._filter_df_based_on_currency_pairs(df, top_20_alts)
-        self._describe_and_write(top20, writer, "Top 20 alts")
+        self._describe_and_write(top20, writer, f"{sheet_prefix}Top 20", formats)
 
-        # top 10 best performing coins
-        # top 10 worst performing coins
-        df[backtesting_report_columns].to_excel(writer, "Original data")
+        df[backtesting_report_columns].to_excel(writer, f"{sheet_prefix}Original data", index=False, header=False, startrow=1)
+        self._reformat_original_data(writer.sheets[f"{sheet_prefix}Original data"], formats)
 
-        writer.save()
-        writer.close()
+        if close_on_exit:
+            writer.save()
+            writer.close()
 
 
 
