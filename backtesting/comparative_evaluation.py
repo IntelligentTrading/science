@@ -235,8 +235,10 @@ class ComparativeReportBuilder:
         evaluation_dict["buy_and_hold_profit_percent_USDT"] = baseline_dict["profit_percent_USDT"]
         return evaluation_dict
 
+
     def get_best_performing_backtest(self):
         return self.results_df[self.results_df.num_trades > 0].iloc[0]["evaluation_object"]
+
 
     def write_summary(self, output_file):
         writer = pd.ExcelWriter(output_file)
@@ -244,6 +246,7 @@ class ComparativeReportBuilder:
         self.results_df[backtesting_report_columns]. \
             sort_values(by=['profit_percent'], ascending=False).to_excel(writer, 'Results')
         writer.save()
+
 
     def write_comparative_summary(self, summary_path):
         writer = pd.ExcelWriter(summary_path)
@@ -253,8 +256,10 @@ class ComparativeReportBuilder:
         summary.groupby(["strategy", "resample_period"]).describe().to_excel(writer, 'Results')
         writer.save()
 
+
     def _filter_df_based_on_currency_pairs(self, df, currency_pairs_to_keep):
         return df[df[["transaction_currency", "counter_currency"]].apply(tuple, 1).isin(currency_pairs_to_keep)]
+
 
     def _get_description_stat_values(self, desc_df, field_name, row_name):
         mean = desc_df[[(field_name, 'mean')]].loc[row_name][0]
@@ -263,8 +268,8 @@ class ComparativeReportBuilder:
         max = desc_df[[(field_name, 'max')]].loc[row_name][0]
         return mean, std, min, max
 
-    def _describe_and_write(self, filtered_df, writer, sheet_prefix, formats):
 
+    def _describe_and_write(self, filtered_df, writer, sheet_prefix, formats):
         if filtered_df.empty:
             return
 
@@ -283,25 +288,27 @@ class ComparativeReportBuilder:
         by_strategy_df[["profit_percent", "buy_and_hold_profit_percent", "num_trades", "outperforms"]]\
             .to_excel(writer, f'{sheet_prefix} by strategy', header=False, startrow=4)
 
-
+        # apply sheet formatting
         sheet = writer.sheets[f'{sheet_prefix} by strategy']
-
         self._reformat_sheet_grouped_by_strategy(formats, outperforms, sheet)
 
         # group by coin, evaluate
         by_coin_df = filtered_df[["source", "transaction_currency", "profit_percent",
                                   "buy_and_hold_profit_percent", "num_trades"]]\
             .groupby(["source", "transaction_currency"]).describe(percentiles=[])
+
         # reorder columns and write
+        # not sorted - commented out
         # by_coin_df[["profit_percent", "buy_and_hold_profit_percent", "num_trades"]].to_excel(writer, f'{sheet_prefix} by coin')
 
         g = by_coin_df.groupby(level=0, group_keys=False)
         by_coin_sorted_df = g.apply(lambda x: x.sort_values([('profit_percent', 'mean')], ascending=False))
         by_coin_sorted_df[["profit_percent", "buy_and_hold_profit_percent", "num_trades"]].to_excel(writer, f'{sheet_prefix} sorted by coin',
                                                                                                     header=False, startrow=4)
-
+        # apply sheet formatting
         sheet = writer.sheets[f'{sheet_prefix} sorted by coin']
         self._reformat_sheet_grouped_by_coin(formats, sheet)
+
 
     def _reformat_sheet_grouped_by_strategy(self, formats, outperforms, sheet):
         # add outperformance percent at the top
@@ -361,6 +368,14 @@ class ComparativeReportBuilder:
 
         sheet.write('A1', 'Mean profits, buy and hold profits and number of trades for all coins and signals in our database, grouped by coin')
 
+
+    def _reformat_original_data(self, sheet, formats):
+        sheet.write_row('A1', backtesting_report_column_names, formats['header_format'])
+        sheet.set_column('A:A', 20)
+        sheet.set_column('F:I', None, formats['percent_format'])
+        sheet.set_column('M:M', None, formats['percent_format'])
+
+
     def _init_worksheet_formats(self, workbook):
         formats = {}
         formats['percent_format'] = workbook.add_format({'num_format': '0.00\%'})
@@ -415,13 +430,6 @@ class ComparativeReportBuilder:
         })
 
         return formats
-
-    def _reformat_original_data(self, sheet, formats):
-        sheet.write_row('A1', backtesting_report_column_names, formats['header_format'])
-        sheet.set_column('A:A', 20)
-        sheet.set_column('F:I', None, formats['percent_format'])
-        sheet.set_column('M:M', None, formats['percent_format'])
-
 
 
     def all_coins_report(self, report_path=None, currency_pairs_to_keep=None, group_strategy_variants=True, writer=None,
