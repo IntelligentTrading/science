@@ -1,7 +1,6 @@
 from evaluation import Evaluation
 from orders import OrderType
-import logging
-from data_sources import get_price, get_filtered_signals, NoPriceDataException
+from data_sources import get_filtered_signals
 
 class SignalDrivenBacktester(Evaluation):
 
@@ -45,7 +44,6 @@ class SignalDrivenBacktester(Evaluation):
         super()._init_backtesting(start_cash, start_crypto)
 
 
-
     def fill_trading_df(self, orders):
         for i, order in enumerate(orders):
             if i == 0: # first order
@@ -77,24 +75,7 @@ class SignalDrivenBacktester(Evaluation):
 
     def run(self):
         self.orders, self.order_signals = self._order_generator.get_orders(
-            decisions=self.get_decisions(),
-            start_cash=self._start_cash,
-            start_crypto=self._start_crypto,
-            source=self._source,
-            time_delay=self._time_delay,
-            slippage=self._slippage
-
+            decisions=self.get_decisions()
         )
-        """
-        self.orders, self.order_signals = self._strategy.get_orders(
-            signals=self.signals,
-            start_cash=self._start_cash,
-            start_crypto=self._start_crypto,
-            source=self._source,
-            time_delay=self._time_delay,
-            slippage=self._slippage
-        )
-        """
 
         self.fill_trading_df(self.orders)
-        #self.execute_orders(self.orders)

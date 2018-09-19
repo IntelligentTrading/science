@@ -20,12 +20,13 @@ class StrategyDecision:
     SELL = "SELL"
     IGNORE = None
 
-    def __init__(self, timestamp, transaction_currency=None, counter_currency=None, outcome=None, signal=None):
+    def __init__(self, timestamp, transaction_currency=None, counter_currency=None, source=None, outcome=None, signal=None):
         assert outcome in (StrategyDecision.BUY, StrategyDecision.SELL, StrategyDecision.IGNORE)
         self.outcome = outcome
         self.timestamp = timestamp
         self.transaction_currency = transaction_currency
         self.counter_currency = counter_currency
+        self.source = source
         self.signal = signal
 
     def buy(self):
@@ -67,13 +68,13 @@ class Strategy(ABC):
                     logging.error(
                         'Multiple signals at the same time with opposing decisions! Highly unlikely, investigate!')
                 decision = StrategyDecision(timestamp, signal.transaction_currency, signal.counter_currency,
-                                            StrategyDecision.BUY, signal)
+                                            signal.source, StrategyDecision.BUY, signal)
             elif self.indicates_sell(signal):
                 if decision is not None and decision.outcome == StrategyDecision.BUY:  # sanity checks
                     logging.error(
                         'Multiple signals at the same time with opposing decisions! Highly unlikely, investigate!')
                 decision = StrategyDecision(timestamp, signal.transaction_currency, signal.counter_currency,
-                                            StrategyDecision.SELL, signal)
+                                            signal.source, StrategyDecision.SELL, signal)
 
         if decision is None:
             decision = StrategyDecision(timestamp, outcome=StrategyDecision.IGNORE)
@@ -84,15 +85,6 @@ class SignalStrategy(Strategy):
     """
     Base class for trading strategies that build orders based on a given list of signals.
     """
-
-    def __init__(self, order_generator):
-        if order_generator is None:
-            order_generator = AlternatingOrderGenerator()
-        self.order_generator = order_generator
-
-    def get_orders(self, signals, start_cash, start_crypto, source, time_delay=0, slippage=0):
-        return self.order_generator.get_orders(self, signals, start_cash, start_crypto, source, time_delay, slippage)
-
 
     def evaluate(self, transaction_currency, counter_currency, start_cash, start_crypto, start_time, end_time,
                  source, resample_period, evaluate_profit_on_last_order=False, verbose=True, time_delay=0):
@@ -137,12 +129,11 @@ class SignalSignatureStrategy(SignalStrategy):
     """
     A strategy based on ITF signal signatures (see a list of signatures in the field ALL_SIGNALS).
     """
-    def __init__(self, signal_set, order_generator=None):
+    def __init__(self, signal_set):
         """
         Builds the signal signature strategy.
         :param signal_set: A list of ITF signal signatures to be used in the strategy.
         """
-        super(SignalSignatureStrategy, self).__init__(order_generator)
         self.signal_set = signal_set
 
     def belongs_to_this_strategy(self, signal):
@@ -177,14 +168,13 @@ class SimpleRSIStrategy(SignalStrategy):
     """
     A strategy based on RSI thresholds.
     """
-    def __init__(self, overbought_threshold=80, oversold_threshold=25, signal_type="RSI", order_generator=None):
+    def __init__(self, overbought_threshold=80, oversold_threshold=25, signal_type="RSI"):
         """
         Builds the RSI strategy.
         :param overbought_threshold: The RSI overbought threshold.
         :param oversold_threshold: The RSI oversold threshold.
         :param signal_type: signal type: Set to "RSI" or "RSI_Cumulative".
         """
-        super(SimpleRSIStrategy, self).__init__(order_generator)
         self.overbought_threshold = overbought_threshold
         self.oversold_threshold = oversold_threshold
         self.signal_type = signal_type
@@ -217,12 +207,11 @@ class SimpleTrendBasedStrategy(SignalStrategy):
     """
     A strategy that decides on buys and sells based on signal trend information.
     """
-    def __init__(self, signal_type, order_generator=None):
+    def __init__(self, signal_type):
         """
         Builds the trend-based strategy.
         :param signal_type: The underlying signal type to use with the strategy (e.g. "SMA", "RSI", "ANN").
         """
-        super(SimpleTrendBasedStrategy, self).__init__(order_generator)
         self.signal_type = signal_type
 
     def __str__(self):

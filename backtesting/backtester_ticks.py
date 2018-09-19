@@ -7,9 +7,10 @@ from strategies import StrategyDecision, TickerBuyAndHold
 
 class TickDrivenBacktester(Evaluation, TickListener):
 
-    def __init__(self, tick_provider, **kwargs):
+    def __init__(self, tick_provider, order_generator, **kwargs):
         super().__init__(**kwargs)
         self.tick_provider = tick_provider
+        self.order_generator = order_generator
         self.run()
 
     def run(self):
@@ -26,31 +27,21 @@ class TickDrivenBacktester(Evaluation, TickListener):
         # self._current_price = price_data['close_price'].item()
 
         # price = row.close_price
-        self._current_timestamp = price_data.Index
+        self._current_timestamp = price_data.timestamp
         self._current_price = price_data.close_price
 
         # self._current_timestamp = signals_now
         # self._current_price = price_data
 
-        decision, order_signal = self._strategy.process_ticker(price_data, signals_now)
-        order = None
-        if decision == StrategyDecision.SELL and self._crypto > 0:
-            order = Order(OrderType.SELL, self._transaction_currency, self._counter_currency,
-                          self._current_timestamp, self._crypto, self._current_price, self._transaction_cost_percent, self._time_delay,
-                          self._slippage)
+        decision = self._strategy.get_decision(self._current_timestamp, self._current_price, signals_now)
+        order = self.order_generator.generate_order(decision)
+        if order is not None:
             self.orders.append(order)
-            self.order_signals.append(order_signal)
-            self.execute_order(order)
-        elif decision == StrategyDecision.BUY and self._cash > 0:
-            order = Order(OrderType.BUY, self._transaction_currency, self._counter_currency,
-                          self._current_timestamp, self._cash, self._current_price, self._transaction_cost_percent, self._time_delay,
-                          self._slippage)
-            self.orders.append(order)
-            self.order_signals.append(order_signal)
+            self.order_signals.append(decision.signal)
             self.execute_order(order)
 
         self._current_order = order
-        self._current_signal = order_signal
+        self._current_signal = decision.signal
 
         self._write_trading_df_row()
 
@@ -110,7 +101,7 @@ if __name__ == '__main__':
     )
 
     benchmark = None
-    build_benchmark = True
+    build_benchmark = False
 
     if build_benchmark:
         benchmark_transaction_currency, benchmark_counter_currency = "BTC", "USDT"
@@ -138,10 +129,14 @@ if __name__ == '__main__':
 
     # supply ticks from the ITF DB
     tick_provider = TickProviderITFDB(transaction_currency, counter_currency, start_time, end_time)
+    from trader import AlternatingOrderGenerator
+
+    order_generator = AlternatingOrderGenerator(start_cash=start_cash, start_crypto=start_crypto,
+                                                  time_delay=0, slippage=0)
 
     # create a new tick based backtester
     evaluation = TickDrivenBacktester(tick_provider=tick_provider,
-                                      strategy=strategy,
+                                      strategy=rsi_strategy,
                                       transaction_currency='BTC',
                                       counter_currency='USDT',
                                       start_cash=start_cash,
@@ -150,10 +145,11 @@ if __name__ == '__main__':
                                       end_time=end_time,
                                       benchmark_backtest=benchmark,
                                       time_delay=0,
-                                      slippage=SLIPPAGE
+                                      slippage=0,
+                                      order_generator=order_generator
                                       )
 
-    evaluation.to_excel("test.xlsx")
+    #evaluation.to_excel("test.xlsx")
     evaluation.plot_cumulative_returns()
 
 

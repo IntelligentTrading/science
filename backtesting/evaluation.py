@@ -10,7 +10,6 @@ from config import transaction_cost_percents
 from abc import ABC, abstractmethod
 from charting import BacktestingChart
 
-from trader import AlternatingOrderGenerator
 
 logging.getLogger().setLevel(logging.INFO)
 pd.options.mode.chained_assignment = None
@@ -20,8 +19,7 @@ class Evaluation(ABC):
     def __init__(self, strategy, transaction_currency, counter_currency,
                  start_cash, start_crypto, start_time, end_time, source=0,
                  resample_period=60, evaluate_profit_on_last_order=True, verbose=True,
-                 benchmark_backtest=None, time_delay=0, slippage=0, infinite_cash=False,
-                 infinite_crypto=False):
+                 benchmark_backtest=None, time_delay=0, slippage=0, order_generator=None):
         self._strategy = strategy
         self._transaction_currency = transaction_currency
         self._counter_currency = counter_currency
@@ -37,9 +35,8 @@ class Evaluation(ABC):
         self._benchmark_backtest = benchmark_backtest
         self._time_delay = time_delay
         self._slippage = slippage
-        self._order_generator = AlternatingOrderGenerator()
-        self._infinite_cash = infinite_cash
-        self._infinite_crypto = infinite_crypto
+
+        self._order_generator = order_generator
 
 
         if benchmark_backtest is not None:

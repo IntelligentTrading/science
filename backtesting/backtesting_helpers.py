@@ -80,11 +80,12 @@ def evaluate_rsi_any_currency(overbought_threshold, oversold_threshold, **kwargs
 
 
 def position_based_order_test(**kwargs):
-    from trader import PositionBasedOrderGenerator
+    from trader import PositionBasedOrderGenerator, AlternatingOrderGenerator
     rsi_strategy = SignalSignatureStrategy(
-        ['rsi_buy_2', 'rsi_sell_2','rsi_buy_1', 'rsi_sell_1','rsi_buy_3', 'rsi_sell_3'],
-        order_generator=PositionBasedOrderGenerator())
-    return SignalDrivenBacktester(strategy=rsi_strategy, **kwargs)
+        ['rsi_buy_2', 'rsi_sell_2','rsi_buy_1', 'rsi_sell_1','rsi_buy_3', 'rsi_sell_3'])
+    order_generator = AlternatingOrderGenerator(start_cash=kwargs['start_cash'], start_crypto=kwargs['start_crypto'],
+                                                  time_delay=kwargs['time_delay'], slippage=kwargs['slippage'])
+    return SignalDrivenBacktester(strategy=rsi_strategy, order_generator=order_generator, **kwargs)
 
 
 if __name__ == "__main__":
