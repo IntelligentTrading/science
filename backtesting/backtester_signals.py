@@ -66,7 +66,26 @@ class SignalDrivenBacktester(Evaluation):
         self._finalize_backtesting()
 
 
+    def get_decisions(self):
+        decisions = []
+        for signal in self.signals:
+            timestamp = signal.timestamp
+            price = signal.price
+            decisions.append(self._strategy.get_decision(timestamp, price, [signal]))
+
+        return decisions
+
     def run(self):
+        self.orders, self.order_signals = self._order_generator.get_orders(
+            decisions=self.get_decisions(),
+            start_cash=self._start_cash,
+            start_crypto=self._start_crypto,
+            source=self._source,
+            time_delay=self._time_delay,
+            slippage=self._slippage
+
+        )
+        """
         self.orders, self.order_signals = self._strategy.get_orders(
             signals=self.signals,
             start_cash=self._start_cash,
@@ -75,6 +94,7 @@ class SignalDrivenBacktester(Evaluation):
             time_delay=self._time_delay,
             slippage=self._slippage
         )
+        """
 
         self.fill_trading_df(self.orders)
         #self.execute_orders(self.orders)

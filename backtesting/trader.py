@@ -1,12 +1,13 @@
 from orders import OrderType, Order
 from config import transaction_cost_percents
 from data_sources import fetch_delayed_price
+from strategies import StrategyDecision
 
 
 class AlternatingOrderGenerator:
 
     @staticmethod
-    def get_orders(strategy, signals, start_cash, start_crypto, source, time_delay=0, slippage=0):
+    def get_orders(decisions, start_cash, start_crypto, source, time_delay=0, slippage=0):
         """
         Produces a list of buy-sell orders based on input signals.
         :param strategy: The strategy for which to produce the orders.
@@ -23,30 +24,34 @@ class AlternatingOrderGenerator:
         cash = start_cash
         crypto = start_crypto
         buy_currency = None
-        for i, signal in enumerate(signals):
-            if not strategy.belongs_to_this_strategy(signal):
-                continue
-
-            if strategy.indicates_sell(signal) and crypto > 0 and signal.transaction_currency == buy_currency:
-                price = fetch_delayed_price(signal, source, time_delay)
-                order = Order(OrderType.SELL, signal.transaction_currency, signal.counter_currency,
-                              signal.timestamp, crypto, price, transaction_cost_percents[source], time_delay, slippage,
-                              signal.price)
+        for decision in decisions:
+            if decision.buy() and crypto > 0 and decision.signal.transaction_currency == buy_currency:
+                price = fetch_delayed_price(decision.timestamp, decision.transaction_currency,
+                                            decision.counter_currency, source, time_delay,
+                                            decision.signal.price if not decision.signal is None else None)
+                order = Order(OrderType.SELL, decision.transaction_currency, decision.counter_currency,
+                              decision.timestamp, crypto, price, transaction_cost_percents[source], time_delay, slippage,
+                              decision.signal.price if not decision.signal is None else None)
                 orders.append(order)
-                order_signals.append(signal)
+                order_signals.append(decision.signal)
                 delta_crypto, delta_cash = order.execute()
                 cash = cash + delta_cash
                 crypto = crypto + delta_crypto
                 assert crypto == 0
 
-            elif strategy.indicates_buy(signal) and cash > 0:
-                price = fetch_delayed_price(signal, source, time_delay)
-                buy_currency = signal.transaction_currency
-                order = Order(OrderType.BUY, signal.transaction_currency, signal.counter_currency,
-                              signal.timestamp, cash, price, transaction_cost_percents[source], time_delay, slippage,
-                              signal.price)
+            elif decision.sell() and cash > 0:
+                buy_currency = decision.transaction_currency
+
+                price = fetch_delayed_price(decision.timestamp, decision.transaction_currency,
+                                            decision.counter_currency, source, time_delay,
+                                            decision.signal.price if not decision.signal is None else None)
+                order = Order(OrderType.BUY, decision.transaction_currency, decision.counter_currency,
+                              decision.timestamp, cash, price, transaction_cost_percents[source], time_delay,
+                              slippage,
+                              decision.signal.price if not decision.signal is None else None)
+
                 orders.append(order)
-                order_signals.append(signal)
+                order_signals.append(decision.signal)
                 delta_crypto, delta_cash = order.execute()
                 cash = cash + delta_cash
                 crypto = crypto + delta_crypto

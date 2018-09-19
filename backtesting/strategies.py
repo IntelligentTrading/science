@@ -2,13 +2,40 @@ import random
 from orders import *
 from data_sources import *
 from signals import *
-from backtester_signals import SignalDrivenBacktester
+#from backtester_signals import SignalDrivenBacktester
 from abc import ABC, abstractmethod
 from config import transaction_cost_percents
 import logging
-from trader import AlternatingOrderGenerator
+#from trader import AlternatingOrderGenerator
+from functools import total_ordering
+from collections import namedtuple
 
 log = logging.getLogger("strategies")
+
+class StrategyDecision:
+    """
+    Strategy decisions used by TickerStrategies.
+    """
+    BUY = "BUY"
+    SELL = "SELL"
+    IGNORE = None
+
+    def __init__(self, timestamp, transaction_currency=None, counter_currency=None, outcome=None, signal=None):
+        assert outcome in (StrategyDecision.BUY, StrategyDecision.SELL, StrategyDecision.IGNORE)
+        self.outcome = outcome
+        self.timestamp = timestamp
+        self.transaction_currency = transaction_currency
+        self.counter_currency = counter_currency
+        self.signal = signal
+
+    def buy(self):
+        return self.outcome == StrategyDecision.BUY
+
+    def sell(self):
+        return self.outcome == StrategyDecision.SELL
+
+    def ignore(self):
+        return self.outcome == StrategyDecision.IGNORE
 
 class Strategy(ABC):
     """
@@ -29,6 +56,29 @@ class Strategy(ABC):
     def get_short_summary(self):
         pass
 
+    def get_decision(self, timestamp, price, signals):
+        decision = None
+        for signal in signals:
+            if not self.belongs_to_this_strategy(signal):
+                continue
+
+            if self.indicates_buy(signal):
+                if decision is not None and decision.outcome == StrategyDecision.SELL:  # sanity checks
+                    logging.error(
+                        'Multiple signals at the same time with opposing decisions! Highly unlikely, investigate!')
+                decision = StrategyDecision(timestamp, signal.transaction_currency, signal.counter_currency,
+                                            StrategyDecision.BUY, signal)
+            elif self.indicates_sell(signal):
+                if decision is not None and decision.outcome == StrategyDecision.BUY:  # sanity checks
+                    logging.error(
+                        'Multiple signals at the same time with opposing decisions! Highly unlikely, investigate!')
+                decision = StrategyDecision(timestamp, signal.transaction_currency, signal.counter_currency,
+                                            StrategyDecision.SELL, signal)
+
+        if decision is None:
+            decision = StrategyDecision(timestamp, outcome=StrategyDecision.IGNORE)
+        return decision
+
 
 class SignalStrategy(Strategy):
     """
@@ -42,6 +92,7 @@ class SignalStrategy(Strategy):
 
     def get_orders(self, signals, start_cash, start_crypto, source, time_delay=0, slippage=0):
         return self.order_generator.get_orders(self, signals, start_cash, start_crypto, source, time_delay, slippage)
+
 
     def evaluate(self, transaction_currency, counter_currency, start_cash, start_crypto, start_time, end_time,
                  source, resample_period, evaluate_profit_on_last_order=False, verbose=True, time_delay=0):
@@ -77,7 +128,9 @@ class SignalStrategy(Strategy):
                 if strategy.belongs_to_this_strategy(signal) and strategy.indicates_sell(signal)]
 
 
-from functools import total_ordering
+
+
+
 
 @total_ordering
 class SignalSignatureStrategy(SignalStrategy):
@@ -251,15 +304,6 @@ class BuyAndHoldTimebasedStrategy(SignalStrategy):
 
     def belongs_to_this_strategy(self, signal):
         return False
-
-
-class StrategyDecision:
-    """
-    Strategy decisions used by TickerStrategies.
-    """
-    BUY = "BUY"
-    SELL = "SELL"
-    IGNORE = None
 
 
 class TickerStrategy(Strategy):

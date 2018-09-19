@@ -125,7 +125,7 @@ class Evaluation(ABC):
         try:
             return self._start_cash + \
                    (self._start_crypto * get_price(
-                   self.start_crypto_currency,
+                   self._transaction_currency,
                    self._start_time,
                    self._source,
                    self._counter_currency) if self._start_crypto > 0 else 0)
@@ -313,21 +313,21 @@ class Evaluation(ABC):
         self._end_cash = self._cash
         self._end_crypto = self._crypto
 
-        rerun = False
-        if self._infinite_cash and self._end_cash < 0:
-            self._start_cash = self._start_cash - self.end_cash   # assume we had all that money when we started
-            self._end_cash = 0
-            rerun = True
+        # rerun = False
+        # if self._infinite_cash and self._end_cash < 0:
+        #    self._start_cash = self._start_cash - self.end_cash   # assume we had all that money when we started
+        #    self._end_cash = 0
+        #    rerun = True
 
-        if self._infinite_crypto and self._crypto < 0:
-            self._start_crypto = self._start_crypto + self.end_crypto
-            self.end_crypto = 0 # just assuming we have an infinite supply of cash and crypto and not trading
-            rerun = True
+        # if self._infinite_crypto and self._crypto < 0:
+        #    self._start_crypto = self._start_crypto + self.end_crypto
+        #     self.end_crypto = 0 # just assuming we have an infinite supply of cash and crypto and not trading
+        #    rerun = True
 
-        if rerun:
-            self._init_backtesting(self._start_cash, self._start_crypto)
-            self.run()
-            return
+        # if rerun:
+        #    self._init_backtesting(self._start_cash, self._start_crypto)
+        #    self.run()
+        #    return
 
         # compute returns for stats
         self.trading_df = self._fill_returns(self.trading_df)
@@ -395,7 +395,7 @@ class Evaluation(ABC):
 
         output.append("\n* Order execution log *\n")
         output.append("Start balance: cash = {} {}, crypto = {} {}".format(self._start_cash, self._counter_currency,
-                                                                           self._start_crypto, self.start_crypto_currency
+                                                                           self._start_crypto, self._transaction_currency
                                                                            if self._start_crypto != 0 else ""))
 
         output.append("Start time: {}\n--".format(datetime_from_timestamp(self._start_time)))
