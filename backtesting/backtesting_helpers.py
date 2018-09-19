@@ -1,6 +1,7 @@
 from strategies import *
 from backtester_signals import SignalDrivenBacktester
 
+
 def evaluate_rsi_signature(**kwargs):
     rsi_strategy = SignalSignatureStrategy(['rsi_buy_2', 'rsi_sell_2','rsi_buy_1', 'rsi_sell_1','rsi_buy_3', 'rsi_sell_3'])
     return SignalDrivenBacktester(strategy=rsi_strategy, **kwargs)

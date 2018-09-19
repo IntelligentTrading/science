@@ -335,7 +335,7 @@ def get_currencies_for_signal(counter_currency, signal):
 
 def fetch_delayed_price(timestamp, transaction_currency, counter_currency, source, time_delay, original_price=None):
     if time_delay != 0 or original_price is None:
-        return get_price(signal.transaction_currency, signal.timestamp + time_delay, source, signal.counter_currency)
+        return get_price(transaction_currency, timestamp + time_delay, source, counter_currency)
     else:
         return original_price
 

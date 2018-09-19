@@ -257,11 +257,13 @@ class BuyOnFirstSignalAndHoldStrategy(SignalStrategy):
     def get_signal_report(self):
         return self.strategy.get_signal_report()
 
+
+
 class BuyAndHoldTimebasedStrategy(SignalStrategy):
     """
     Standard buy & hold strategy (signal-driven).
     """
-    def __init__(self, start_time, end_time, transaction_currency, counter_currency):
+    def __init__(self, start_time, end_time, transaction_currency, counter_currency, source):
         """
         Builds the buy and hold strategy.
         :param start_time: When to buy transaction_currency.
@@ -269,24 +271,40 @@ class BuyAndHoldTimebasedStrategy(SignalStrategy):
         :param transaction_currency: Transaction currency.
         :param counter_currency: Counter currency.
         """
-        self.start_time = start_time
-        self.end_time = end_time
-        self.transaction_currency = transaction_currency
-        self.counter_currency = counter_currency
+        self._start_time = start_time
+        self._end_time = end_time
+        self._transaction_currency = transaction_currency
+        self._counter_currency = counter_currency
+        self._source = source
+        self._bought = False
+        self._sold = False
 
-    def get_orders(self, signals, start_cash, start_crypto, source, time_delay=0, slippage=0):
-        transaction_cost_percent = transaction_cost_percents[source]
-        orders = []
-        start_price = get_price(self.transaction_currency, self.start_time, source, self.counter_currency)
-        end_price = get_price(self.transaction_currency, self.end_time, source, self.counter_currency)
-        order = Order(OrderType.BUY, self.transaction_currency, self.counter_currency,
-                      self.start_time, start_cash, start_price, transaction_cost_percent, time_delay, slippage)
-        orders.append(order)
-        delta_crypto, delta_cash = order.execute()
-        order = Order(OrderType.SELL, self.transaction_currency, self.counter_currency,
-                      self.end_time, delta_crypto, end_price, transaction_cost_percent, time_delay, slippage)
-        orders.append(order)
-        return orders, []
+    def get_decision(self, timestamp, price, signals):
+        if timestamp >= self._start_time and timestamp <= self._end_time and not self._bought:
+            if abs(timestamp - self._start_time) > 120:
+                log.warning("Buy and hold BUY: ticker more than 2 mins after start time ({:.2f} mins)!"
+                                .format(abs(timestamp - self._start_time)/60))
+            self._bought = True
+            return StrategyDecision(outcome=StrategyDecision.BUY, timestamp=timestamp,
+                                    transaction_currency=self._transaction_currency,
+                                    counter_currency=self._counter_currency,
+                                    source=self._source)
+        elif timestamp >= self._end_time and not self._sold:
+            if abs(timestamp - self._end_time) > 120:
+                log.warning("Buy and hold SELL: ticker more than 2 mins after end time ({:.2f} mins)!"
+                                .format(abs(timestamp - self._end_time) / 60))
+            self._sold = True
+            return StrategyDecision(outcome=StrategyDecision.SELL, timestamp=timestamp,
+                                    transaction_currency=self._transaction_currency,
+                                    counter_currency=self._counter_currency,
+                                    source=self._source)
+        else:
+            return StrategyDecision(outcome=StrategyDecision.IGNORE, timestamp=timestamp,
+                                    transaction_currency=self._transaction_currency,
+                                    counter_currency=self._counter_currency,
+                                    source=self._source
+                                    )
+
 
     def get_short_summary(self):
         return "Buy & hold"
@@ -337,50 +355,6 @@ class TickerWrapperStrategy(TickerStrategy):
     def get_short_summary(self):
         return self._strategy.get_short_summary()
 
-
-class TickerBuyAndHold(TickerWrapperStrategy):
-    """
-    Ticker-based buy & hold strategy (used as baseline for benchmark stats calculation).
-    """
-
-    def __init__(self, start_time, end_time):
-        """
-        Builds the ticker-based buy and hold strategy.
-        :param start_time: time of buying
-        :param end_time: time of selling
-        """
-        self._start_time = start_time
-        self._end_time = end_time
-        self._bought = False
-        self._sold = False
-
-    def process_ticker(self, price_data, signals):
-        """
-        Process incoming price data.
-        :param price_data: Pandas row with OHLC information and timestamp. Assumed to be pre-filtered so this method
-        always receives only one transaction and counter currency
-        :param signals: ITF signals, ignored.
-        :return: StrategyDecision.BUY or StrategyDecision.SELL or StrategyDecision.IGNORE
-        """
-        timestamp = price_data.Index
-
-        if timestamp >= self._start_time and timestamp <= self._end_time and not self._bought:
-            if abs(timestamp - self._start_time) > 120:
-                log.warning("Buy and hold BUY: ticker more than 2 mins after start time ({:.2f} mins)!"
-                                .format(abs(timestamp - self._start_time)/60))
-            self._bought = True
-            return StrategyDecision.BUY, None
-        elif timestamp >= self._end_time and not self._sold:
-            if abs(timestamp - self._end_time) > 120:
-                log.warning("Buy and hold SELL: ticker more than 2 mins after end time ({:.2f} mins)!"
-                                .format(abs(timestamp - self._end_time) / 60))
-            self._sold = True
-            return StrategyDecision.SELL, None
-        else:
-            return StrategyDecision.IGNORE, None
-
-    def get_short_summary(self):
-        return "Ticker-based buy and hold strategy"
 
 
 class RandomTradingStrategy(SimpleTrendBasedStrategy):
