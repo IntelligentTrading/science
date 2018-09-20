@@ -5,6 +5,10 @@ from abc import ABC, abstractmethod
 
 
 class OrderGenerator(ABC):
+
+    ALTERNATING = 'alternating'
+    POSITION_BASED = 'position_based'
+
     def __init__(self, start_cash, start_crypto, time_delay, slippage):
         self._cash = start_cash
         self._crypto = start_crypto
@@ -63,6 +67,15 @@ class OrderGenerator(ABC):
     @abstractmethod
     def generate_order(self, decision):
         pass
+
+    @staticmethod
+    def create(generator_type, **kwargs):
+        if generator_type == OrderGenerator.ALTERNATING:
+            return AlternatingOrderGenerator(**kwargs)
+        elif generator_type == OrderGenerator.POSITION_BASED:
+            return PositionBasedOrderGenerator(**kwargs)
+        else:
+            raise Exception('Unknown order generator type!')
 
 
 class AlternatingOrderGenerator(OrderGenerator):

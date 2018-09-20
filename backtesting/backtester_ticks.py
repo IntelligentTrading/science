@@ -5,10 +5,9 @@ from tick_provider_itf_db import TickProviderITFDB
 
 class TickDrivenBacktester(Evaluation, TickListener):
 
-    def __init__(self, tick_provider, order_generator, **kwargs):
+    def __init__(self, tick_provider, **kwargs):
         super().__init__(**kwargs)
         self.tick_provider = tick_provider
-        self.order_generator = order_generator
         self.run()
 
     def run(self):
@@ -32,7 +31,7 @@ class TickDrivenBacktester(Evaluation, TickListener):
         # self._current_price = price_data
 
         decision = self._strategy.get_decision(self._current_timestamp, self._current_price, signals_now)
-        order = self.order_generator.generate_order(decision)
+        order = self._order_generator.generate_order(decision)
         if order is not None:
             self.orders.append(order)
             self.order_signals.append(decision.signal)
@@ -64,8 +63,8 @@ class TickDrivenBacktester(Evaluation, TickListener):
                                                     end_time)
         benchmark_strategy = BuyAndHoldTimebasedStrategy(start_time, end_time, transaction_currency, counter_currency,
                                                          source=0)
-        benchmark_order_generator = AlternatingOrderGenerator(start_cash=start_cash, start_crypto=start_crypto,
-                                                  time_delay=0, slippage=0)
+        benchmark_order_generator = OrderGenerator.ALTERNATING
+
         benchmark = TickDrivenBacktester(
                 tick_provider=tick_provider,
                 strategy=benchmark_strategy,
@@ -102,10 +101,8 @@ if __name__ == '__main__':
         ['rsi_buy_2', 'rsi_sell_2', 'rsi_buy_1', 'rsi_sell_1', 'rsi_buy_3', 'rsi_sell_3']
     )
 
-    from trader import PositionBasedOrderGenerator, AlternatingOrderGenerator
+    from trader import OrderGenerator
 
-    order_generator = PositionBasedOrderGenerator(start_cash=start_cash, start_crypto=start_crypto,
-                                                  time_delay=0, slippage=0)
 
     benchmark = None
     build_benchmark = True
@@ -117,8 +114,7 @@ if __name__ == '__main__':
                                                     end_time)
         benchmark_strategy = BuyAndHoldTimebasedStrategy(start_time, end_time, benchmark_transaction_currency, benchmark_counter_currency,
                                                          source=0)
-        benchmark_order_generator = AlternatingOrderGenerator(start_cash=start_cash, start_crypto=start_crypto,
-                                                  time_delay=0, slippage=0)
+
         benchmark = TickDrivenBacktester(
             tick_provider=benchmark_tick_provider,
             strategy=benchmark_strategy,
@@ -133,17 +129,14 @@ if __name__ == '__main__':
             verbose=True,
             time_delay=0,
             slippage=0,
-            order_generator=benchmark_order_generator
+            order_generator=OrderGenerator.ALTERNATING
         )
-
-    exit(0)
 
     strategy = TickerWrapperStrategy(rsi_strategy)
     #strategy = TickerBuyAndHold(start_time, end_time)
 
     # supply ticks from the ITF DB
     tick_provider = TickProviderITFDB(transaction_currency, counter_currency, start_time, end_time)
-
 
     # create a new tick based backtester
     evaluation = TickDrivenBacktester(tick_provider=tick_provider,
@@ -157,7 +150,7 @@ if __name__ == '__main__':
                                       benchmark_backtest=benchmark,
                                       time_delay=0,
                                       slippage=0,
-                                      order_generator=order_generator
+                                      order_generator=OrderGenerator.POSITION_BASED
                                       )
 
     #evaluation.to_excel("test.xlsx")

@@ -3,7 +3,7 @@ from strategies import RandomTradingStrategy
 import numpy as np
 import datetime
 from backtesting_helpers import find_num_cumulative_outperforms
-from data_sources import get_currencies_trading_against_counter
+from dateutil import parser
 
 
 def best_performing_signals_of_the_week():
@@ -43,11 +43,11 @@ def best_performing_signals_of_the_week():
         start_crypto=0,
         start_time=start_time,
         end_time=end_time,
-        output_file=f"best_performing_{datetime.datetime.utcfromtimestamp(end_time).strftime('%Y-%m-%d')}.xlsx",
-        debug=True
+        output_file=f"cbest_performing_{datetime.datetime.utcfromtimestamp(end_time).strftime('%Y-%m-%d')}.xlsx",
+        debug=False,
     )
 
-    comparison.report.all_coins_report(f"full_report_{datetime.datetime.utcfromtimestamp(end_time).strftime('%Y-%m-%d')}.xlsx", group_strategy_variants=False)
+    comparison.report.all_coins_report(f"cfull_report_{datetime.datetime.utcfromtimestamp(end_time).strftime('%Y-%m-%d')}.xlsx", group_strategy_variants=False)
 
 
 def in_depth_signal_comparison(out_path):
@@ -78,19 +78,12 @@ def in_depth_signal_comparison(out_path):
     strategies = basic_strategies + vbi_strategies + ann_rsi_strategies
 
     periods = {
-        'Mar 2018': ('2018/03/01 00:00:00 UTC', '2018/03/31 23:59:59 UTC'),
-        'Apr 2018': ('2018/04/01 00:00:00 UTC', '2018/04/30 23:59:59 UTC'),
-        'May 2018': ('2018/05/01 00:00:00 UTC', '2018/05/31 23:59:59 UTC'),
-        'Jun 2018': ('2018/06/01 00:00:00 UTC', '2018/06/30 23:59:59 UTC'),
-        'Jul 2018': ('2018/07/01 00:00:00 UTC', '2018/07/31 23:59:59 UTC'),
-        'Q1 2018': ('2018/01/01 00:00:00 UTC', '2018/03/31 23:59:59 UTC'),
-        'Q2 2018': ('2018/04/01 00:00:00 UTC', '2018/06/30 23:59:59 UTC'),
+        'July 2018': ('2018/07/01 00:00:00 UTC', '2018/07/31 23:59:59 UTC')
 
     }
 
     writer = pd.ExcelWriter(out_path)
 
-    from dateutil import parser
     for period in periods:
         start_time = parser.parse(periods[period][0]).timestamp()
         end_time = parser.parse(periods[period][1]).timestamp()
@@ -109,7 +102,6 @@ def in_depth_signal_comparison(out_path):
         )
 
         comparison.report.all_coins_report(writer=writer, sheet_prefix=f'({period}) ', group_strategy_variants=False)
-
 
     writer.save()
     writer.close()
@@ -312,9 +304,9 @@ if __name__ == "__main__":
     # delayed_trading_stats()
 
     # Best performing signals
-    # best_performing_signals_of_the_week()
+    best_performing_signals_of_the_week()
 
-    in_depth_signal_comparison('comp.xlsx')
+    #in_depth_signal_comparison('comp.xlsx')
 
     # RSI vs RSI cumulative
     # start_time = 1518523200  # first instance of RSI_Cumulative signal

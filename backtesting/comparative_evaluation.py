@@ -6,6 +6,7 @@ from config import backtesting_report_columns, backtesting_report_column_names, 
 from signals import ALL_SIGNALS
 from strategies import BuyAndHoldTimebasedStrategy, SignalSignatureStrategy, SimpleRSIStrategy
 from enum import Enum
+from trader import OrderGenerator
 
 import pandas.io.formats.excel
 
@@ -113,7 +114,8 @@ class ComparativeEvaluation:
     """
 
     def __init__(self, strategy_set, counter_currencies, resample_periods, sources,
-                 start_cash, start_crypto, start_time, end_time, output_file=None, time_delay=0, debug=False):
+                 start_cash, start_crypto, start_time, end_time, output_file=None, time_delay=0, debug=False,
+                 order_generator=OrderGenerator.ALTERNATING):
 
         self.strategy_set = sorted(strategy_set)
         self.counter_currencies = counter_currencies
@@ -127,6 +129,7 @@ class ComparativeEvaluation:
         self.buy_first_and_hold = False
         self.output_file = output_file
         self.time_delay = time_delay
+        self.order_generator = order_generator
 
         self._run_backtests(debug)
         self._report = ComparativeReportBuilder(self.backtests, self.baselines)
@@ -157,6 +160,8 @@ class ComparativeEvaluation:
             for transaction_currency in transaction_currencies:
                 try:
                     backtest, baseline = self._evaluate(strategy, transaction_currency, counter_currency, resample_period, source)
+                    if backtest.profit_percent is None or baseline.profit_percent is None:
+                        continue
                     self.backtests.append(backtest)
                     self.baselines.append(baseline)
                     if debug:
@@ -179,8 +184,9 @@ class ComparativeEvaluation:
         params['evaluate_profit_on_last_order'] = self.evaluate_profit_on_last_order
         params['verbose'] = False
         params['source'] = source
+        params['order_generator'] = self.order_generator
 
-        baseline = BuyAndHoldTimebasedStrategy(self.start_time, self.end_time, transaction_currency, counter_currency)
+        baseline = BuyAndHoldTimebasedStrategy(self.start_time, self.end_time, transaction_currency, counter_currency, source)
         baseline_evaluation = SignalDrivenBacktester(strategy=baseline, **params)
         evaluation = SignalDrivenBacktester(strategy=strategy, **params)
 
@@ -243,8 +249,10 @@ class ComparativeReportBuilder:
     def write_summary(self, output_file):
         writer = pd.ExcelWriter(output_file)
         # filter so that only report columns remain
+        #self.results_df['profit_percent'][self.results_df['profit_percent'] == 'N/A'] = np.nan
         self.results_df[backtesting_report_columns]. \
             sort_values(by=['profit_percent'], ascending=False).to_excel(writer, 'Results')
+
         writer.save()
 
 

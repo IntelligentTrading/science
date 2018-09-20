@@ -66,10 +66,19 @@ class SignalDrivenBacktester(Evaluation):
 
     def get_decisions(self):
         decisions = []
+        # special case for buy and hold - get decision at the beginning of time
+        if len(self.signals) == 0 or self.signals[0].timestamp != self._start_time:
+            decisions.append(self._strategy.get_decision(self._start_time, None, []))
+
+        decisions.append(self._strategy.get_decision(self._start_time, None, []))
         for signal in self.signals:
             timestamp = signal.timestamp
             price = signal.price
             decisions.append(self._strategy.get_decision(timestamp, price, [signal]))
+
+        # again, let the strategy decide at the end of time
+        if len(self.signals) == 0 or self.signals[-1].timestamp != self._end_time:
+            decisions.append(self._strategy.get_decision(self._end_time, None, []))
 
         return decisions
 

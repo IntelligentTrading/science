@@ -2,19 +2,16 @@ import random
 from orders import *
 from data_sources import *
 from signals import *
-#from backtester_signals import SignalDrivenBacktester
 from abc import ABC, abstractmethod
-from config import transaction_cost_percents
 import logging
-#from trader import AlternatingOrderGenerator
 from functools import total_ordering
-from collections import namedtuple
+from backtester_signals import SignalDrivenBacktester
 
 log = logging.getLogger("strategies")
 
 class StrategyDecision:
     """
-    Strategy decisions used by TickerStrategies.
+    A class that encapsulates decision produced by a strategy.
     """
     BUY = "BUY"
     SELL = "SELL"
@@ -37,6 +34,7 @@ class StrategyDecision:
 
     def ignore(self):
         return self.outcome == StrategyDecision.IGNORE
+
 
 class Strategy(ABC):
     """
@@ -80,6 +78,16 @@ class Strategy(ABC):
             decision = StrategyDecision(timestamp, outcome=StrategyDecision.IGNORE)
         return decision
 
+    @staticmethod
+    def get_buy_signals(strategy, signals):
+        return [signal for signal in signals
+                if strategy.belongs_to_this_strategy(signal) and strategy.indicates_buy(signal)]
+
+    @staticmethod
+    def get_sell_signals(strategy, signals):
+        return [signal for signal in signals
+                if strategy.belongs_to_this_strategy(signal) and strategy.indicates_sell(signal)]
+
 
 class SignalStrategy(Strategy):
     """
@@ -87,7 +95,8 @@ class SignalStrategy(Strategy):
     """
 
     def evaluate(self, transaction_currency, counter_currency, start_cash, start_crypto, start_time, end_time,
-                 source, resample_period, evaluate_profit_on_last_order=False, verbose=True, time_delay=0):
+                 source, resample_period, evaluate_profit_on_last_order=False, verbose=True, time_delay=0,
+                 order_generator=None):
         """
         Builds a signal-based backtester using this strategy.
         See full documentation in SignalDrivenBacktester.
@@ -105,23 +114,9 @@ class SignalStrategy(Strategy):
             resample_period=resample_period,
             evaluate_profit_on_last_order=evaluate_profit_on_last_order,
             verbose=verbose,
-            time_delay=time_delay
+            time_delay=time_delay,
+            order_generator=order_generator
         )
-
-    # TODO: test and clean this
-    @staticmethod
-    def get_buy_signals(strategy, signals):
-        return [signal for signal in signals
-                if strategy.belongs_to_this_strategy(signal) and strategy.indicates_buy(signal)]
-
-    @staticmethod
-    def get_sell_signals(strategy, signals):
-        return [signal for signal in signals
-                if strategy.belongs_to_this_strategy(signal) and strategy.indicates_sell(signal)]
-
-
-
-
 
 
 @total_ordering
@@ -144,7 +139,6 @@ class SignalSignatureStrategy(SignalStrategy):
         output.append("Strategy: a simple signal set-based strategy")
         output.append("  description: trading according to signal set {}".format(str(self.signal_set)))
         return "\n".join(output)
-
 
     def get_short_summary(self):
         return ' + '.join([pretty_print_signal(s) for s in self.signal_set])
@@ -227,7 +221,7 @@ class SimpleTrendBasedStrategy(SignalStrategy):
     def belongs_to_this_strategy(self, signal):
         return signal.signal_type == self.signal_type
 
-
+# TODO
 class BuyOnFirstSignalAndHoldStrategy(SignalStrategy):
     """
     A wrapper class for SignalStrategies. Buys on first signal, then holds.
@@ -256,7 +250,6 @@ class BuyOnFirstSignalAndHoldStrategy(SignalStrategy):
 
     def get_signal_report(self):
         return self.strategy.get_signal_report()
-
 
 
 class BuyAndHoldTimebasedStrategy(SignalStrategy):
@@ -304,7 +297,6 @@ class BuyAndHoldTimebasedStrategy(SignalStrategy):
                                     counter_currency=self._counter_currency,
                                     source=self._source
                                     )
-
 
     def get_short_summary(self):
         return "Buy & hold"
@@ -354,7 +346,6 @@ class TickerWrapperStrategy(TickerStrategy):
 
     def get_short_summary(self):
         return self._strategy.get_short_summary()
-
 
 
 class RandomTradingStrategy(SimpleTrendBasedStrategy):
