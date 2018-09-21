@@ -8,12 +8,14 @@ class TickDrivenBacktester(Evaluation, TickListener):
     def __init__(self, tick_provider, **kwargs):
         super().__init__(**kwargs)
         self.tick_provider = tick_provider
+        # reevaluate infinite bank
+        self._reevaluate_inf_bank()
+
         self.run()
 
     def run(self):
         # register at tick provider
         self.tick_provider.add_listener(self)
-
         # ingest ticks
         self.tick_provider.run()
 
@@ -138,13 +140,14 @@ if __name__ == '__main__':
     # supply ticks from the ITF DB
     tick_provider = TickProviderITFDB(transaction_currency, counter_currency, start_time, end_time)
 
+    from config import INF_CASH, INF_CRYPTO
     # create a new tick based backtester
     evaluation = TickDrivenBacktester(tick_provider=tick_provider,
                                       strategy=rsi_strategy,
                                       transaction_currency='BTC',
                                       counter_currency='USDT',
-                                      start_cash=start_cash,
-                                      start_crypto=start_crypto,
+                                      start_cash=INF_CASH,
+                                      start_crypto=INF_CRYPTO,
                                       start_time=start_time,
                                       end_time=end_time,
                                       benchmark_backtest=benchmark,

@@ -90,7 +90,7 @@ def position_based_order_test(**kwargs):
 
 if __name__ == "__main__":
     end_time = 1531699200
-    start_time = end_time - 60*60*24*70
+    start_time = end_time - 60*60*24*7
 
     from config import INF_CASH, INF_CRYPTO
 
