@@ -9,6 +9,7 @@ from backtester_signals import SignalDrivenBacktester
 
 log = logging.getLogger("strategies")
 
+
 class StrategyDecision:
     """
     A class that encapsulates decision produced by a strategy.

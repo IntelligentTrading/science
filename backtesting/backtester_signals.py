@@ -36,18 +36,16 @@ class SignalDrivenBacktester(Evaluation):
             self.signals = signals
 
         self._buy_currency = self._start_crypto_currency = self._transaction_currency
+        self._reevaluate_inf_bank()
 
         self.run()
 
-
-    def _init_backtesting(self, start_cash, start_crypto):
-        super()._init_backtesting(start_cash, start_crypto)
 
 
     def fill_trading_df(self, orders):
         for i, order in enumerate(orders):
             if i == 0: # first order
-                assert order.order_type == OrderType.BUY
+#                assert order.order_type == OrderType.BUY
                 self._start_crypto_currency = self._buy_currency = order.transaction_currency
 
             if order.order_type == OrderType.BUY:

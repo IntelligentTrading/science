@@ -106,10 +106,18 @@ class PositionBasedOrderGenerator(OrderGenerator):
     def __init__(self, quantity=1, **kwargs):
         super(PositionBasedOrderGenerator, self).__init__(**kwargs)
         self._quantity = quantity
+        self._transaction_currency = None
 
     def generate_order(self, decision):
         order = None
-        if decision.sell() and decision.transaction_currency == self._buy_currency:
+
+        if decision.buy() or decision.sell():  # sanity checks
+            if self._transaction_currency is None:
+                self._transaction_currency = decision.transaction_currency
+            else:
+                assert decision.transaction_currency == self._transaction_currency
+
+        if decision.sell():
             order = self.sell_order(decision=decision, value=self._quantity)
             self._execute_order(order)
 

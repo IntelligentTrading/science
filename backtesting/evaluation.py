@@ -11,6 +11,7 @@ from abc import ABC, abstractmethod
 from charting import BacktestingChart
 
 from trader import OrderGenerator
+from config import INF_CRYPTO, INF_CASH
 
 logging.getLogger().setLevel(logging.INFO)
 pd.options.mode.chained_assignment = None
@@ -45,7 +46,6 @@ class Evaluation(ABC):
             slippage=slippage
         )
 
-
         if benchmark_backtest is not None:
             pass # TODO: fix assertions and delayed buy&hold
             # assert benchmark_backtest._start_time == self._start_time
@@ -54,6 +54,26 @@ class Evaluation(ABC):
         # Init backtesting variables
         self._init_backtesting(start_cash, start_crypto)
         #self.trading_df = pd.DataFrame(columns=['close_price', 'signal', 'order', 'cash', 'crypto', 'total_value'])
+
+
+    def _reevaluate_inf_bank(self):
+
+        import copy
+        if self._start_cash == INF_CASH:
+            # simulate how the trading would have gone
+            self._start_cash = self._cash = 0
+            evaluation = copy.deepcopy(self)
+            evaluation._verbose = False
+            evaluation.run()
+            if evaluation._end_cash < 0:
+                self._start_cash = self._cash = -evaluation.end_cash
+        if self._start_crypto == INF_CRYPTO:
+            self._start_crypto = self._crypto = 0
+            evaluation = copy.deepcopy(self)
+            evaluation._verbose=False
+            evaluation.run()
+            if evaluation._end_crypto < 0:
+                self._start_crypto = self._crypto = -evaluation.end_crypto
 
     def _init_backtesting(self, start_cash, start_crypto):
         self._cash = start_cash
@@ -281,6 +301,8 @@ class Evaluation(ABC):
     @property
     def benchmark_backtest(self):
         return self._benchmark_backtest
+
+
 
     def _write_trading_df_row(self):
         total_value = self._crypto * self._current_price + self._cash

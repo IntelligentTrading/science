@@ -43,8 +43,9 @@ def best_performing_signals_of_the_week():
         start_crypto=0,
         start_time=start_time,
         end_time=end_time,
-        output_file=f"cbest_performing_{datetime.datetime.utcfromtimestamp(end_time).strftime('%Y-%m-%d')}.xlsx",
+        output_file=f"position_based_best_performing_{datetime.datetime.utcfromtimestamp(end_time).strftime('%Y-%m-%d')}.xlsx",
         debug=False,
+        order_generator=OrderGenerator.POSITION_BASED
     )
 
     comparison.report.all_coins_report(f"cfull_report_{datetime.datetime.utcfromtimestamp(end_time).strftime('%Y-%m-%d')}.xlsx", group_strategy_variants=False)
