@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import mysql.connector
 from mysql.connector import errorcode
+import psycopg2 as pg
 
 def ittconnection(DATABASE='prodcopy'):
     if DATABASE == 'prod':
@@ -25,11 +26,11 @@ def ittconnection(DATABASE='prodcopy'):
 
     elif DATABASE == 'stage':
         config = {
-            'user': 'alienbaby',
-            'password': 'alienbabymoonangel',
-            'host': 'intelligenttrading-aurora-production-postgres-cluster.cluster-caexel1tmds5.us-east-1.rds.amazonaws.com',
+            'user': 'itfcorestage',
+            'password': '63YB2P-uZqRpe-NJs6UM_fkG8',
+            'host': 'itf-core-aurora-postgresql-stage.caexel1tmds5.us-east-1.rds.amazonaws.com',
             'port': '5432',
-            'dbname': 'primary_postgres'
+            'dbname': 'itf_core_stage_db'
         }
 
         try:
