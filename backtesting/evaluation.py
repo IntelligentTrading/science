@@ -2,6 +2,7 @@ import logging
 import empyrical
 import numpy as np
 import pandas as pd
+import copy
 
 from data_sources import get_price, convert_value_to_USDT, NoPriceDataException, Horizon
 from orders import OrderType
@@ -10,7 +11,7 @@ from config import transaction_cost_percents
 from abc import ABC, abstractmethod
 from charting import BacktestingChart
 
-from trader import OrderGenerator
+from order_generator import OrderGenerator
 from config import INF_CRYPTO, INF_CASH
 
 logging.getLogger().setLevel(logging.INFO)
@@ -57,8 +58,6 @@ class Evaluation(ABC):
 
 
     def _reevaluate_inf_bank(self):
-
-        import copy
         if self._start_cash == INF_CASH:
             # simulate how the trading would have gone
             self._start_cash = self._cash = 0
@@ -70,7 +69,7 @@ class Evaluation(ABC):
         if self._start_crypto == INF_CRYPTO:
             self._start_crypto = self._crypto = 0
             evaluation = copy.deepcopy(self)
-            evaluation._verbose=False
+            evaluation._verbose = False
             evaluation.run()
             if evaluation._end_crypto < 0:
                 self._start_crypto = self._crypto = -evaluation.end_crypto
@@ -338,22 +337,6 @@ class Evaluation(ABC):
         # set finishing variable values
         self._end_cash = self._cash
         self._end_crypto = self._crypto
-
-        # rerun = False
-        # if self._infinite_cash and self._end_cash < 0:
-        #    self._start_cash = self._start_cash - self.end_cash   # assume we had all that money when we started
-        #    self._end_cash = 0
-        #    rerun = True
-
-        # if self._infinite_crypto and self._crypto < 0:
-        #    self._start_crypto = self._start_crypto + self.end_crypto
-        #     self.end_crypto = 0 # just assuming we have an infinite supply of cash and crypto and not trading
-        #    rerun = True
-
-        # if rerun:
-        #    self._init_backtesting(self._start_cash, self._start_crypto)
-        #    self.run()
-        #    return
 
         # compute returns for stats
         self.trading_df = self._fill_returns(self.trading_df)

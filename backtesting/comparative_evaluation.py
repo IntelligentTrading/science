@@ -6,7 +6,7 @@ from config import backtesting_report_columns, backtesting_report_column_names, 
 from signals import ALL_SIGNALS
 from strategies import BuyAndHoldTimebasedStrategy, SignalSignatureStrategy, SimpleRSIStrategy
 from enum import Enum
-from trader import OrderGenerator
+from order_generator import OrderGenerator
 
 import pandas.io.formats.excel
 

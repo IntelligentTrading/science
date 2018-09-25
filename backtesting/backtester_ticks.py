@@ -1,6 +1,7 @@
 from evaluation import Evaluation
 from tick_listener import TickListener
 from tick_provider_itf_db import TickProviderITFDB
+from config import INF_CASH, INF_CRYPTO
 
 
 class TickDrivenBacktester(Evaluation, TickListener):
@@ -86,7 +87,6 @@ class TickDrivenBacktester(Evaluation, TickListener):
         return benchmark
 
 
-
 if __name__ == '__main__':
     from strategies import SignalSignatureStrategy, TickerWrapperStrategy
 
@@ -103,7 +103,7 @@ if __name__ == '__main__':
         ['rsi_buy_2', 'rsi_sell_2', 'rsi_buy_1', 'rsi_sell_1', 'rsi_buy_3', 'rsi_sell_3']
     )
 
-    from trader import OrderGenerator
+    from order_generator import OrderGenerator
 
 
     benchmark = None
@@ -122,8 +122,8 @@ if __name__ == '__main__':
             strategy=benchmark_strategy,
             transaction_currency=benchmark_transaction_currency,
             counter_currency=benchmark_counter_currency,
-            start_cash=start_cash,
-            start_crypto=start_crypto,
+            start_cash=INF_CASH, #tart_cash,
+            start_crypto=INF_CRYPTO, #start_crypto,
             start_time=start_time,
             end_time=end_time,
             source=source,
