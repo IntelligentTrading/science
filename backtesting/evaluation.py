@@ -2,6 +2,7 @@ import logging
 import empyrical
 import numpy as np
 import pandas as pd
+import copy
 
 from data_sources import get_price, convert_value_to_USDT, NoPriceDataException, Horizon
 from orders import OrderType
@@ -9,6 +10,9 @@ from utils import get_distinct_signal_types, datetime_from_timestamp
 from config import transaction_cost_percents
 from abc import ABC, abstractmethod
 from charting import BacktestingChart
+
+from order_generator import OrderGenerator
+from config import INF_CRYPTO, INF_CASH
 
 logging.getLogger().setLevel(logging.INFO)
 pd.options.mode.chained_assignment = None
@@ -18,7 +22,7 @@ class Evaluation(ABC):
     def __init__(self, strategy, transaction_currency, counter_currency,
                  start_cash, start_crypto, start_time, end_time, source=0,
                  resample_period=60, evaluate_profit_on_last_order=True, verbose=True,
-                 benchmark_backtest=None, time_delay=0, slippage=0):
+                 benchmark_backtest=None, time_delay=0, slippage=0, order_generator=OrderGenerator.ALTERNATING):
         self._strategy = strategy
         self._transaction_currency = transaction_currency
         self._counter_currency = counter_currency
@@ -35,12 +39,42 @@ class Evaluation(ABC):
         self._time_delay = time_delay
         self._slippage = slippage
 
+        self._order_generator = OrderGenerator.create(
+            generator_type=order_generator,
+            start_cash=start_cash,
+            start_crypto=start_crypto,
+            time_delay=time_delay,
+            slippage=slippage
+        )
+
         if benchmark_backtest is not None:
             pass # TODO: fix assertions and delayed buy&hold
             # assert benchmark_backtest._start_time == self._start_time
             # assert benchmark_backtest._end_time == self._end_time
 
         # Init backtesting variables
+        self._init_backtesting(start_cash, start_crypto)
+        #self.trading_df = pd.DataFrame(columns=['close_price', 'signal', 'order', 'cash', 'crypto', 'total_value'])
+
+
+    def _reevaluate_inf_bank(self):
+        if self._start_cash == INF_CASH:
+            # simulate how the trading would have gone
+            self._start_cash = self._cash = 0
+            evaluation = copy.deepcopy(self)
+            evaluation._verbose = False
+            evaluation.run()
+            if evaluation._end_cash < 0:
+                self._start_cash = self._cash = -evaluation.end_cash
+        if self._start_crypto == INF_CRYPTO:
+            self._start_crypto = self._crypto = 0
+            evaluation = copy.deepcopy(self)
+            evaluation._verbose = False
+            evaluation.run()
+            if evaluation._end_crypto < 0:
+                self._start_crypto = self._crypto = -evaluation.end_crypto
+
+    def _init_backtesting(self, start_cash, start_crypto):
         self._cash = start_cash
         self._crypto = start_crypto
         self._num_trades = 0
@@ -49,8 +83,6 @@ class Evaluation(ABC):
         self.orders = []
         self.order_signals = []
         self.trading_df_rows = []  # optimization for speed
-        #self.trading_df = pd.DataFrame(columns=['close_price', 'signal', 'order', 'cash', 'crypto', 'total_value'])
-
 
     @property
     def noncumulative_returns(self):
@@ -116,7 +148,7 @@ class Evaluation(ABC):
         try:
             return self._start_cash + \
                    (self._start_crypto * get_price(
-                   self.start_crypto_currency,
+                   self._transaction_currency,
                    self._start_time,
                    self._source,
                    self._counter_currency) if self._start_crypto > 0 else 0)
@@ -269,6 +301,8 @@ class Evaluation(ABC):
     def benchmark_backtest(self):
         return self._benchmark_backtest
 
+
+
     def _write_trading_df_row(self):
         total_value = self._crypto * self._current_price + self._cash
 
@@ -370,7 +404,7 @@ class Evaluation(ABC):
 
         output.append("\n* Order execution log *\n")
         output.append("Start balance: cash = {} {}, crypto = {} {}".format(self._start_cash, self._counter_currency,
-                                                                           self._start_crypto, self.start_crypto_currency
+                                                                           self._start_crypto, self._transaction_currency
                                                                            if self._start_crypto != 0 else ""))
 
         output.append("Start time: {}\n--".format(datetime_from_timestamp(self._start_time)))
@@ -472,6 +506,8 @@ class Evaluation(ABC):
             # the currency we're selling must match the bought currency
             assert order.transaction_currency == self._buy_currency
             self._num_sells += 1
+        #print(f'Executed order... {str(order)}')
+        #print(f'Total cash: {self._cash}, total crypto: {self._crypto}')
 
     def to_primitive_types_dictionary(self):
         import inspect

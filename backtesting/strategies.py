@@ -2,11 +2,40 @@ import random
 from orders import *
 from data_sources import *
 from signals import *
-from backtester_signals import SignalDrivenBacktester
 from abc import ABC, abstractmethod
-from config import transaction_cost_percents
 import logging
+from functools import total_ordering
+from backtester_signals import SignalDrivenBacktester
+
 log = logging.getLogger("strategies")
+
+
+class StrategyDecision:
+    """
+    A class that encapsulates decision produced by a strategy.
+    """
+    BUY = "BUY"
+    SELL = "SELL"
+    IGNORE = None
+
+    def __init__(self, timestamp, transaction_currency=None, counter_currency=None, source=None, outcome=None, signal=None):
+        assert outcome in (StrategyDecision.BUY, StrategyDecision.SELL, StrategyDecision.IGNORE)
+        self.outcome = outcome
+        self.timestamp = timestamp
+        self.transaction_currency = transaction_currency
+        self.counter_currency = counter_currency
+        self.source = source
+        self.signal = signal
+
+    def buy(self):
+        return self.outcome == StrategyDecision.BUY
+
+    def sell(self):
+        return self.outcome == StrategyDecision.SELL
+
+    def ignore(self):
+        return self.outcome == StrategyDecision.IGNORE
+
 
 class Strategy(ABC):
     """
@@ -27,61 +56,48 @@ class Strategy(ABC):
     def get_short_summary(self):
         pass
 
+    def get_decision(self, timestamp, price, signals):
+        decision = None
+        for signal in signals:
+            if not self.belongs_to_this_strategy(signal):
+                continue
+
+            if self.indicates_buy(signal):
+                if decision is not None and decision.outcome == StrategyDecision.SELL:  # sanity checks
+                    logging.error(
+                        'Multiple signals at the same time with opposing decisions! Highly unlikely, investigate!')
+                decision = StrategyDecision(timestamp, signal.transaction_currency, signal.counter_currency,
+                                            signal.source, StrategyDecision.BUY, signal)
+            elif self.indicates_sell(signal):
+                if decision is not None and decision.outcome == StrategyDecision.BUY:  # sanity checks
+                    logging.error(
+                        'Multiple signals at the same time with opposing decisions! Highly unlikely, investigate!')
+                decision = StrategyDecision(timestamp, signal.transaction_currency, signal.counter_currency,
+                                            signal.source, StrategyDecision.SELL, signal)
+
+        if decision is None:
+            decision = StrategyDecision(timestamp, outcome=StrategyDecision.IGNORE)
+        return decision
+
+    @staticmethod
+    def get_buy_signals(strategy, signals):
+        return [signal for signal in signals
+                if strategy.belongs_to_this_strategy(signal) and strategy.indicates_buy(signal)]
+
+    @staticmethod
+    def get_sell_signals(strategy, signals):
+        return [signal for signal in signals
+                if strategy.belongs_to_this_strategy(signal) and strategy.indicates_sell(signal)]
+
 
 class SignalStrategy(Strategy):
     """
     Base class for trading strategies that build orders based on a given list of signals.
     """
 
-    def get_orders(self, signals, start_cash, start_crypto, source, time_delay=0, slippage=0):
-        """
-        Produces a list of buy-sell orders based on input signals.
-        :param signals: A list of input signals.
-        :param start_cash: Starting amount of counter_currency (counter_currency is read from first signal).
-        :param start_crypto: Starting amount of transaction_currency (transaction_currency is read from first signal).
-        :param source: ITF exchange code.
-        :param time_delay: Parameter specifying the delay applied when fetching price info (in seconds).
-        :param slippage: Parameter specifying the slippage percentage, applied in the direction of the trade.
-        :return: A list of orders produced by the strategy.
-        """
-        orders = []
-        order_signals = []
-        cash = start_cash
-        crypto = start_crypto
-        buy_currency = None
-        for i, signal in enumerate(signals):
-            if not self.belongs_to_this_strategy(signal):
-                continue
-
-            if self.indicates_sell(signal) and crypto > 0 and signal.transaction_currency == buy_currency:
-                price = fetch_delayed_price(signal, source, time_delay)
-                order = Order(OrderType.SELL, signal.transaction_currency, signal.counter_currency,
-                              signal.timestamp, crypto, price, transaction_cost_percents[source], time_delay, slippage,
-                              signal.price)
-                orders.append(order)
-                order_signals.append(signal)
-                delta_crypto, delta_cash = order.execute()
-                cash = cash + delta_cash
-                crypto = crypto + delta_crypto
-                assert crypto == 0
-
-            elif self.indicates_buy(signal) and cash > 0:
-                price = fetch_delayed_price(signal, source, time_delay)
-                buy_currency = signal.transaction_currency
-                order = Order(OrderType.BUY, signal.transaction_currency, signal.counter_currency,
-                              signal.timestamp, cash, price, transaction_cost_percents[source], time_delay, slippage,
-                              signal.price)
-                orders.append(order)
-                order_signals.append(signal)
-                delta_crypto, delta_cash = order.execute()
-                cash = cash + delta_cash
-                crypto = crypto + delta_crypto
-                assert cash == 0
-
-        return orders, order_signals
-
     def evaluate(self, transaction_currency, counter_currency, start_cash, start_crypto, start_time, end_time,
-                 source, resample_period, evaluate_profit_on_last_order=False, verbose=True, time_delay=0):
+                 source, resample_period, evaluate_profit_on_last_order=False, verbose=True, time_delay=0,
+                 order_generator=None):
         """
         Builds a signal-based backtester using this strategy.
         See full documentation in SignalDrivenBacktester.
@@ -99,22 +115,10 @@ class SignalStrategy(Strategy):
             resample_period=resample_period,
             evaluate_profit_on_last_order=evaluate_profit_on_last_order,
             verbose=verbose,
-            time_delay=time_delay
+            time_delay=time_delay,
+            order_generator=order_generator
         )
 
-    # TODO: test and clean this
-    @staticmethod
-    def get_buy_signals(strategy, signals):
-        return [signal for signal in signals
-                if strategy.belongs_to_this_strategy(signal) and strategy.indicates_buy(signal)]
-
-    @staticmethod
-    def get_sell_signals(strategy, signals):
-        return [signal for signal in signals
-                if strategy.belongs_to_this_strategy(signal) and strategy.indicates_sell(signal)]
-
-
-from functools import total_ordering
 
 @total_ordering
 class SignalSignatureStrategy(SignalStrategy):
@@ -136,7 +140,6 @@ class SignalSignatureStrategy(SignalStrategy):
         output.append("Strategy: a simple signal set-based strategy")
         output.append("  description: trading according to signal set {}".format(str(self.signal_set)))
         return "\n".join(output)
-
 
     def get_short_summary(self):
         return ' + '.join([pretty_print_signal(s) for s in self.signal_set])
@@ -219,7 +222,7 @@ class SimpleTrendBasedStrategy(SignalStrategy):
     def belongs_to_this_strategy(self, signal):
         return signal.signal_type == self.signal_type
 
-
+# TODO
 class BuyOnFirstSignalAndHoldStrategy(SignalStrategy):
     """
     A wrapper class for SignalStrategies. Buys on first signal, then holds.
@@ -249,11 +252,12 @@ class BuyOnFirstSignalAndHoldStrategy(SignalStrategy):
     def get_signal_report(self):
         return self.strategy.get_signal_report()
 
+
 class BuyAndHoldTimebasedStrategy(SignalStrategy):
     """
     Standard buy & hold strategy (signal-driven).
     """
-    def __init__(self, start_time, end_time, transaction_currency, counter_currency):
+    def __init__(self, start_time, end_time, transaction_currency, counter_currency, source):
         """
         Builds the buy and hold strategy.
         :param start_time: When to buy transaction_currency.
@@ -261,39 +265,45 @@ class BuyAndHoldTimebasedStrategy(SignalStrategy):
         :param transaction_currency: Transaction currency.
         :param counter_currency: Counter currency.
         """
-        self.start_time = start_time
-        self.end_time = end_time
-        self.transaction_currency = transaction_currency
-        self.counter_currency = counter_currency
+        self._start_time = start_time
+        self._end_time = end_time
+        self._transaction_currency = transaction_currency
+        self._counter_currency = counter_currency
+        self._source = source
+        self._bought = False
+        self._sold = False
 
-    def get_orders(self, signals, start_cash, start_crypto, source, time_delay=0, slippage=0):
-        transaction_cost_percent = transaction_cost_percents[source]
-        orders = []
-        start_price = get_price(self.transaction_currency, self.start_time, source, self.counter_currency)
-        end_price = get_price(self.transaction_currency, self.end_time, source, self.counter_currency)
-        order = Order(OrderType.BUY, self.transaction_currency, self.counter_currency,
-                      self.start_time, start_cash, start_price, transaction_cost_percent, time_delay, slippage)
-        orders.append(order)
-        delta_crypto, delta_cash = order.execute()
-        order = Order(OrderType.SELL, self.transaction_currency, self.counter_currency,
-                      self.end_time, delta_crypto, end_price, transaction_cost_percent, time_delay, slippage)
-        orders.append(order)
-        return orders, []
+    def get_decision(self, timestamp, price, signals):
+        if timestamp >= self._start_time and timestamp <= self._end_time and not self._bought:
+            if abs(timestamp - self._start_time) > 120:
+                log.warning("Buy and hold BUY: ticker more than 2 mins after start time ({:.2f} mins)!"
+                                .format(abs(timestamp - self._start_time)/60))
+            self._bought = True
+            return StrategyDecision(outcome=StrategyDecision.BUY, timestamp=timestamp,
+                                    transaction_currency=self._transaction_currency,
+                                    counter_currency=self._counter_currency,
+                                    source=self._source)
+        elif timestamp >= self._end_time and not self._sold:
+            if abs(timestamp - self._end_time) > 120:
+                log.warning("Buy and hold SELL: ticker more than 2 mins after end time ({:.2f} mins)!"
+                                .format(abs(timestamp - self._end_time) / 60))
+            self._sold = True
+            return StrategyDecision(outcome=StrategyDecision.SELL, timestamp=timestamp,
+                                    transaction_currency=self._transaction_currency,
+                                    counter_currency=self._counter_currency,
+                                    source=self._source)
+        else:
+            return StrategyDecision(outcome=StrategyDecision.IGNORE, timestamp=timestamp,
+                                    transaction_currency=self._transaction_currency,
+                                    counter_currency=self._counter_currency,
+                                    source=self._source
+                                    )
 
     def get_short_summary(self):
         return "Buy & hold"
 
     def belongs_to_this_strategy(self, signal):
         return False
-
-
-class StrategyDecision:
-    """
-    Strategy decisions used by TickerStrategies.
-    """
-    BUY = "BUY"
-    SELL = "SELL"
-    IGNORE = None
 
 
 class TickerStrategy(Strategy):
@@ -337,51 +347,6 @@ class TickerWrapperStrategy(TickerStrategy):
 
     def get_short_summary(self):
         return self._strategy.get_short_summary()
-
-
-class TickerBuyAndHold(TickerWrapperStrategy):
-    """
-    Ticker-based buy & hold strategy (used as baseline for benchmark stats calculation).
-    """
-
-    def __init__(self, start_time, end_time):
-        """
-        Builds the ticker-based buy and hold strategy.
-        :param start_time: time of buying
-        :param end_time: time of selling
-        """
-        self._start_time = start_time
-        self._end_time = end_time
-        self._bought = False
-        self._sold = False
-
-    def process_ticker(self, price_data, signals):
-        """
-        Process incoming price data.
-        :param price_data: Pandas row with OHLC information and timestamp. Assumed to be pre-filtered so this method
-        always receives only one transaction and counter currency
-        :param signals: ITF signals, ignored.
-        :return: StrategyDecision.BUY or StrategyDecision.SELL or StrategyDecision.IGNORE
-        """
-        timestamp = price_data.Index
-
-        if timestamp >= self._start_time and timestamp <= self._end_time and not self._bought:
-            if abs(timestamp - self._start_time) > 120:
-                log.warning("Buy and hold BUY: ticker more than 2 mins after start time ({:.2f} mins)!"
-                                .format(abs(timestamp - self._start_time)/60))
-            self._bought = True
-            return StrategyDecision.BUY, None
-        elif timestamp >= self._end_time and not self._sold:
-            if abs(timestamp - self._end_time) > 120:
-                log.warning("Buy and hold SELL: ticker more than 2 mins after end time ({:.2f} mins)!"
-                                .format(abs(timestamp - self._end_time) / 60))
-            self._sold = True
-            return StrategyDecision.SELL, None
-        else:
-            return StrategyDecision.IGNORE, None
-
-    def get_short_summary(self):
-        return "Ticker-based buy and hold strategy"
 
 
 class RandomTradingStrategy(SimpleTrendBasedStrategy):

@@ -8,7 +8,7 @@ def datetime_from_timestamp(timestamp):
 
 
 def get_distinct_signal_types(signals):
-    return set([x.signal_signature for x in signals])
+    return set([x.signal_signature if x is not None else '(no signals)' for x in signals])
 
 
 def time_performance(func):

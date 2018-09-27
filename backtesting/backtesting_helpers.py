@@ -1,4 +1,6 @@
 from strategies import *
+from backtester_signals import SignalDrivenBacktester
+
 
 def evaluate_rsi_signature(**kwargs):
     rsi_strategy = SignalSignatureStrategy(['rsi_buy_2', 'rsi_sell_2','rsi_buy_1', 'rsi_sell_1','rsi_buy_3', 'rsi_sell_3'])
@@ -78,25 +80,37 @@ def evaluate_rsi_any_currency(overbought_threshold, oversold_threshold, **kwargs
     return SignalDrivenBacktester(strategy=rsi_strategy, **kwargs)
 
 
+def position_based_order_test(**kwargs):
+    from order_generator import OrderGenerator
+    rsi_strategy = SignalSignatureStrategy(
+        ['rsi_buy_2', 'rsi_sell_2','rsi_buy_1', 'rsi_sell_1','rsi_buy_3', 'rsi_sell_3'])
+    order_generator = OrderGenerator.POSITION_BASED
+    return SignalDrivenBacktester(strategy=rsi_strategy, order_generator=order_generator, **kwargs)
+
+
 if __name__ == "__main__":
     end_time = 1531699200
-    start_time = end_time - 60*60*24*70
+    start_time = end_time - 60*60*24*7
+
+    from config import INF_CASH, INF_CRYPTO
 
     kwargs = {}
     kwargs['transaction_currency'] = 'BTC'
     kwargs['counter_currency'] = 'USDT'
     kwargs['start_time'] =  start_time
     kwargs['end_time'] = end_time
-    kwargs['start_cash'] = 1000
-    kwargs['start_crypto'] = 0
+    kwargs['start_cash'] = INF_CASH
+    kwargs['start_crypto'] = INF_CRYPTO
     kwargs['source'] = 0
     kwargs['resample_period'] = 60
     kwargs['time_delay'] = 0
     kwargs['slippage'] = 0
 
-    evaluate_rsi_any_currency(75, 25, **kwargs)
-    evaluate_rsi_signature(**kwargs)
-    evaluate_rsi(75, 25, **kwargs)
-    evaluate_trend_based("SMA", **kwargs)
-    find_num_cumulative_outperforms((("BTC", "USDT"), ("DOGE","BTC")), **kwargs)
+
+    position_based_order_test(**kwargs)
+    #evaluate_rsi_any_currency(75, 25, **kwargs)
+    #evaluate_rsi_signature(**kwargs)
+    #evaluate_rsi(75, 25, **kwargs)
+    #evaluate_trend_based("SMA", **kwargs)
+    #find_num_cumulative_outperforms((("BTC", "USDT"), ("DOGE","BTC")), **kwargs)
 
