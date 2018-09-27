@@ -38,34 +38,51 @@ class TAProvider(FunctionProvider):
     def __str__(self):
         return("TAprovider")
 
+    def _get_timestamp_index(self, input):
+        return np.where(self.data.price_data.index == input[0])[0]
+
     def rsi(self, input):
-        timestamp = input[0]
-        timestamp_index = np.where(self.data.price_data.index == timestamp)[0]
-        return self.data.rsi_data[timestamp_index]
+        return self.data.rsi_data[self._get_timestamp_index(input)]
+
+    def rsi_lt_20(self, input):
+        return self.data.rsi_data[self._get_timestamp_index(input)] < 20
+
+    def rsi_lt_25(self, input):
+        return self.data.rsi_data[self._get_timestamp_index(input)] < 25
+
+    def rsi_lt_30(self, input):
+        return self.data.rsi_data[self._get_timestamp_index(input)] < 30
+
+    def rsi_gt_70(self, input):
+        return self.data.rsi_data[self._get_timestamp_index(input)] > 70
+
+    def rsi_gt_75(self, input):
+        return self.data.rsi_data[self._get_timestamp_index(input)] > 75
+
+    def rsi_gt_80(self, input):
+        return self.data.rsi_data[self._get_timestamp_index(input)] > 80
+
+    def sma20(self, input):
+        return self.data.sma20_data[self._get_timestamp_index(input)]
+
+    def ema20(self, input):
+        return self.data.ema20_data[self._get_timestamp_index(input)]
 
     def sma50(self, input):
-        timestamp = input[0]
-        timestamp_index = np.where(self.data.price_data.index == timestamp)[0]
-        return self.data.sma50_data[timestamp_index]
+        return self.data.sma50_data[self._get_timestamp_index(input)]
 
     def ema50(self, input):
-        timestamp = input[0]
-        timestamp_index = np.where(self.data.price_data.index == timestamp)[0]
-        return self.data.ema50_data[timestamp_index]
+        return self.data.ema50_data[self._get_timestamp_index(input)]
 
     def sma200(self, input):
-        timestamp = input[0]
-        timestamp_index = np.where(self.data.price_data.index == timestamp)[0]
-        return self.data.sma200_data[timestamp_index]
+        return self.data.sma200_data[self._get_timestamp_index(input)]
 
     def ema200(self, input):
-        timestamp = input[0]
-        timestamp_index = np.where(self.data.price_data.index == timestamp)[0]
-        return self.data.ema200_data[timestamp_index]
+        return self.data.ema200_data[self._get_timestamp_index(input)]
 
     def price(self, input):
         timestamp = input[0]
-        return self.data.price_data.loc[timestamp,"close_price"]
+        return self.data.price_data.loc[timestamp, "close_price"]
 
 
 class TAProviderCollection(FunctionProvider):
@@ -84,12 +101,22 @@ class TAProviderCollection(FunctionProvider):
             if function_name.startswith('__'):
                 continue
 
-            def fn(self, input):
-                timestamp, transaction_currency, counter_currency = input
-                return self.get_provider(timestamp, transaction_currency, counter_currency)[function_name]([timestamp])
-            fn.__name__ = function_name
+            #def fn(self, input):
+            #    timestamp, transaction_currency, counter_currency = input
+            #    provider = self.get_provider(timestamp, transaction_currency, counter_currency)
+            #    return getattr(provider, function_name)([timestamp])
+            #fn.__name__ = function_name
+            setattr(TAProviderCollection, function_name, self.make_fun(function_name))
+        print('Init done.')
 
-            setattr(TAProviderCollection, function_name, fn)
+    def make_fun(self, function_name):
+        exec(f'''
+def {function_name}(self, input):
+    timestamp, transaction_currency, counter_currency = input
+    provider = self.get_provider(timestamp, transaction_currency, counter_currency)
+    return provider.{function_name}([timestamp])
+''')
+        return locals()[f'{function_name}']
 
     def __str__(self):
         return("TAproviderCollection")

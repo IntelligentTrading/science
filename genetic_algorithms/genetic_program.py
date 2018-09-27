@@ -54,30 +54,39 @@ class GeneticTickerStrategy(TickerStrategy):
         :param signals: ITF signals co-occurring with price tick.
         :return: StrategyDecision.BUY or StrategyDecision.SELL or StrategyDecision.IGNORE
         """
-        self.i += 1
 
         price = price_data.close_price
         timestamp = price_data.Index
+        return self.get_decision(timestamp, price, signals)
+
+
+    def get_decision(self, timestamp, price, signals):
+        self.i += 1
 
         if self.i <= self.history_size:
             # outcomes.append("skipped")
-            return StrategyDecision.IGNORE, None
+            return StrategyDecision(timestamp, outcome=StrategyDecision.IGNORE)
         outcome = self.func([timestamp, self.data.transaction_currency, self.data.counter_currency])
 
-        decision = StrategyDecision.IGNORE
-        signal = None
+        decision = None
         if outcome == self.gp_object.function_provider.buy:
-            decision = StrategyDecision.BUY
             signal = Signal("Genetic", 1, None, 3, 3, price, 0, timestamp, None, self.transaction_currency,
                             self.counter_currency, self.source, self.resample_period)
+            decision = StrategyDecision(timestamp, self.transaction_currency, self.counter_currency,
+                                        self.source, StrategyDecision.BUY, signal)
         elif outcome == self.gp_object.function_provider.sell:
-            decision = StrategyDecision.SELL
             signal = Signal("Genetic", -1, None, 3, 3, price, 0, timestamp, None, self.transaction_currency,
                             self.counter_currency, self.source, self.resample_period)
+            decision = StrategyDecision(timestamp, self.transaction_currency, self.counter_currency,
+                                        self.source, StrategyDecision.SELL, signal)
         elif not outcome == self.gp_object.function_provider.ignore:
             logging.warning("Invalid outcome encountered")
 
-        return decision, signal
+        if decision is None:
+            decision = StrategyDecision(timestamp, outcome=StrategyDecision.IGNORE)
+
+        return decision
+
 
     def belongs_to_this_strategy(self, signal):
         return signal.signal_type == "Genetic"

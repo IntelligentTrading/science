@@ -46,6 +46,8 @@ class Data:
                             f"the set end time!")
 
         self.rsi_data = talib.RSI(np.array(self.price_data.close_price, dtype=float), timeperiod=14)
+        self.sma20_data = talib.SMA(np.array(self.price_data.close_price, dtype=float), timeperiod=20)
+        self.ema20_data = talib.EMA(np.array(self.price_data.close_price, dtype=float), timeperiod=20)
         self.sma50_data = talib.SMA(np.array(self.price_data.close_price, dtype=float), timeperiod=50)
         self.ema50_data = talib.EMA(np.array(self.price_data.close_price, dtype=float), timeperiod=50)
         self.sma200_data = talib.SMA(np.array(self.price_data.close_price, dtype=float), timeperiod=200)
