@@ -303,10 +303,10 @@ class ComparativeReportBuilder:
 
         g = by_coin_df.groupby(level=0, group_keys=False)
         by_coin_sorted_df = g.apply(lambda x: x.sort_values([('profit_percent', 'mean')], ascending=False))
-        by_coin_sorted_df[["profit_percent", "buy_and_hold_profit_percent", "num_trades"]].to_excel(writer, f'{sheet_prefix} sorted by coin',
+        by_coin_sorted_df[["profit_percent", "buy_and_hold_profit_percent", "num_trades"]].to_excel(writer, f'{sheet_prefix} by coin',
                                                                                                     header=False, startrow=4)
         # apply sheet formatting
-        sheet = writer.sheets[f'{sheet_prefix} sorted by coin']
+        sheet = writer.sheets[f'{sheet_prefix} by coin']
         self._reformat_sheet_grouped_by_coin(formats, sheet)
 
 
