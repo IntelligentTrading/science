@@ -165,6 +165,9 @@ def get_filtered_signals(signal_type=None, transaction_currency=None, start_time
     if return_df:
         connection = dbc.get_connection()
         signals_df = pd.read_sql(query, con=connection, params=params, index_col="timestamp")
+        signals_df['counter_currency'] = [CounterCurrency(counter_currency).name
+                                          for counter_currency in signals_df.counter_currency]
+        signals_df['price'] = signals_df['price']/1E8
         return signals_df
 
     # otherwise, we return a list of Signal objectss
@@ -330,11 +333,9 @@ def get_currencies_for_signal(counter_currency, signal):
     return currencies
 
 
-
-def fetch_delayed_price(signal, source, time_delay):
-    if time_delay != 0:
-        return get_price(signal.transaction_currency, signal.timestamp + time_delay, source, signal.counter_currency)
+def fetch_delayed_price(timestamp, transaction_currency, counter_currency, source, time_delay, original_price=None):
+    if time_delay != 0 or original_price is None:
+        return get_price(transaction_currency, timestamp + time_delay, source, counter_currency)
     else:
-        return signal.price
-
+        return original_price
 

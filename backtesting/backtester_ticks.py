@@ -1,8 +1,9 @@
 from evaluation import Evaluation
 from tick_listener import TickListener
-from orders import Order, OrderType
 from tick_provider_itf_db import TickProviderITFDB
-from strategies import StrategyDecision, TickerBuyAndHold
+from config import INF_CASH, INF_CRYPTO
+from strategies import BuyAndHoldTimebasedStrategy
+from order_generator import OrderGenerator
 
 
 class TickDrivenBacktester(Evaluation, TickListener):
@@ -10,12 +11,14 @@ class TickDrivenBacktester(Evaluation, TickListener):
     def __init__(self, tick_provider, **kwargs):
         super().__init__(**kwargs)
         self.tick_provider = tick_provider
+        # reevaluate infinite bank
+        self._reevaluate_inf_bank()
+
         self.run()
 
     def run(self):
         # register at tick provider
         self.tick_provider.add_listener(self)
-
         # ingest ticks
         self.tick_provider.run()
 
@@ -32,28 +35,17 @@ class TickDrivenBacktester(Evaluation, TickListener):
         # self._current_timestamp = signals_now
         # self._current_price = price_data
 
-        decision, order_signal = self._strategy.process_ticker(price_data, signals_now)
-        order = None
-        if decision == StrategyDecision.SELL and self._crypto > 0:
-            order = Order(OrderType.SELL, self._transaction_currency, self._counter_currency,
-                          self._current_timestamp, self._crypto, self._current_price, self._transaction_cost_percent, self._time_delay,
-                          self._slippage)
+        decision = self._strategy.get_decision(self._current_timestamp, self._current_price, signals_now)
+        order = self._order_generator.generate_order(decision)
+        if order is not None:
             self.orders.append(order)
-            self.order_signals.append(order_signal)
-            self.execute_order(order)
-        elif decision == StrategyDecision.BUY and self._cash > 0:
-            order = Order(OrderType.BUY, self._transaction_currency, self._counter_currency,
-                          self._current_timestamp, self._cash, self._current_price, self._transaction_cost_percent, self._time_delay,
-                          self._slippage)
-            self.orders.append(order)
-            self.order_signals.append(order_signal)
+            self.order_signals.append(decision.signal)
             self.execute_order(order)
 
         self._current_order = order
-        self._current_signal = order_signal
+        self._current_signal = decision.signal
 
         self._write_trading_df_row()
-
 
     def broadcast_ended(self):
         self._end_crypto_currency = self._transaction_currency
@@ -74,7 +66,10 @@ class TickDrivenBacktester(Evaluation, TickListener):
                                                     counter_currency,
                                                     start_time,
                                                     end_time)
-        benchmark_strategy = TickerBuyAndHold(start_time, end_time)
+        benchmark_strategy = BuyAndHoldTimebasedStrategy(start_time, end_time, transaction_currency, counter_currency,
+                                                         source=0)
+        benchmark_order_generator = OrderGenerator.ALTERNATING
+
         benchmark = TickDrivenBacktester(
                 tick_provider=tick_provider,
                 strategy=benchmark_strategy,
@@ -88,14 +83,15 @@ class TickDrivenBacktester(Evaluation, TickListener):
                 resample_period=None,
                 verbose=False,
                 time_delay=time_delay,
-                slippage=slippage
+                slippage=slippage,
+                order_generator=benchmark_order_generator
             )
         return benchmark
 
 
-
 if __name__ == '__main__':
-    from strategies import SignalSignatureStrategy, TickerWrapperStrategy, TickerBuyAndHold
+    from strategies import SignalSignatureStrategy, TickerWrapperStrategy
+
     # from ticker_strategies import TickerStrategy, TickerBuyAndHold
     end_time = 1531699200
     start_time = end_time - 60*60*24*70
@@ -109,28 +105,35 @@ if __name__ == '__main__':
         ['rsi_buy_2', 'rsi_sell_2', 'rsi_buy_1', 'rsi_sell_1', 'rsi_buy_3', 'rsi_sell_3']
     )
 
+    from order_generator import OrderGenerator
+
+
     benchmark = None
     build_benchmark = True
 
+    from strategies import BuyAndHoldTimebasedStrategy
     if build_benchmark:
         benchmark_transaction_currency, benchmark_counter_currency = "BTC", "USDT"
         benchmark_tick_provider = TickProviderITFDB(benchmark_transaction_currency, benchmark_counter_currency, start_time,
                                                     end_time)
-        benchmark_strategy = TickerBuyAndHold(start_time, end_time)
+        benchmark_strategy = BuyAndHoldTimebasedStrategy(start_time, end_time, benchmark_transaction_currency, benchmark_counter_currency,
+                                                         source=0)
+
         benchmark = TickDrivenBacktester(
             tick_provider=benchmark_tick_provider,
             strategy=benchmark_strategy,
             transaction_currency=benchmark_transaction_currency,
             counter_currency=benchmark_counter_currency,
-            start_cash=start_cash,
-            start_crypto=start_crypto,
+            start_cash=INF_CASH, #tart_cash,
+            start_crypto=INF_CRYPTO, #start_crypto,
             start_time=start_time,
             end_time=end_time,
             source=source,
             resample_period=60,
-            verbose=False,
+            verbose=True,
             time_delay=0,
-            slippage=SLIPPAGE
+            slippage=0,
+            order_generator=OrderGenerator.ALTERNATING
         )
 
     strategy = TickerWrapperStrategy(rsi_strategy)
@@ -139,21 +142,23 @@ if __name__ == '__main__':
     # supply ticks from the ITF DB
     tick_provider = TickProviderITFDB(transaction_currency, counter_currency, start_time, end_time)
 
+    from config import INF_CASH, INF_CRYPTO
     # create a new tick based backtester
     evaluation = TickDrivenBacktester(tick_provider=tick_provider,
-                                      strategy=strategy,
+                                      strategy=rsi_strategy,
                                       transaction_currency='BTC',
                                       counter_currency='USDT',
-                                      start_cash=start_cash,
-                                      start_crypto=start_crypto,
+                                      start_cash=INF_CASH,
+                                      start_crypto=INF_CRYPTO,
                                       start_time=start_time,
                                       end_time=end_time,
                                       benchmark_backtest=benchmark,
                                       time_delay=0,
-                                      slippage=SLIPPAGE
+                                      slippage=0,
+                                      order_generator=OrderGenerator.POSITION_BASED
                                       )
 
-    evaluation.to_excel("test.xlsx")
+    #evaluation.to_excel("test.xlsx")
     evaluation.plot_cumulative_returns()
 
 

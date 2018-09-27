@@ -33,6 +33,6 @@ class PriceDataframeTickProvider(TickProvider):
             # price = row.close_price
             # timestamp = row.Index
 
-            self.notify_listeners(row, None)
+            self.notify_listeners(row, [])
         self.broadcast_ended()
 
