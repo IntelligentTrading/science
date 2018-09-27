@@ -506,8 +506,8 @@ class Evaluation(ABC):
             # the currency we're selling must match the bought currency
             assert order.transaction_currency == self._buy_currency
             self._num_sells += 1
-        print(f'Executed order... {str(order)}')
-        print(f'Total cash: {self._cash}, total crypto: {self._crypto}')
+        #print(f'Executed order... {str(order)}')
+        #print(f'Total cash: {self._cash}, total crypto: {self._crypto}')
 
     def to_primitive_types_dictionary(self):
         import inspect

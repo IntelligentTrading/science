@@ -125,7 +125,7 @@ class PositionBasedOrderGenerator(OrderGenerator):
             self._buy_currency = decision.transaction_currency
             order = self.buy_order(
                 decision=decision,
-                value=self._get_price(decision)*self._quantity*(1+transaction_cost_percents[decision.source])
+                value=self._get_price(decision)*self._quantity/(1-transaction_cost_percents[decision.source])
             )
             self._execute_order(order)
         return order

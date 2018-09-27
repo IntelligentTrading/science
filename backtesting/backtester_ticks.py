@@ -2,6 +2,8 @@ from evaluation import Evaluation
 from tick_listener import TickListener
 from tick_provider_itf_db import TickProviderITFDB
 from config import INF_CASH, INF_CRYPTO
+from strategies import BuyAndHoldTimebasedStrategy
+from order_generator import OrderGenerator
 
 
 class TickDrivenBacktester(Evaluation, TickListener):
@@ -27,7 +29,7 @@ class TickDrivenBacktester(Evaluation, TickListener):
         # self._current_price = price_data['close_price'].item()
 
         # price = row.close_price
-        self._current_timestamp = price_data.timestamp
+        self._current_timestamp = price_data.Index
         self._current_price = price_data.close_price
 
         # self._current_timestamp = signals_now
