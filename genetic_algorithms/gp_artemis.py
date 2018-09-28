@@ -12,10 +12,11 @@ import pandas as pd
 
 @experiment_root
 def run_evolution(experiment_id, data, function_provider, grammar_version, fitness_function, mating_prob,
-                  mutation_prob, population_size, num_generations):
+                  mutation_prob, population_size, num_generations, premade_individuals):
     grammar = Grammar.construct(grammar_version, function_provider, ephemeral_suffix=experiment_id)
     genetic_program = GeneticProgram(data_collection=data, function_provider=function_provider,
-                                     grammar=grammar, fitness_function=fitness_function)
+                                     grammar=grammar, fitness_function=fitness_function,
+                                     premade_individuals=premade_individuals)
     hof, best = genetic_program.evolve(mating_prob, mutation_prob, population_size, num_generations, verbose=False)
     return hof, best
 
@@ -58,7 +59,8 @@ class ExperimentManager:
                 mating_prob=mating_prob,
                 mutation_prob=mutation_prob,
                 population_size=population_size,
-                num_generations=self.experiment_json["num_generations"])
+                num_generations=self.experiment_json["num_generations"],
+                premade_individuals=self.experiment_json["premade_individuals"])
 
     def _register_variants(self, rebuild_grammar=True):
         if rebuild_grammar:
@@ -288,7 +290,6 @@ class ExperimentManager:
         return genetic_program.compute_fitness_over_datasets(individual)[0]
 
 
-
 class ExperimentDB:
 
     def __init__(self):
@@ -296,7 +297,7 @@ class ExperimentDB:
         self._num_records = 0
 
     def add(self, data, function_provider, grammar_version, fitness_function,
-            mating_prob, mutation_prob, population_size, num_generations):
+            mating_prob, mutation_prob, population_size, num_generations, premade_individuals):
         entry = {}
         entry['data'] = data
         entry['function_provider'] = function_provider
@@ -306,6 +307,7 @@ class ExperimentDB:
         entry['mutation_prob'] = mutation_prob
         entry['population_size'] = population_size
         entry['num_generations'] = num_generations
+        entry['premade_individuals'] = premade_individuals
         entry['experiment_id'] = self._num_records
         name = self.build_experiment_id(**entry)
         self._experiments[name] = entry
@@ -346,13 +348,16 @@ class ExperimentDB:
 
 if __name__ == "__main__":
     e = ExperimentManager("sample_experiment.json")
-    #e.run_experiments()
+    #e = ExperimentManager("compress.json")
+    e.run_experiments()
     #e.explore_records()
     #e.best_individuals_across_variants_and_datasets = e.get_best_performing_across_variants_and_datasets(e.training_data)
     #dfs = e.get_joined_performance_dfs_over_all_variants()
     df = e.get_best_performing_across_variants_and_datasets(e.training_data)
-    from genetic_program import compress
-    compress(df.iloc[0].individual)
+    from gp_utils import compress
+
+    print(compress(df.iloc[0].individual))
+    print(str(df.iloc[0].individual))
     #e.browse_variants()
 
 

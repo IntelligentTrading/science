@@ -37,17 +37,21 @@
 
     "fitness_functions": ["ff_benchmarkdiff"],
     "grammar_version": "gv4",
-    "num_generations": 3,
+    "num_generations": 10,
 
     "mating_probabilities": [
         0.9
     ],
 
     "mutation_probabilities": [
-        0.65
+        0.9
     ],
 
     "population_sizes": [
         50
+    ],
+
+    "premade_individuals": [
+        "if_then_else(rsi_lt_20(ARG0), buy, if_then_else(rsi_gt_80(ARG0), sell, ignore))"
     ]
 }

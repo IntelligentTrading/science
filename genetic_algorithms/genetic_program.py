@@ -231,6 +231,7 @@ class GeneticProgram:
         self.fitness = kwargs.get('fitness_function', FitnessFunctionV1())
         self.tree_depth = kwargs.get('tree_depth', 5)
         self.combined_fitness_operator = kwargs.get('combined_fitness_operator', min)
+        self.premade_individuals = kwargs.get('premade_individuals', [])
         self._build_toolbox()
 
     @property
@@ -259,6 +260,11 @@ class GeneticProgram:
     def evolve(self, mating_prob, mutation_prob, population_size,
                num_generations, verbose=True, output_folder=None, run_id=None):
         pop = self.toolbox.population(n=population_size)
+
+        # insert premade individuals into the population (if any)
+        premade = [self.individual_from_string(code) for code in self.premade_individuals]
+        pop[-len(premade):] = premade
+
         hof = tools.HallOfFame(10)
 
         stats_fit = tools.Statistics(lambda ind: ind.fitness.values)
