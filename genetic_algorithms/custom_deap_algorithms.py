@@ -26,13 +26,15 @@ you really want them to do.
 """
 
 import random
+import logging
 
 from deap import tools, gp
 from deap.algorithms import varAnd, varOr
+from gp_utils import compress
 
 
 def eaSimpleCustom(population, toolbox, cxpb, mutpb, ngen, stats=None,
-             halloffame=None, verbose=__debug__):
+             halloffame=None, verbose=__debug__, genetic_program=None):
     """This algorithm reproduce the simplest evolutionary algorithm as
     presented in chapter 7 of [Back2000]_.
 
@@ -111,11 +113,19 @@ def eaSimpleCustom(population, toolbox, cxpb, mutpb, ngen, stats=None,
 
     # Begin the generational process
     for gen in range(1, ngen + 1):
+        # compress population
+        # print(f'Before compression: {" / ".join(map(str, population))}')
+        # population = compress_population(population, genetic_program)
+        # print(f'After compression: {" / ".join(map(str, population))}')
+
         # Select the next generation individuals
         offspring = toolbox.select(population, len(population))
 
         # Vary the pool of individuals
         offspring = varAnd(offspring, toolbox, cxpb, mutpb)
+
+        # compress offspring
+        offspring = compress_population(offspring, genetic_program)
 
         # Evaluate the individuals with an invalid fitness
         invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
@@ -129,6 +139,7 @@ def eaSimpleCustom(population, toolbox, cxpb, mutpb, ngen, stats=None,
 
         # Replace the current population by the offspring
         population[:] = offspring
+
         sorted_pop = sorted(population, key=lambda ind: ind.fitness, reverse=True)
         best_in_gens.append(sorted_pop[0])
 
@@ -140,6 +151,8 @@ def eaSimpleCustom(population, toolbox, cxpb, mutpb, ngen, stats=None,
 
     return population, logbook, best_in_gens
 
+def compress_population(population, genetic_program):
+    return [genetic_program.individual_from_string(compress(individual)) for individual in population]
 
 def combined_mutation(individual, expr, pset):
     if random.random() > 0.5:

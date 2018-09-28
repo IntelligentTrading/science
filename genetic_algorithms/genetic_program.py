@@ -3,6 +3,7 @@ import os
 import logging
 import numpy as np
 from deap import creator, tools, base
+from deap.gp import PrimitiveTree
 from backtesting.signals import Signal
 from backtesting.strategies import SignalStrategy, Strength, TickerStrategy, StrategyDecision
 from chart_plotter import *
@@ -86,7 +87,6 @@ class GeneticTickerStrategy(TickerStrategy):
             decision = StrategyDecision(timestamp, outcome=StrategyDecision.IGNORE)
 
         return decision
-
 
     def belongs_to_this_strategy(self, signal):
         return signal.signal_type == "Genetic"
@@ -181,17 +181,20 @@ class FitnessFunctionV1(FitnessFunction):
         return evaluation.profit_percent + (max_len - len(individual)) / float(max_len) * 20 \
                + evaluation.num_sells * 5,
 
+
 class BenchmarkDiffFitness(FitnessFunction):
     _name = "ff_benchmarkdiff"
 
     def compute(self, individual, evaluation, genetic_program):
         return evaluation.profit_percent - evaluation.benchmark_backtest.profit_percent,
 
+
 class BenchmarkDiffTrades(FitnessFunction):
     _name = "ff_benchmarkdiff_trades"
 
     def compute(self, individual, evaluation, genetic_program):
         return (evaluation.profit_percent - evaluation.benchmark_backtest.profit_percent)*evaluation.num_profitable_trades,
+
 
 class BenchmarkLengthControlFitness(FitnessFunction):
     _name = "ff_benchlenctrl"
@@ -201,6 +204,7 @@ class BenchmarkLengthControlFitness(FitnessFunction):
         return (evaluation.profit_percent - evaluation.benchmark_backtest.profit_percent) + \
                (max_len - len(individual)) / float(max_len) * 20,
 
+
 class BenchmarkLengthControlFitnessV2(FitnessFunction):
     _name = "ff_benchlenctrl_v2"
 
@@ -209,6 +213,7 @@ class BenchmarkLengthControlFitnessV2(FitnessFunction):
         return (evaluation.profit_percent - evaluation.benchmark_backtest.profit_percent) * \
                (max_len - len(individual)) / float(max_len),
 
+
 class BenchmarkLengthControlFitnessV3(FitnessFunction):
     _name = "ff_benchlenctrl_v3"
 
@@ -216,6 +221,7 @@ class BenchmarkLengthControlFitnessV3(FitnessFunction):
         max_len = 3 ** genetic_program.tree_depth
         return (evaluation.profit_percent - evaluation.benchmark_backtest.profit_percent) * \
                (1+0.1*(max_len - len(individual)) / float(max_len)),
+
 
 class GeneticProgram:
     def __init__(self, data_collection, **kwargs):
@@ -230,7 +236,6 @@ class GeneticProgram:
     @property
     def pset(self):
         return self.grammar.pset
-
 
     def _build_toolbox(self):
 
@@ -265,7 +270,7 @@ class GeneticProgram:
         mstats.register("max", np.max)
 
         pop, log, best = eaSimpleCustom(pop, self.toolbox, mating_prob, mutation_prob, num_generations, stats=mstats,
-                                        halloffame=hof, verbose=True)
+                                        halloffame=hof, verbose=True, genetic_program=self)
 
         if verbose:
             logging.info("Winners in each generation: ")
@@ -275,7 +280,6 @@ class GeneticProgram:
             for i in range(len(hof)):
                 logging.info(f"  {i}  {hof[i]}")
             draw_tree(hof[0])
-
 
         if output_folder != None:  # TODO: clean
             hof_name = self.get_hof_filename(mating_prob, mutation_prob, run_id)
@@ -307,7 +311,6 @@ class GeneticProgram:
         for i, data in enumerate(self.data_collection):
             fitnesses.append(self.compute_fitness(individual, data)[0])
         return self.combined_fitness_operator(fitnesses),
-        
 
     def build_evaluation_object(self, individual, data, ticker=True):
         if not ticker:
@@ -344,6 +347,10 @@ class GeneticProgram:
 
         return evaluation
 
+    def individual_from_string(self, code):
+        return creator.Individual(PrimitiveTree.from_string(code, self.grammar.pset))
+
+
 
     @staticmethod
     def get_gen_best_filename(mating_prob, mutation_prob, run_id):
@@ -365,95 +372,6 @@ class GeneticProgram:
 
     def load_evolution_file(self, file_path):
         return pickle.load(open(file_path, "rb"))
-
-    @staticmethod
-    def compress_individual(individual):
-        for i, element in enumerate(individual):
-
-            if individual == 'True':
-                return True
-            if individual == 'False':
-                return False
-            if individual == 'identity':
-                return 'identity'
-
-            if individual.arity == 0:
-                return individual
-            elements = individual[i:i+element.arity]
-            if str(individual) == 'if_then_else':
-                if GeneticProgram.compress_individual(elements[1]) == False:
-                    return GeneticProgram.compress_individual(elements[2])
-                elif GeneticProgram.compress_individual(elements[1]) == True:
-                    return GeneticProgram.compress_individual(elements[1])
-                else:
-                    return 'if_then_else'
-
-def visit_node(graph, node, labels, parent = None):
-    children = [visit_node(graph, child, labels, node)
-                for child in graph[node]
-                if child != parent]
-    return [labels[node], children]
-
-def compress(individual):
-    nodes, edges, labels = gp.graph(individual)
-    from gp_utils import recompute_tree_graph
-    graph = recompute_tree_graph(nodes, edges)
-    root = visit_node(graph, 0, labels)
-    optimized = optimize(root)
-    return wrap_children(optimized)
-
-def wrap_children(optimized):
-    node, children = optimized
-    if len(children) == 0:
-        return node
-    s = f'{str(node)}('
-    for child in children:
-        s += str(wrap_children(child))
-        s += ','
-    s = s[:-1]
-    s += ')'
-    return s
-
-def optimize(node):
-    node_type, children = node
-    # optimize all children
-    for i in range(len(children)):
-        children[i] = optimize(children[i])
-    if node_type == "if_then_else":
-        cond_type = children[0][0]
-        if cond_type is True:
-            return children[1]
-        if cond_type is False:
-            return children[2]
-    elif node_type == "or_":
-        if children[0][0] is True or children[1][0] is True:
-            return [True, []]
-        if children[0][0] is False:
-            return children[1]
-        if children[1][0] is False:
-            return children[0]
-    elif node_type == "and_":
-        if children[0][0] is False or children[1][0] is False:
-            return [False, []]
-        if children[0][0] is True:
-            return children[1]
-        if children[1][0] is True:
-            return children[0]
-    elif node_type == "xor":
-        if (children[0][0] is True and children[1][0] is False) or (children[0][0] is False and children[1][0] is True):
-            return [True, []]
-        if (children[0][0] is True and children[1][0] is True) or (children[0][0] is False and children[1][0] is False):
-            return [False, []]
-        if children[0][0] is False:
-            return children[1]
-        if children[1][0] is False:
-            return children[0]
-    elif node_type in ("identity_list", "identity_bool", "identity_float"):
-        return children[0]
-
-    # can't optimize this node
-    # (and children are already optimized)
-    return node
 
 
 
