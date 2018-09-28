@@ -408,7 +408,7 @@ def wrap_children(optimized):
         return node
     s = f'{str(node)}('
     for child in children:
-        s += wrap_children(child)
+        s += str(wrap_children(child))
         s += ','
     s = s[:-1]
     s += ')'
@@ -421,10 +421,36 @@ def optimize(node):
         children[i] = optimize(children[i])
     if node_type == "if_then_else":
         cond_type = children[0][0]
-        if cond_type == True:
+        if cond_type is True:
             return children[1]
-        if cond_type == False:
+        if cond_type is False:
             return children[2]
+    elif node_type == "or_":
+        if children[0][0] is True or children[1][0] is True:
+            return [True, []]
+        if children[0][0] is False:
+            return children[1]
+        if children[1][0] is False:
+            return children[0]
+    elif node_type == "and_":
+        if children[0][0] is False or children[1][0] is False:
+            return [False, []]
+        if children[0][0] is True:
+            return children[1]
+        if children[1][0] is True:
+            return children[0]
+    elif node_type == "xor":
+        if (children[0][0] is True and children[1][0] is False) or (children[0][0] is False and children[1][0] is True):
+            return [True, []]
+        if (children[0][0] is True and children[1][0] is True) or (children[0][0] is False and children[1][0] is False):
+            return [False, []]
+        if children[0][0] is False:
+            return children[1]
+        if children[1][0] is False:
+            return children[0]
+    elif node_type in ("identity_list", "identity_bool", "identity_float"):
+        return children[0]
+
     # can't optimize this node
     # (and children are already optimized)
     return node

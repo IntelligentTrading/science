@@ -106,10 +106,10 @@ class TAProviderCollection(FunctionProvider):
             #    provider = self.get_provider(timestamp, transaction_currency, counter_currency)
             #    return getattr(provider, function_name)([timestamp])
             #fn.__name__ = function_name
-            setattr(TAProviderCollection, function_name, self.make_fun(function_name))
-        print('Init done.')
+            setattr(TAProviderCollection, function_name, self._create_function(function_name))
 
-    def make_fun(self, function_name):
+
+    def _create_function(self, function_name):
         exec(f'''
 def {function_name}(self, input):
     timestamp, transaction_currency, counter_currency = input
