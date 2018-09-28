@@ -78,7 +78,7 @@ price_in_range_query_asc = """SELECT price, timestamp FROM indicator_price WHERE
 volume_in_range_query_asc = """SELECT volume, timestamp FROM indicator_volume WHERE transaction_currency = %s AND counter_currency = %s 
                          AND source = %s AND timestamp >= %s AND timestamp <= %s ORDER BY timestamp ASC"""
 
-resampled_price_range_query = """SELECT timestamp, close_price
+resampled_price_range_query = """SELECT timestamp, close_price, high_price, low_price
                                  FROM indicator_priceresampl 
                                  WHERE transaction_currency = %s 
                                  AND counter_currency = %s 

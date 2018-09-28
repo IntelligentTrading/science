@@ -33,25 +33,36 @@ class Data:
         self.start_crypto = start_crypto
         self.source = source
 
-        self.price_data = get_resampled_prices_in_range(self.start_time, self.end_time, transaction_currency, counter_currency, resample_period)
+        self.price_data = get_resampled_prices_in_range\
+            (self.start_time, self.end_time, transaction_currency, counter_currency, resample_period)
+
+        self.price_data = self.price_data[~self.price_data.index.duplicated(keep='first')]
+
+
         # do some sanity checks with data
         if not self.price_data.empty and self.price_data.iloc[0].name > self.start_time + 60*60*2:
-            raise Exception(f"The retrieved price data starts "
+            raise Exception(f"The retrieved price data for {transaction_currency}-{counter_currency} starts "
                             f"{(self.price_data.iloc[0].name - self.start_time)/60:.2f} minutes after "
                             f"the set start time!")
 
         if not self.price_data.empty and self.end_time - self.price_data.iloc[-1].name > 60*60*2:
-            raise Exception(f"The retrieved price data ends "
+            raise Exception(f"The retrieved price data for {transaction_currency}-{counter_currency} ends "
                             f"{(self.end_time - self.price_data.iloc[-1].name)/60:.2f} minutes before "
                             f"the set end time!")
 
-        self.rsi_data = talib.RSI(np.array(self.price_data.close_price, dtype=float), timeperiod=14)
-        self.sma20_data = talib.SMA(np.array(self.price_data.close_price, dtype=float), timeperiod=20)
-        self.ema20_data = talib.EMA(np.array(self.price_data.close_price, dtype=float), timeperiod=20)
-        self.sma50_data = talib.SMA(np.array(self.price_data.close_price, dtype=float), timeperiod=50)
-        self.ema50_data = talib.EMA(np.array(self.price_data.close_price, dtype=float), timeperiod=50)
-        self.sma200_data = talib.SMA(np.array(self.price_data.close_price, dtype=float), timeperiod=200)
-        self.ema200_data = talib.EMA(np.array(self.price_data.close_price, dtype=float), timeperiod=200)
+        prices = np.array(self.price_data.close_price, dtype=float)
+        self.rsi_data = talib.RSI(prices, timeperiod=14)
+        self.sma20_data = talib.SMA(prices, timeperiod=20)
+        self.ema20_data = talib.EMA(prices, timeperiod=20)
+        self.sma50_data = talib.SMA(prices, timeperiod=50)
+        self.ema50_data = talib.EMA(prices, timeperiod=50)
+        self.sma200_data = talib.SMA(prices, timeperiod=200)
+        self.ema200_data = talib.EMA(prices, timeperiod=200)
+        self.macd, self.macd_signal, self.macd_hist = talib.MACD(
+            prices, fastperiod=12, slowperiod=26, signalperiod=9)
+        self.adx = talib.ADX(np.array(self.price_data.high_price, dtype=float),
+                             np.array(self.price_data.low_price, dtype=float),
+                             np.array(self.price_data.close_price, dtype=float))
         self.prices = self.price_data.as_matrix(columns=["close_price"])
         self.timestamps = pd.to_datetime(self.price_data.index.values, unit='s')
         assert len(self.prices) == len(self.timestamps)

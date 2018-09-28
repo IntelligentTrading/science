@@ -35,8 +35,8 @@
         "source": 0
     }],
 
-    "fitness_functions": ["ff_v1"],
-    "grammar_version": "gv3",
+    "fitness_functions": ["ff_benchmarkdiff"],
+    "grammar_version": "gv4",
     "num_generations": 3,
 
     "mating_probabilities": [
@@ -44,10 +44,10 @@
     ],
 
     "mutation_probabilities": [
-        0.5
+        0.65
     ],
 
     "population_sizes": [
-        500
+        50
     ]
 }

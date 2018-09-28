@@ -62,6 +62,23 @@ class TAProvider(FunctionProvider):
     def rsi_gt_80(self, input):
         return self.data.rsi_data[self._get_timestamp_index(input)] > 80
 
+    def macd_bullish(self, input):
+        index = self._get_timestamp_index(input)
+        if index == 0:
+            return False
+        return self.data.macd[index] > self.data.macd_signal[index] \
+               and self.data.macd[index-1] <= self.data.macd_signal[index-1]
+
+    def macd_bearish(self, input):
+        index = self._get_timestamp_index(input)
+        if index == 0:
+            return False
+        return self.data.macd[index] < self.data.macd_signal[index] \
+               and self.data.macd[index-1] >= self.data.macd_signal[index-1]
+
+    def adx(self, input):
+        return self.data.adx[self._get_timestamp_index(input)]
+
     def sma20(self, input):
         return self.data.sma20_data[self._get_timestamp_index(input)]
 
@@ -101,11 +118,6 @@ class TAProviderCollection(FunctionProvider):
             if function_name.startswith('__'):
                 continue
 
-            #def fn(self, input):
-            #    timestamp, transaction_currency, counter_currency = input
-            #    provider = self.get_provider(timestamp, transaction_currency, counter_currency)
-            #    return getattr(provider, function_name)([timestamp])
-            #fn.__name__ = function_name
             setattr(TAProviderCollection, function_name, self._create_function(function_name))
 
 

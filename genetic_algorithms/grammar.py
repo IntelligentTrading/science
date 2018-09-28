@@ -168,11 +168,17 @@ class GrammarV4(Grammar):
         pset.addPrimitive(self.function_provider.rsi_gt_70, [list], bool)
         pset.addPrimitive(self.function_provider.rsi_gt_75, [list], bool)
         pset.addPrimitive(self.function_provider.rsi_gt_80, [list], bool)
+        pset.addPrimitive(self.function_provider.macd_bullish, [list], bool)
+        pset.addPrimitive(self.function_provider.macd_bearish, [list], bool)
+        pset.addPrimitive(self.function_provider.adx, [list], float)
         pset.addPrimitive(self.function_provider.sma50, [list], float)
         pset.addPrimitive(self.function_provider.sma200, [list], float)
         pset.addPrimitive(self.function_provider.ema50, [list], float)
         pset.addPrimitive(self.function_provider.ema200, [list], float)
         pset.addPrimitive(self.function_provider.price, [list], float)
+        pset.addTerminal(20.0, float)
+        pset.addTerminal(30.0, float)
+        pset.addTerminal(40.0, float)
         self._pset = pset
 
     @property
