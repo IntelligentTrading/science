@@ -73,6 +73,22 @@ def optimize(node):
             return children[1]
         if children[1][0] is False:
             return children[0]
+    elif node_type == "lt":
+        try:
+            child1 = float(children[0][0])
+            child2 = float(children[1][0])
+            return [child1 < child2, []]
+        except:
+            pass
+    elif node_type == "gt":
+        try:
+            child1 = float(children[0][0])
+            child2 = float(children[1][0])
+            return [child1 > child2, []]
+        except:
+            pass
+
+
     elif node_type in ("identity_list", "identity_bool", "identity_float"):
         return children[0]
 
