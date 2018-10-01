@@ -12,6 +12,11 @@ from backtester_ticks import TickDrivenBacktester
 from tick_provider import PriceDataframeTickProvider
 from abc import ABC, abstractmethod
 import dill as pickle
+#logger = logging.getLogger()
+#logger.setLevel(logging.DEBUG)
+
+np.seterr(divide='ignore', invalid='ignore')
+# prevent Sharpe ratio NaN warnings
 
 creator.create("FitnessMax", base.Fitness, weights=(1.0,))
 creator.create("Individual", gp.PrimitiveTree, fitness=creator.FitnessMax)
@@ -256,10 +261,45 @@ class GeneticProgram:
         toolbox.decorate("mutate", gp.staticLimit(key=operator.attrgetter("height"), max_value=self.tree_depth))  # 17))
         self.toolbox = toolbox
 
+    def _generate_population(self, population_size, min_fitness=0, num_good_individuals=2, max_iterations=20):
+        run_count = 0
+        logging.info('Generating population...')
+        saved = []
+        while True:
+            run_count += 1
+            population = self.toolbox.population(n=population_size)
+            count = 0
+            invalid_ind = [ind for ind in population if not ind.fitness.valid]
+            fitnesses = self.toolbox.map(self.toolbox.evaluate, invalid_ind)
+            for ind, fit in zip(invalid_ind, fitnesses):
+                ind.fitness.values = fit
+                if fit[0] >= min_fitness:
+                    count += 1
+                    saved.append(ind)
+            # option 1, by rolling the dice we got a total of num_good_individuals
+            if count >= num_good_individuals:
+                logging.info(f'Initialized a population with {count} individuals'
+                      f' of fitness >= {min_fitness} after {run_count} iterations.')
+                population = sorted(population, key=lambda x: x.fitness.values[0], reverse=True)
+                return population
+            # option 2, we found some good individuals in the previous runs, some in this run, and we have enough
+            elif len(saved) == num_good_individuals:
+                population = sorted(population, key=lambda x: x.fitness.values[0], reverse=True)
+                population[0:len(saved)] = saved
+                return population
+            # option 3, max runtime exceeded, return what we have
+            if run_count > max_iterations:
+                population = sorted(population, key=lambda x: x.fitness.values[0], reverse=True)
+                population[0:len(saved)] = saved
+                logging.info(f'Reached {run_count} iterations trying to generate initial population, '
+                             f'continuing ({len(saved)} individuals found and inserted)...')
+                return population
+
 
     def evolve(self, mating_prob, mutation_prob, population_size,
                num_generations, verbose=True, output_folder=None, run_id=None):
-        pop = self.toolbox.population(n=population_size)
+        #pop = self.toolbox.population(n=population_size)
+        pop = self._generate_population(population_size)
 
         # insert premade individuals into the population (if any)
         premade = [self.individual_from_string(code) for code in self.premade_individuals]
