@@ -9,14 +9,18 @@ import itertools
 import numpy as np
 from chart_plotter import *
 import pandas as pd
+from order_generator import OrderGenerator
+from config import INF_CASH, INF_CRYPTO
 
 @experiment_root
 def run_evolution(experiment_id, data, function_provider, grammar_version, fitness_function, mating_prob,
-                  mutation_prob, population_size, num_generations, premade_individuals):
+                  mutation_prob, population_size, num_generations, premade_individuals, order_generator, tree_depth,
+                  reseed_params):
     grammar = Grammar.construct(grammar_version, function_provider, ephemeral_suffix=experiment_id)
     genetic_program = GeneticProgram(data_collection=data, function_provider=function_provider,
                                      grammar=grammar, fitness_function=fitness_function,
-                                     premade_individuals=premade_individuals)
+                                     premade_individuals=premade_individuals, order_generator=order_generator,
+                                     tree_depth=tree_depth, reseed_params=reseed_params)
     hof, best = genetic_program.evolve(mating_prob, mutation_prob, population_size, num_generations, verbose=False)
     return hof, best
 
@@ -32,6 +36,11 @@ class ExperimentManager:
                 self.experiment_json = json.load(f)
         else:
             self.experiment_json = experiment_container
+
+        if self.experiment_json['order_generator'] == OrderGenerator.POSITION_BASED:
+            self.START_CASH = INF_CASH
+            self.START_CRYPTO = INF_CRYPTO
+
         # initialize data
         self.training_data = [Data(start_cash=self.START_CASH, start_crypto=self.START_CRYPTO,
                                   **dataset) for dataset in self.experiment_json["training_data"]]
@@ -60,7 +69,12 @@ class ExperimentManager:
                 mutation_prob=mutation_prob,
                 population_size=population_size,
                 num_generations=self.experiment_json["num_generations"],
-                premade_individuals=self.experiment_json["premade_individuals"])
+                premade_individuals=self.experiment_json["premade_individuals"],
+                order_generator=self.experiment_json["order_generator"],
+                tree_depth=self.experiment_json["tree_depth"],
+                reseed_params=self.experiment_json["reseed_initial_population"]
+            )
+
 
     def _register_variants(self, rebuild_grammar=True):
         if rebuild_grammar:
@@ -297,7 +311,8 @@ class ExperimentDB:
         self._num_records = 0
 
     def add(self, data, function_provider, grammar_version, fitness_function,
-            mating_prob, mutation_prob, population_size, num_generations, premade_individuals):
+            mating_prob, mutation_prob, population_size, num_generations, premade_individuals,
+            order_generator, tree_depth, reseed_params):
         entry = {}
         entry['data'] = data
         entry['function_provider'] = function_provider
@@ -308,6 +323,9 @@ class ExperimentDB:
         entry['population_size'] = population_size
         entry['num_generations'] = num_generations
         entry['premade_individuals'] = premade_individuals
+        entry['order_generator'] = order_generator
+        entry['tree_depth'] = tree_depth
+        entry['reseed_params'] = reseed_params
         entry['experiment_id'] = self._num_records
         name = self.build_experiment_id(**entry)
         self._experiments[name] = entry
@@ -347,7 +365,7 @@ class ExperimentDB:
 ####################################
 
 if __name__ == "__main__":
-    e = ExperimentManager("sample_experiment.json")
+    e = ExperimentManager("position_experiment.json")
     #e = ExperimentManager("compress.json")
     e.run_experiments()
     #e.explore_records()
