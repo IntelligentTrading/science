@@ -291,7 +291,10 @@ class ExperimentManager:
             data_collection=data,
             function_provider=self.function_provider,
             grammar=grammar,
-            fitness_function=db_record['fitness_function']
+            fitness_function=db_record['fitness_function'],
+            tree_depth=db_record['tree_depth'],
+            order_generator=db_record['order_generator']
+
         )
         return genetic_program
 
@@ -368,6 +371,7 @@ if __name__ == "__main__":
     e = ExperimentManager("position_experiment.json")
     #e = ExperimentManager("compress.json")
     e.run_experiments()
+    performance_dfs = e.get_joined_performance_dfs_over_all_variants()
     #e.explore_records()
     #e.best_individuals_across_variants_and_datasets = e.get_best_performing_across_variants_and_datasets(e.training_data)
     #dfs = e.get_joined_performance_dfs_over_all_variants()
