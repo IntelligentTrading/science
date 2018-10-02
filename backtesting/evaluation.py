@@ -327,7 +327,10 @@ class Evaluation(ABC):
             'crypto': self._crypto,
             'total_value': total_value,
             'order': "" if self._current_order is None else self._current_order.order_type.value,
-            'signal': "" if self._current_order is None or self._current_signal is None else self._current_signal.signal_type}
+            'signal': "" if self._current_order is None or self._current_signal is None else self._current_signal.signal_type,
+            'order_obj': self._current_order,
+            'signal_obj': self._current_signal
+        }
         )
 
     def _finalize_backtesting(self):
@@ -335,7 +338,8 @@ class Evaluation(ABC):
         # self.trading_df = pd.DataFrame(columns=['close_price', 'signal', 'order', 'cash', 'crypto', 'total_value'],
         # columns=['close_price', 'signal', 'order', 'cash', 'crypto', 'total_value'])
         self.trading_df = pd.DataFrame(self.trading_df_rows,
-                                       columns=['timestamp', 'close_price', 'signal', 'order', 'cash', 'crypto', 'total_value'])
+                                       columns=['timestamp', 'close_price', 'signal', 'order', 'cash', 'crypto', 'total_value',
+                                                'order_obj', 'signal_obj'])
         self.trading_df = self.trading_df.set_index('timestamp')
         assert self.trading_df.index.is_monotonic_increasing
         # set finishing variable values
@@ -414,10 +418,20 @@ class Evaluation(ABC):
         output.append("Start time: {}\n--".format(datetime_from_timestamp(self._start_time)))
         output.append("--")
 
+        '''
         for i, order in enumerate(self.orders):
             output.append(str(order))
             if include_order_signals and len(self.order_signals) == len(self.orders): # for buy & hold we don't have signals
                 output.append("   signal: {}".format(self.order_signals[i]))
+        '''
+        for i, row in self.orders_df.iterrows():
+            order = row.order_obj
+            signal = row.signal_obj
+            output.append(str(order))
+            if include_order_signals and signal is not None:  # for buy & hold we don't have signals
+                output.append("   signal: {}".format(signal))
+            output.append(f'   cash: {row.cash}    crypto: {row.crypto}')
+
 
         output.append("End time: {}".format(datetime_from_timestamp(self._end_time)))
         output.append("\nSummary")
@@ -509,8 +523,9 @@ class Evaluation(ABC):
         elif order.order_type == OrderType.SELL:
             # the currency we're selling must match the bought currency
             self._num_sells += 1
-        #print(f'Executed order... {str(order)}')
-        #print(f'Total cash: {self._cash}, total crypto: {self._crypto}')
+
+
+
 
     def to_primitive_types_dictionary(self):
         import inspect
