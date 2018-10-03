@@ -39,6 +39,10 @@ class Evaluation(ABC):
         self._time_delay = time_delay
         self._slippage = slippage
 
+        if order_generator == OrderGenerator.POSITION_BASED and not \
+            (start_cash == INF_CASH and start_crypto == INF_CRYPTO):
+            logging.warning('Position-based generator selected, and cash not set to infinite. '
+                            'Be careful of currency scale errors!')
         self._order_generator = OrderGenerator.create(
             generator_type=order_generator,
             start_cash=start_cash,
@@ -60,15 +64,15 @@ class Evaluation(ABC):
     def _reevaluate_inf_bank(self):
         if self._start_cash == INF_CASH:
             # simulate how the trading would have gone
-            self._start_cash = self._cash = 0
             evaluation = copy.deepcopy(self)
+            evaluation._start_cash = evaluation._cash = 0
             evaluation._verbose = False
             evaluation.run()
             if evaluation._end_cash < 0:
                 self._start_cash = self._cash = -evaluation.end_cash
         if self._start_crypto == INF_CRYPTO:
-            self._start_crypto = self._crypto = 0
             evaluation = copy.deepcopy(self)
+            evaluation._start_crypto = evaluation._crypto = 0
             evaluation._verbose = False
             evaluation.run()
             if evaluation._end_crypto < 0:
@@ -115,7 +119,7 @@ class Evaluation(ABC):
                                                      self._counter_currency, self._source)
             if self._start_crypto > 0 and self._transaction_currency is not None:
                 start_value_USDT += convert_value_to_USDT(self._start_crypto, self._start_time,
-                                                          self.start_crypto_currency, self._source)
+                                                          self._transaction_currency, self._source)
             return start_value_USDT
         except NoPriceDataException:
             return None
@@ -323,7 +327,10 @@ class Evaluation(ABC):
             'crypto': self._crypto,
             'total_value': total_value,
             'order': "" if self._current_order is None else self._current_order.order_type.value,
-            'signal': "" if self._current_order is None or self._current_signal is None else self._current_signal.signal_type}
+            'signal': "" if self._current_order is None or self._current_signal is None else self._current_signal.signal_type,
+            'order_obj': self._current_order,
+            'signal_obj': self._current_signal
+        }
         )
 
     def _finalize_backtesting(self):
@@ -331,7 +338,8 @@ class Evaluation(ABC):
         # self.trading_df = pd.DataFrame(columns=['close_price', 'signal', 'order', 'cash', 'crypto', 'total_value'],
         # columns=['close_price', 'signal', 'order', 'cash', 'crypto', 'total_value'])
         self.trading_df = pd.DataFrame(self.trading_df_rows,
-                                       columns=['timestamp', 'close_price', 'signal', 'order', 'cash', 'crypto', 'total_value'])
+                                       columns=['timestamp', 'close_price', 'signal', 'order', 'cash', 'crypto', 'total_value',
+                                                'order_obj', 'signal_obj'])
         self.trading_df = self.trading_df.set_index('timestamp')
         assert self.trading_df.index.is_monotonic_increasing
         # set finishing variable values
@@ -410,10 +418,20 @@ class Evaluation(ABC):
         output.append("Start time: {}\n--".format(datetime_from_timestamp(self._start_time)))
         output.append("--")
 
+        '''
         for i, order in enumerate(self.orders):
             output.append(str(order))
             if include_order_signals and len(self.order_signals) == len(self.orders): # for buy & hold we don't have signals
                 output.append("   signal: {}".format(self.order_signals[i]))
+        '''
+        for i, row in self.orders_df.iterrows():
+            order = row.order_obj
+            signal = row.signal_obj
+            output.append(str(order))
+            if include_order_signals and signal is not None:  # for buy & hold we don't have signals
+                output.append("   signal: {}".format(signal))
+            output.append(f'   cash: {row.cash}    crypto: {row.crypto}')
+
 
         output.append("End time: {}".format(datetime_from_timestamp(self._end_time)))
         output.append("\nSummary")
@@ -495,19 +513,19 @@ class Evaluation(ABC):
             self._format_price_dependent_value(self.profit_percent)))
 
     def execute_order(self, order):
+        assert order.transaction_currency == self._transaction_currency
         delta_crypto, delta_cash = order.execute()
         self._cash += delta_cash
         self._crypto += delta_crypto
         self._num_trades += 1
         if order.order_type == OrderType.BUY:
-            self._buy_currency = order.transaction_currency
             self._num_buys += 1
         elif order.order_type == OrderType.SELL:
             # the currency we're selling must match the bought currency
-            assert order.transaction_currency == self._buy_currency
             self._num_sells += 1
-        #print(f'Executed order... {str(order)}')
-        #print(f'Total cash: {self._cash}, total crypto: {self._crypto}')
+
+
+
 
     def to_primitive_types_dictionary(self):
         import inspect

@@ -44,7 +44,7 @@
     ],
 
     "mutation_probabilities": [
-        0.9
+        0.5
     ],
 
     "population_sizes": [
@@ -53,5 +53,15 @@
 
     "premade_individuals": [
         "if_then_else(rsi_lt_20(ARG0), buy, if_then_else(rsi_gt_80(ARG0), sell, ignore))"
-    ]
+    ],
+
+    "tree_depth": 3,
+    "order_generator": "position_based",
+    "reseed_initial_population": {
+        "enabled": 0,
+        "num_good_individuals": 1,
+        "min_fitness": 0,
+        "max_iterations": 10
+    }
+
 }

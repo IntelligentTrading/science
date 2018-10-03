@@ -11,7 +11,13 @@ from custom_deap_algorithms import combined_mutation, eaSimpleCustom
 from backtester_ticks import TickDrivenBacktester
 from tick_provider import PriceDataframeTickProvider
 from abc import ABC, abstractmethod
+from order_generator import OrderGenerator
 import dill as pickle
+#logger = logging.getLogger()
+#logger.setLevel(logging.DEBUG)
+
+np.seterr(divide='ignore', invalid='ignore')
+# prevent Sharpe ratio NaN warnings
 
 creator.create("FitnessMax", base.Fitness, weights=(1.0,))
 creator.create("Individual", gp.PrimitiveTree, fitness=creator.FitnessMax)
@@ -229,10 +235,14 @@ class GeneticProgram:
         self.function_provider = kwargs.get('function_provider')
         self.grammar = kwargs.get('grammar')
         self.fitness = kwargs.get('fitness_function', FitnessFunctionV1())
-        self.tree_depth = kwargs.get('tree_depth', 5)
+        self.tree_depth = kwargs.get('tree_depth', 3)
         self.combined_fitness_operator = kwargs.get('combined_fitness_operator', min)
         self.premade_individuals = kwargs.get('premade_individuals', [])
+        self.order_generator = kwargs.get('order_generator', OrderGenerator.ALTERNATING)
+
+        self.reseed_params = kwargs.get('reseed_params', None)
         self._build_toolbox()
+
 
     @property
     def pset(self):
@@ -256,10 +266,49 @@ class GeneticProgram:
         toolbox.decorate("mutate", gp.staticLimit(key=operator.attrgetter("height"), max_value=self.tree_depth))  # 17))
         self.toolbox = toolbox
 
+    def _generate_population(self, population_size, min_fitness=0, num_good_individuals=1, max_iterations=20):
+        run_count = 0
+        logging.info('Generating population...')
+        saved = []
+        while True:
+            run_count += 1
+            population = self.toolbox.population(n=population_size)
+            count = 0
+            invalid_ind = [ind for ind in population if not ind.fitness.valid]
+            fitnesses = self.toolbox.map(self.toolbox.evaluate, invalid_ind)
+            for ind, fit in zip(invalid_ind, fitnesses):
+                ind.fitness.values = fit
+                if fit[0] >= min_fitness:
+                    count += 1
+                    saved.append(ind)
+            # option 1, by rolling the dice we got a total of num_good_individuals
+            if count >= num_good_individuals:
+                logging.info(f'Initialized a population with {count} individuals'
+                      f' of fitness >= {min_fitness} after {run_count} iterations.')
+                population = sorted(population, key=lambda x: x.fitness.values[0], reverse=True)
+                return population
+            # option 2, we found some good individuals in the previous runs, some in this run, and we have enough
+            elif len(saved) == num_good_individuals:
+                population = sorted(population, key=lambda x: x.fitness.values[0], reverse=True)
+                population[0:len(saved)] = saved
+                return population
+            # option 3, max runtime exceeded, return what we have
+            if run_count > max_iterations:
+                population = sorted(population, key=lambda x: x.fitness.values[0], reverse=True)
+                population[0:len(saved)] = saved
+                logging.info(f'Reached {run_count} iterations trying to generate initial population, '
+                             f'continuing ({len(saved)} individuals found and inserted)...')
+                return population
+
 
     def evolve(self, mating_prob, mutation_prob, population_size,
                num_generations, verbose=True, output_folder=None, run_id=None):
-        pop = self.toolbox.population(n=population_size)
+        if self.reseed_params is None or not self.reseed_params['enabled']:
+            pop = self.toolbox.population(n=population_size)
+        else:
+            pop = self._generate_population(population_size, min_fitness=self.reseed_params['min_fitness'],
+                                            num_good_individuals=self.reseed_params['num_good_individuals'],
+                                            max_iterations=self.reseed_params['max_iterations'])
 
         # insert premade individuals into the population (if any)
         premade = [self.individual_from_string(code) for code in self.premade_individuals]
@@ -316,6 +365,7 @@ class GeneticProgram:
         fitnesses = []
         for i, data in enumerate(self.data_collection):
             fitnesses.append(self.compute_fitness(individual, data)[0])
+
         return self.combined_fitness_operator(fitnesses),
 
     def build_evaluation_object(self, individual, data, ticker=True):
@@ -324,7 +374,8 @@ class GeneticProgram:
                                              history_size=self.grammar.longest_function_history_size)
             evaluation = strategy.evaluate(data.transaction_currency, data.counter_currency,
                                            data.start_cash, data.start_crypto,
-                                           data.start_time, data.end_time, data.source, 60, verbose=False)
+                                           data.start_time, data.end_time, data.source, 60, verbose=False,
+                                           order_generator=self.order_generator)
 
         else:
             strategy = GeneticTickerStrategy(tree=individual,
@@ -348,7 +399,8 @@ class GeneticProgram:
                 ),
                 time_delay=0,
                 slippage=0,
-                verbose=False
+                verbose=False,
+                order_generator=self.order_generator
             )
 
         return evaluation
