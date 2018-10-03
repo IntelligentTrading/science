@@ -3,12 +3,12 @@ from strategies import RandomTradingStrategy
 import numpy as np
 import datetime
 from backtesting_helpers import find_num_cumulative_outperforms
-from dateutil import parser
+from data_sources import get_currencies_trading_against_counter
 
 
 def best_performing_signals_of_the_week():
-    start_time = datetime.datetime(2018, 7, 1, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
-    end_time = datetime.datetime(2018, 7, 31, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
+    start_time = datetime.datetime(2018, 9, 24, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
+    end_time = datetime.datetime(2018, 9, 28, 23, 59, tzinfo=datetime.timezone.utc).timestamp()
 
     basic_strategies = StrategyEvaluationSetBuilder.build_from_signal_set(
         buy_signals=['rsi_buy_3', 'rsi_buy_2', 'rsi_cumulat_buy_2', 'rsi_cumulat_buy_3', 'ichi_kumo_up', 'ann_simple_bull'],
@@ -43,20 +43,19 @@ def best_performing_signals_of_the_week():
         start_crypto=0,
         start_time=start_time,
         end_time=end_time,
-        output_file=f"position_based_best_performing_{datetime.datetime.utcfromtimestamp(end_time).strftime('%Y-%m-%d')}.xlsx",
-        debug=False,
-        order_generator=OrderGenerator.POSITION_BASED
+        output_file=f"best_performing_{datetime.datetime.utcfromtimestamp(end_time).strftime('%Y-%m-%d')}.xlsx",
+        debug=False
     )
 
-    comparison.report.all_coins_report(f"cfull_report_{datetime.datetime.utcfromtimestamp(end_time).strftime('%Y-%m-%d')}.xlsx", group_strategy_variants=False)
+    comparison.report.all_coins_report(f"full_report_{datetime.datetime.utcfromtimestamp(end_time).strftime('%Y-%m-%d')}.xlsx", group_strategy_variants=False)
 
 
 def in_depth_signal_comparison(out_path):
     basic_strategies = StrategyEvaluationSetBuilder.build_from_signal_set(
-        buy_signals=['rsi_buy_3', 'rsi_buy_2', 'rsi_cumulat_buy_2', 'rsi_cumulat_buy_3', 'ichi_kumo_up',
-                     'ann_simple_bull'],
-        sell_signals=['rsi_sell_3', 'rsi_sell_2', 'rsi_cumulat_sell_2', 'rsi_cumulat_sell_3', 'ichi_kumo_down',
-                      'ann_simple_bear'],
+        buy_signals=['rsi_buy_3', 'rsi_buy_2', 'rsi_cumulat_buy_2', 'rsi_cumulat_buy_3', 'ichi_kumo_up',],
+#                     'ann_simple_bull'],
+        sell_signals=['rsi_sell_3', 'rsi_sell_2', 'rsi_cumulat_sell_2', 'rsi_cumulat_sell_3', 'ichi_kumo_down',],
+#                      'ann_simple_bear'],
         num_buy=2,
         num_sell=2,
         signal_combination_mode=SignalCombinationMode.SAME_TYPE)
@@ -76,15 +75,23 @@ def in_depth_signal_comparison(out_path):
         num_sell=1,
         signal_combination_mode=SignalCombinationMode.ANY
     )
-    strategies = basic_strategies + vbi_strategies + ann_rsi_strategies
+    strategies = basic_strategies + vbi_strategies # + ann_rsi_strategies
 
     periods = {
-        'July 2018': ('2018/07/01 00:00:00 UTC', '2018/07/31 23:59:59 UTC')
-
+        'Mar 2018': ('2018/03/01 00:00:00 UTC', '2018/03/31 23:59:59 UTC'),
+        'Apr 2018': ('2018/04/01 00:00:00 UTC', '2018/04/30 23:59:59 UTC'),
+        'May 2018': ('2018/05/01 00:00:00 UTC', '2018/05/31 23:59:59 UTC'),
+        'Jun 2018': ('2018/06/01 00:00:00 UTC', '2018/06/30 23:59:59 UTC'),
+        'Jul 2018': ('2018/07/01 00:00:00 UTC', '2018/07/31 23:59:59 UTC'),
+        'Aug 2018': ('2018/08/01 00:00:00 UTC', '2018/08/31 23:59:59 UTC'),
+        'Q1 2018': ('2018/01/01 00:00:00 UTC', '2018/03/31 23:59:59 UTC'),
+        'Q2 2018': ('2018/04/01 00:00:00 UTC', '2018/06/30 23:59:59 UTC'),
+        '678 2018': ('2018/06/01 00:00:00 UTC', '2018/08/31 23:59:59 UTC'),
     }
 
     writer = pd.ExcelWriter(out_path)
 
+    from dateutil import parser
     for period in periods:
         start_time = parser.parse(periods[period][0]).timestamp()
         end_time = parser.parse(periods[period][1]).timestamp()
@@ -99,10 +106,11 @@ def in_depth_signal_comparison(out_path):
             start_time=start_time,
             end_time=end_time,
             output_file=f"debug_best_performing_{datetime.datetime.utcfromtimestamp(end_time).strftime('%Y-%m-%d')}.xlsx",
-            debug=True
+            debug=False
         )
 
         comparison.report.all_coins_report(writer=writer, sheet_prefix=f'({period}) ', group_strategy_variants=False)
+
 
     writer.save()
     writer.close()
@@ -307,7 +315,7 @@ if __name__ == "__main__":
     # Best performing signals
     best_performing_signals_of_the_week()
 
-    #in_depth_signal_comparison('comp.xlsx')
+    #in_depth_signal_comparison('comp_no_ann.xlsx')
 
     # RSI vs RSI cumulative
     # start_time = 1518523200  # first instance of RSI_Cumulative signal

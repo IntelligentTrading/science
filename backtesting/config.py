@@ -9,7 +9,7 @@ mysql_database_config = {
 }
 '''
 
-postgres_connection_string = "host='localhost' dbname='itf_08_05' user='postgres' password='itfscience'"
+postgres_connection_string = "host='localhost' dbname='itf_09_30' user='postgres' password='itfscience'"
 
 backtesting_cols_to_names = {
     "strategy": "Strategy",
