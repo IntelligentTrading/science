@@ -137,6 +137,7 @@ class ExperimentManager:
             self._print_individual_info(best_individual, evaluation)
 
 
+
     def get_best_performing_across_datasets(self, variant, datasets):
         """
         Finds the best performing individual in an experiment variant, across all datasets.
@@ -163,12 +164,14 @@ class ExperimentManager:
         :return:
         """
         df = pd.DataFrame(columns=["experiment_name", "doge", "fitness_function", "fitness_value",
-                                   "mean_profit", "std_profit", "max_profit", "min_profit", "variant",
+                                   "mean_profit", "std_profit", "max_profit", "min_profit", "all_profits",
+                                   "benchmark_profits", "differences", "variant",
                                    "evaluations", "individual"])
-        best_individuals = []
         for variant in self.get_variants():
             best_individual, evaluations = self.get_best_performing_across_datasets(variant, datasets)
             profits = [evaluation.profit_percent for evaluation in evaluations]
+            benchmark_profits = [evaluation.benchmark_backtest.profit_percent for evaluation in evaluations]
+            differences = [x1-x2 for (x1, x2) in zip(profits, benchmark_profits)]
             df = df.append({"experiment_name": str(variant.name),
                        "doge": str(best_individual),
                        "fitness_function": self.get_db_record(variant)["fitness_function"]._name,
@@ -178,6 +181,8 @@ class ExperimentManager:
                        "max_profit": np.max(profits),
                        "min_profit": np.min(profits),
                        "all_profits": ", ".join(map(str,profits)),
+                       "benchmark_profits": ", ".join(map(str, benchmark_profits)),
+                       "differences": ", ".join(map(str, differences)),
                        "variant" : variant,
                        "evaluations": evaluations,
                        "individual": best_individual}, ignore_index=True)
@@ -252,19 +257,21 @@ class ExperimentManager:
 
             performance_info = performance_info.sort_values(by=['profit_percent'], ascending=False)
             if verbose:
-                self.performance_df_row_info(performance_info.iloc[0])
+                self.performance_df_row_info(performance_info.iloc[0], data)
             joined_dfs.append(performance_info)
         return joined_dfs
 
-    def performance_df_row_info(self, performance_df_row):
+    def performance_df_row_info(self, performance_df_row, data=None):
         print(f'Experiment id: {performance_df_row.experiment_id}\n')
         individual = performance_df_row.individual
         evaluation = performance_df_row.evaluation
-        self._print_individual_info(individual, evaluation)
+        self._print_individual_info(individual, evaluation, data)
         return individual
 
-    def _print_individual_info(self, individual, evaluation):
+    def _print_individual_info(self, individual, evaluation, data=None):
         evaluation.plot_price_and_orders()
+        if not data is None:
+            data.plot(evaluation.orders, str(individual))
         print(f'String representation:\n{str(individual)}\n')
         draw_tree(individual)
         try:
@@ -305,6 +312,9 @@ class ExperimentManager:
     def _get_fitness(self, individual, variant, data):
         genetic_program = self._build_genetic_program(variant, data)
         return genetic_program.compute_fitness_over_datasets(individual)[0]
+
+    def plot_data(self):
+        self.training_data[0].plot()
 
 
 class ExperimentDB:
@@ -347,8 +357,8 @@ class ExperimentDB:
                f"n_{kwargs['population_size']};" \
                f"gen_{kwargs['num_generations']};" \
                f"td_{kwargs['tree_depth']};" \
-               f"{'pos' if kwargs['order_generator'] == 'position_based' else 'alt'};" \
-               f"{'reseed' if kwargs['reseed_params']['enabled'] == True else 'no_reseed'}"
+               f"{'p' if kwargs['order_generator'] == 'position_based' else 'a'};" \
+               f"{'rs' if kwargs['reseed_params']['enabled'] == True else 'nrs'}"
 
     #          f"provider_{kwargs['function_provider']};" \
 
@@ -372,7 +382,7 @@ class ExperimentDB:
 ####################################
 
 if __name__ == "__main__":
-    e = ExperimentManager("sample_experiment.json")
+    e = ExperimentManager("gv4_position_experiments.json")
     e.run_experiments()
     performance_dfs = e.get_joined_performance_dfs_over_all_variants()
     e.performance_df_row_info(performance_dfs[0].iloc[0])

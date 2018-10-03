@@ -1,11 +1,13 @@
 import numpy as np
 import pandas as pd
 import talib
+import logging
 from dateutil import parser
 from tick_provider import PriceDataframeTickProvider
 from backtester_ticks import TickDrivenBacktester
 from data_sources import get_resampled_prices_in_range
-import logging
+from charting import time_series_chart
+
 
 # temporarily suspend strategies logging warnings: buy&hold strategy triggers warnings
 # as our buy has to be triggered AFTER the minimum strategy initialization period
@@ -71,11 +73,14 @@ class Data:
     def to_dataframe(self):
         df = self.price_data.copy(deep=True)
         df['RSI'] = pd.Series(self.rsi_data, index=df.index)
+        df['SMA20'] = pd.Series(self.sma20_data, index=df.index)
         df['SMA50'] = pd.Series(self.sma50_data, index=df.index)
         df['SMA200'] = pd.Series(self.sma200_data, index=df.index)
+        df['EMA20'] = pd.Series(self.ema20_data, index=df.index)
         df['EMA50'] = pd.Series(self.ema50_data, index=df.index)
         df['EMA200'] = pd.Series(self.ema200_data, index=df.index)
-        return df
+        df['ADX'] = pd.Series(self.adx, index=df.index)
+
 
     def __str__(self):
         return f"{self.transaction_currency}-{self.counter_currency}-{int(self.start_time)}-{int(self.end_time)}"
@@ -97,3 +102,43 @@ class Data:
             tick_provider=PriceDataframeTickProvider(self.price_data)
         )
         return benchmark
+
+    def _filter_fields(self, fields, individual_str):
+        filtered_dict = {}
+        for field in fields:
+            if not field.lower() in individual_str and field != "Close price" and field != "MACD signal":
+                continue
+            if field == "MACD signal" and "macd" not in individual_str:
+                continue
+            filtered_dict[field] = fields[field]
+        return filtered_dict
+
+
+    def plot(self, orders=None, individual_str=None):
+        timestamps = self.price_data.index
+        data_primary_axis = {
+            "Close price" : self.price_data.close_price,
+            "SMA50": self.sma50_data,
+            "EMA50": self.ema50_data,
+            "SMA200": self.sma200_data,
+            "EMA200": self.ema200_data,
+
+        }
+
+        data_secondary_axis = {
+            "ADX": self.adx,
+            "MACD": self.macd,
+            "MACD signal": self.macd_signal,
+            "RSI": self.rsi_data
+        }
+
+        if individual_str is not None:
+            data_primary_axis = self._filter_fields(data_primary_axis, individual_str)
+            data_secondary_axis = self._filter_fields(data_secondary_axis, individual_str)
+
+
+
+        time_series_chart(timestamps, series_dict_primary=data_primary_axis, series_dict_secondary=data_secondary_axis,
+                          title=f"{self.transaction_currency} - {self.counter_currency}", orders=orders)
+
+
