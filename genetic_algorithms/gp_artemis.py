@@ -345,7 +345,11 @@ class ExperimentDB:
                f"x_{kwargs['mating_prob']};" \
                f"m_{kwargs['mutation_prob']};" \
                f"n_{kwargs['population_size']};" \
-               f"gen_{kwargs['num_generations']}"
+               f"gen_{kwargs['num_generations']};" \
+               f"td_{kwargs['tree_depth']};" \
+               f"{'pos' if kwargs['order_generator'] == 'position_based' else 'alt'};" \
+               f"{'reseed' if kwargs['reseed_params']['enabled'] == True else 'no_reseed'}"
+
     #          f"provider_{kwargs['function_provider']};" \
 
     def __getitem__(self, key):
@@ -368,10 +372,10 @@ class ExperimentDB:
 ####################################
 
 if __name__ == "__main__":
-    e = ExperimentManager("position_experiment.json")
-    #e = ExperimentManager("compress.json")
+    e = ExperimentManager("sample_experiment.json")
     e.run_experiments()
     performance_dfs = e.get_joined_performance_dfs_over_all_variants()
+    e.performance_df_row_info(performance_dfs[0].iloc[0])
     #e.explore_records()
     #e.best_individuals_across_variants_and_datasets = e.get_best_performing_across_variants_and_datasets(e.training_data)
     #dfs = e.get_joined_performance_dfs_over_all_variants()
