@@ -2,6 +2,7 @@ import operator
 import os
 import logging
 import numpy as np
+import math
 from deap import creator, tools, base
 from deap.gp import PrimitiveTree
 from backtesting.signals import Signal
@@ -209,6 +210,16 @@ class BenchmarkLengthControlFitness(FitnessFunction):
         max_len = 3 ** genetic_program.tree_depth
         return (evaluation.profit_percent - evaluation.benchmark_backtest.profit_percent) + \
                (max_len - len(individual)) / float(max_len) * 20,
+
+class UltimateEpicFunction(FitnessFunction):
+    _name = "ff_ultimateepic"
+
+    def compute(self, individual, evaluation, genetic_program):
+        try:
+            return (math.exp(1)+math.log(1+math.sqrt(evaluation.num_buys * evaluation.num_sells))) ** \
+                   (evaluation.profit_percent / (evaluation.benchmark_backtest.profit_percent + 0.000001)),
+        except:
+            pass
 
 
 class BenchmarkLengthControlFitnessV2(FitnessFunction):
