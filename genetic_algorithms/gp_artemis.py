@@ -12,6 +12,10 @@ import pandas as pd
 from order_generator import OrderGenerator
 from config import INF_CASH, INF_CRYPTO
 
+SAVE_HOF_AND_BEST = True
+HOF_AND_BEST_FILENAME = 'rockstars.txt'
+LOAD_ROCKSTARS = True
+
 @experiment_root
 def run_evolution(experiment_id, data, function_provider, grammar_version, fitness_function, mating_prob,
                   mutation_prob, population_size, num_generations, premade_individuals, order_generator, tree_depth,
@@ -60,6 +64,13 @@ class ExperimentManager:
                                      self.experiment_json["population_sizes"],
                                      self.experiment_json["fitness_functions"])
         for mating_prob, mutation_prob, population_size, fitness_function in variants:
+            if LOAD_ROCKSTARS:
+                grammar_version = self.experiment_json["grammar_version"]
+                rockstars = self._load_rockstars(grammar_version, fitness_function, to_load=['hof'], limit_top=20)
+                logging.info(f'Loaded {len(rockstars)} rockstars for {grammar_version}, {fitness_function}.')
+            else:
+                rockstars = []
+
             self.experiment_db.add(
                 data=self.training_data,
                 function_provider=self.function_provider,
@@ -69,7 +80,7 @@ class ExperimentManager:
                 mutation_prob=mutation_prob,
                 population_size=population_size,
                 num_generations=self.experiment_json["num_generations"],
-                premade_individuals=self.experiment_json["premade_individuals"],
+                premade_individuals=self.experiment_json["premade_individuals"]+rockstars,
                 order_generator=self.experiment_json["order_generator"],
                 tree_depth=self.experiment_json["tree_depth"],
                 reseed_params=self.experiment_json["reseed_initial_population"]
@@ -97,7 +108,20 @@ class ExperimentManager:
                 continue
 
             logging.info(f"Running variant {i}")
-            variant.run(keep_record=True, display_results=display_results, saved_figure_ext='.fig.png')
+            record = variant.run(keep_record=True, display_results=display_results, saved_figure_ext='.fig.png')
+            if SAVE_HOF_AND_BEST:
+                hof, best = record.get_result()
+                fitness_function = record.get_args()['fitness_function']
+                grammar_version = record.get_args()['grammar_version']
+                with open(HOF_AND_BEST_FILENAME, 'a') as f:
+                    f.write(
+                        f'hof:{variant.name}:{grammar_version}:{fitness_function._name}:'
+                        f'{"&".join([str(i) + "/" + str(i.fitness.values[0]) for i in hof])}\n'
+                    )
+                    f.write(
+                        f'gen_best:{variant.name}:{grammar_version}:{fitness_function._name}:'
+                        f'{"&".join([str(i) + "/" + str(i.fitness.values[0]) for i in best])}\n'
+                    )
 
     def explore_records(self, use_validation_data=True):
         if use_validation_data:
@@ -135,7 +159,6 @@ class ExperimentManager:
         print(f"Best performing individual across datasets in variant {variant}:\n")
         for evaluation in evaluations:
             self._print_individual_info(best_individual, evaluation)
-
 
 
     def get_best_performing_across_datasets(self, variant, datasets):
@@ -316,6 +339,34 @@ class ExperimentManager:
     def plot_data(self):
         self.training_data[0].plot()
 
+    def _load_rockstars(self, grammar_version, fitness_function_name, to_load = ['hof', 'gen_best'], limit_top=None):
+        individuals = []
+        fitnesses = []
+
+        with open(HOF_AND_BEST_FILENAME, 'r') as f:
+            for line in f:
+                line = line.split(':')
+                if not line[0] in to_load or line[2] != grammar_version or line[3] != fitness_function_name:
+                    continue
+                entries = line[4].split('&')
+                for entry in entries:
+                    individual_str, fitness = entry.split('/')
+                    if individual_str in individuals:  # we don't want repeat individuals
+                        continue
+                    individuals.append(individual_str)
+                    fitnesses.append(fitness)
+
+        individuals = [x for _, x in sorted(zip(fitnesses, individuals))]
+        if limit_top is None:
+            return individuals
+        else:
+            return individuals[:min(len(individuals), limit_top)]
+
+
+
+
+
+
 
 class ExperimentDB:
 
@@ -382,7 +433,7 @@ class ExperimentDB:
 ####################################
 
 if __name__ == "__main__":
-    e = ExperimentManager("gv4_position_experiments.json")
+    e = ExperimentManager("position_experiment.json")
     e.run_experiments()
     performance_dfs = e.get_joined_performance_dfs_over_all_variants()
     e.performance_df_row_info(performance_dfs[0].iloc[0])

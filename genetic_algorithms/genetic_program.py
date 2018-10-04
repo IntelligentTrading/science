@@ -324,6 +324,8 @@ class GeneticProgram:
         # insert premade individuals into the population (if any)
         premade = [self.individual_from_string(code) for code in self.premade_individuals]
         pop[-len(premade):] = premade
+        if len(premade) > 0:
+            logging.info(f'Inserted {len(premade)} individuals into the initial population.')
 
         hof = tools.HallOfFame(10)
 
