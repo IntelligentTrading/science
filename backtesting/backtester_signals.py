@@ -68,7 +68,6 @@ class SignalDrivenBacktester(Evaluation):
         if len(self.signals) == 0 or self.signals[0].timestamp != self._start_time:
             decisions.append(self._strategy.get_decision(self._start_time, None, []))
 
-        decisions.append(self._strategy.get_decision(self._start_time, None, []))
         for signal in self.signals:
             timestamp = signal.timestamp
             price = signal.price

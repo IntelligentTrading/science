@@ -81,21 +81,24 @@ class OrderGenerator(ABC):
 class AlternatingOrderGenerator(OrderGenerator):
     def __init__(self, **kwargs):
         super(AlternatingOrderGenerator, self).__init__(**kwargs)
+        self._buy_currency = None
 
     def generate_order(self, decision):
         order = None
-        if decision.sell() and self._crypto > 0 and decision.transaction_currency == self._buy_currency:
-            order = self.sell_order(decision=decision, value=self._crypto)
-            self._execute_order(order)
-            assert self._crypto == 0
+        try:
+            if decision.sell() and self._crypto > 0 and decision.transaction_currency == self._buy_currency:
+                order = self.sell_order(decision=decision, value=self._crypto)
+                self._execute_order(order)
+                assert self._crypto == 0
 
-        elif decision.buy() and self._cash > 0:
-            self._buy_currency = decision.transaction_currency
-            order = self.buy_order(decision=decision, value=self._cash)
-            self._execute_order(order)
-            assert self._cash == 0
-        return order
-
+            elif decision.buy() and self._cash > 0:
+                self._buy_currency = decision.transaction_currency
+                order = self.buy_order(decision=decision, value=self._cash)
+                self._execute_order(order)
+                assert self._cash == 0
+            return order
+        except AttributeError:
+            pass
 
 class PositionBasedOrderGenerator(OrderGenerator):
     '''

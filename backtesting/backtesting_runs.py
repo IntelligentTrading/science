@@ -6,9 +6,19 @@ from backtesting_helpers import find_num_cumulative_outperforms
 from data_sources import get_currencies_trading_against_counter
 
 
-def best_performing_signals_of_the_week():
-    start_time = datetime.datetime(2018, 9, 24, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
-    end_time = datetime.datetime(2018, 9, 28, 23, 59, tzinfo=datetime.timezone.utc).timestamp()
+def best_performing_signals_of_the_period(start_time=None, end_time=None, additional_strategies=[],
+                                          best_performing_filename=None, full_report_filename=None,
+                                          group_strategy_variants=False):
+    if start_time is None or end_time is None:
+        start_time = datetime.datetime(2018, 9, 24, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
+        end_time = datetime.datetime(2018, 9, 28, 23, 59, tzinfo=datetime.timezone.utc).timestamp()
+
+    if best_performing_filename is None:
+        best_performing_filename = f"best_performing_{datetime.datetime.utcfromtimestamp(end_time).strftime('%Y-%m-%d')}.xlsx"
+
+    if full_report_filename is None:
+        full_report_filename = f"full_report_{datetime.datetime.utcfromtimestamp(end_time).strftime('%Y-%m-%d')}.xlsx"
+
 
     basic_strategies = StrategyEvaluationSetBuilder.build_from_signal_set(
         buy_signals=['rsi_buy_3', 'rsi_buy_2', 'rsi_cumulat_buy_2', 'rsi_cumulat_buy_3', 'ichi_kumo_up', 'ann_simple_bull'],
@@ -32,7 +42,7 @@ def best_performing_signals_of_the_week():
         num_sell=1,
         signal_combination_mode=SignalCombinationMode.ANY
     )
-    strategies = basic_strategies + vbi_strategies + ann_rsi_strategies
+    strategies = basic_strategies + vbi_strategies + ann_rsi_strategies + additional_strategies
 
     comparison = ComparativeEvaluation(
         strategy_set=strategies,
@@ -43,11 +53,11 @@ def best_performing_signals_of_the_week():
         start_crypto=0,
         start_time=start_time,
         end_time=end_time,
-        output_file=f"best_performing_{datetime.datetime.utcfromtimestamp(end_time).strftime('%Y-%m-%d')}.xlsx",
+        output_file=best_performing_filename,
         debug=False
     )
 
-    comparison.report.all_coins_report(f"full_report_{datetime.datetime.utcfromtimestamp(end_time).strftime('%Y-%m-%d')}.xlsx", group_strategy_variants=False)
+    comparison.report.all_coins_report(full_report_filename, group_strategy_variants=group_strategy_variants)
 
 
 def in_depth_signal_comparison(out_path):
@@ -313,7 +323,7 @@ if __name__ == "__main__":
     # delayed_trading_stats()
 
     # Best performing signals
-    best_performing_signals_of_the_week()
+    best_performing_signals_of_the_period()
 
     #in_depth_signal_comparison('comp_no_ann.xlsx')
 
