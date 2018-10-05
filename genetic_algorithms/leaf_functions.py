@@ -130,14 +130,16 @@ def {function_name}(self, input):
 ''')
         return locals()[f'{function_name}']
 
-    def __str__(self):
-        return("TAproviderCollection")
-
     def get_provider(self, timestamp, transaction_currency, counter_currency):
         for key in self.providers.keys():
             if key.transaction_currency == transaction_currency \
                     and key.counter_currency == counter_currency \
                     and key.end_time >= timestamp >= key.start_time:
                 return self.providers[key]
-        raise Exception(f'No data loaded for {transaction_currency} {counter_currency} at {timestamp}!')
+        raise Exception(f'No data loaded for {transaction_currency} - {counter_currency} at {timestamp}!')
+
+    def __str__(self):
+        return ','.join([f'{key.transaction_currency}-{key.counter_currency}-{key.start_time}-{key.end_time}'
+                         for key in self.providers.keys()])
+
 

@@ -8,7 +8,7 @@ from deap.gp import PrimitiveTree
 from backtesting.signals import Signal
 from backtesting.strategies import SignalStrategy, Strength, TickerStrategy, StrategyDecision
 from chart_plotter import *
-from custom_deap_algorithms import combined_mutation, eaSimpleCustom
+from custom_deap_algorithms import combined_mutation, eaSimpleCustom, harm
 from backtester_ticks import TickDrivenBacktester
 from tick_provider import PriceDataframeTickProvider
 from abc import ABC, abstractmethod
@@ -41,15 +41,12 @@ class Grammar(ABC):
 
 
 class GeneticTickerStrategy(TickerStrategy):
-    def __init__(self, tree, data, gp_object, history_size=HISTORY_SIZE):
-        self.data = data
-        self.transaction_currency = data.transaction_currency
-        self.counter_currency = data.counter_currency
-        self.resample_period = data.resample_period
-        self.strength = Strength.any
-        self.source = data.source
-        self.start_time = data.start_time
-        self.end_time = data.end_time
+    def __init__(self, tree, transaction_currency, counter_currency, resample_period, source,
+                 gp_object, history_size=HISTORY_SIZE):
+        self.transaction_currency = transaction_currency
+        self.counter_currency = counter_currency
+        self.resample_period = resample_period
+        self.source = source
         self.tree = tree
         self.gp_object = gp_object
         self.history_size = history_size
@@ -67,14 +64,13 @@ class GeneticTickerStrategy(TickerStrategy):
         timestamp = price_data.Index
         return self.get_decision(timestamp, price, signals)
 
-
     def get_decision(self, timestamp, price, signals):
         self.i += 1
 
         if self.i <= self.history_size:
             # outcomes.append("skipped")
             return StrategyDecision(timestamp, outcome=StrategyDecision.IGNORE)
-        outcome = self.func([timestamp, self.data.transaction_currency, self.data.counter_currency])
+        outcome = self.func([timestamp, self.transaction_currency, self.counter_currency])
 
         decision = None
         if outcome == self.gp_object.function_provider.buy:
@@ -340,6 +336,9 @@ class GeneticProgram:
         pop, log, best = eaSimpleCustom(pop, self.toolbox, mating_prob, mutation_prob, num_generations, stats=mstats,
                                         halloffame=hof, verbose=True, genetic_program=self)
 
+        #pop, log, best = harm(pop, self.toolbox, mating_prob, mutation_prob, num_generations, stats=mstats,
+        #                                halloffame=hof, verbose=True, genetic_program=self)
+
         if verbose:
             logging.info("Winners in each generation: ")
             for i in range(len(best)):
@@ -392,7 +391,10 @@ class GeneticProgram:
 
         else:
             strategy = GeneticTickerStrategy(tree=individual,
-                                             data=data,
+                                             transaction_currency=data.transaction_currency,
+                                             counter_currency=data.counter_currency,
+                                             source=data.source,
+                                             resample_period=data.resample_period,
                                              gp_object=self,
                                              history_size=self.grammar.longest_function_history_size)
             tick_provider = PriceDataframeTickProvider(data.price_data)

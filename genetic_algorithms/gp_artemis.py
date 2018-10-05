@@ -1,16 +1,19 @@
+import logging
+import json
+import itertools
+import numpy as np
+import pandas as pd
+
 from artemis.experiments import experiment_root
 from gp_data import Data
 from genetic_program import GeneticProgram, FitnessFunction
 from leaf_functions import TAProviderCollection
-import logging
 from grammar import Grammar
-import json
-import itertools
-import numpy as np
 from chart_plotter import *
-import pandas as pd
 from order_generator import OrderGenerator
 from config import INF_CASH, INF_CRYPTO
+from comparative_evaluation import StrategyEvaluationSetBuilder, SignalCombinationMode, ComparativeEvaluation, ComparativeReportBuilder
+from data_sources import get_currencies_trading_against_counter
 
 SAVE_HOF_AND_BEST = True
 HOF_AND_BEST_FILENAME = 'rockstars.txt'
@@ -213,6 +216,73 @@ class ExperimentManager:
         df = df.sort_values(by=sort_by, ascending=False)
         return df
 
+    def produce_report(self, top_n, out_filename):
+        performance_df = self.get_best_performing_across_variants_and_datasets(self.training_data)
+
+        genetic_strategies = []
+
+        # we will evaluate the performance of top n individuals
+        for i in range(top_n):
+            individual = performance_df.iloc[i].individual
+            genetic_strategies.append(individual)
+
+
+        vbi_strategies = StrategyEvaluationSetBuilder.build_from_signal_set(
+            buy_signals=['vbi_buy'],
+            sell_signals=['rsi_sell_1', 'rsi_sell_2', 'rsi_sell_3'],
+            num_buy=1,
+            num_sell=1,
+            signal_combination_mode=SignalCombinationMode.ANY
+        )
+
+        start_cash = self.training_data[0].start_cash
+        start_crypto = self.training_data[0].start_crypto
+        start_time = self.training_data[0].start_time + 200 # TODO! self.grammar.longest_function_history_size()
+        end_time = self.training_data[0].end_time
+        source = 0
+        resample_period=60
+        counter_currency = 'USDT'
+
+        logging.info('Running baseline evaluations')
+        comp = ComparativeEvaluation(vbi_strategies, counter_currencies=[counter_currency], resample_periods=['60'],
+                                     sources=[source], start_cash=start_cash, start_crypto=start_crypto,
+                                     start_time=start_time, end_time=end_time, debug=False)
+
+        transaction_currencies = get_currencies_trading_against_counter(counter_currency, source)
+        genetic_backtests = []
+
+        logging.info('Running genetic backtests')
+        data_collection = []
+
+        for transaction_currency in transaction_currencies:
+            try:
+                data = Data(
+                    start_time=self.training_data[0].start_time,
+                    end_time=end_time,
+                    transaction_currency=transaction_currency,
+                    counter_currency=counter_currency,
+                    resample_period=resample_period,
+                    source=source,
+                    start_cash=start_cash,
+                    start_crypto=start_crypto
+                )
+                data_collection.append(data)
+            except: # in case of missing data
+                logging.error(f'Unable to load data for {transaction_currency}-{counter_currency}, skipping...')
+
+        # build a new TAProvider based on the loaded data
+        ta_provider = TAProviderCollection(data_collection)
+
+        # do genetic program backtesting on the new data
+        for data in data_collection:
+            for i in range(top_n):
+                row = performance_df.iloc[i]
+                genetic_backtests.append(self._build_evaluation_object(row.individual, row.variant, data,
+                                                                       function_provider=ta_provider))
+        genetic_baselines = [x.benchmark_backtest for x in genetic_backtests]
+        report = ComparativeReportBuilder(comp.backtests + genetic_backtests, comp.baselines + genetic_baselines)
+        report.all_coins_report(out_filename, group_strategy_variants=False)
+
 
     def get_performance_df_for_dataset_and_variant(self, variant, data):
         """
@@ -310,16 +380,18 @@ class ExperimentManager:
     def get_db_record(self, variant):
         return self.experiment_db[variant.name[len("run_evolution."):]]
 
-    def _build_genetic_program(self, variant, data):
+    def _build_genetic_program(self, variant, data, function_provider=None):
+        if function_provider is None:
+            function_provider = self.function_provider
         db_record = self.get_db_record(variant)
         grammar = Grammar.construct(
             grammar_name=db_record['grammar_version'],
-            function_provider=self.function_provider,
+            function_provider=function_provider,
             ephemeral_suffix=db_record['experiment_id']
         )
         genetic_program = GeneticProgram(
             data_collection=data,
-            function_provider=self.function_provider,
+            function_provider=function_provider,
             grammar=grammar,
             fitness_function=db_record['fitness_function'],
             tree_depth=db_record['tree_depth'],
@@ -328,8 +400,10 @@ class ExperimentManager:
         )
         return genetic_program
 
-    def _build_evaluation_object(self, individual, variant, data):
-        genetic_program = self._build_genetic_program(variant, data)
+    def _build_evaluation_object(self, individual, variant, data, function_provider=None):
+        genetic_program = self._build_genetic_program(variant, data, function_provider)
+        if function_provider is not None: # rebuild individual with the new data
+            individual = genetic_program.individual_from_string(str(individual))
         return genetic_program.build_evaluation_object(individual, data)
 
     def _get_fitness(self, individual, variant, data):
@@ -361,11 +435,6 @@ class ExperimentManager:
             return individuals
         else:
             return individuals[:min(len(individuals), limit_top)]
-
-
-
-
-
 
 
 class ExperimentDB:
@@ -435,6 +504,7 @@ class ExperimentDB:
 if __name__ == "__main__":
     e = ExperimentManager("position_experiment.json")
     e.run_experiments()
+    e.produce_report(1, 'gp_backtesting.xlsx')
     performance_dfs = e.get_joined_performance_dfs_over_all_variants()
     e.performance_df_row_info(performance_dfs[0].iloc[0])
     #e.explore_records()
