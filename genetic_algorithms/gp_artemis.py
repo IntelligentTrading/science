@@ -14,7 +14,7 @@ from order_generator import OrderGenerator
 from config import INF_CASH, INF_CRYPTO
 from comparative_evaluation import StrategyEvaluationSetBuilder, SignalCombinationMode, ComparativeEvaluation, ComparativeReportBuilder
 from data_sources import get_currencies_trading_against_counter
-
+from backtesting_runs import build_itf_baseline_strategies
 SAVE_HOF_AND_BEST = True
 HOF_AND_BEST_FILENAME = 'rockstars.txt'
 LOAD_ROCKSTARS = True
@@ -226,14 +226,8 @@ class ExperimentManager:
             individual = performance_df.iloc[i].individual
             genetic_strategies.append(individual)
 
-
-        vbi_strategies = StrategyEvaluationSetBuilder.build_from_signal_set(
-            buy_signals=['vbi_buy'],
-            sell_signals=['rsi_sell_1', 'rsi_sell_2', 'rsi_sell_3'],
-            num_buy=1,
-            num_sell=1,
-            signal_combination_mode=SignalCombinationMode.ANY
-        )
+        ann_rsi_strategies, basic_strategies, vbi_strategies = build_itf_baseline_strategies()
+        strategies = ann_rsi_strategies + basic_strategies + vbi_strategies
 
         start_cash = self.training_data[0].start_cash
         start_crypto = self.training_data[0].start_crypto
@@ -244,7 +238,7 @@ class ExperimentManager:
         counter_currency = 'USDT'
 
         logging.info('Running baseline evaluations')
-        comp = ComparativeEvaluation(vbi_strategies, counter_currencies=[counter_currency], resample_periods=['60'],
+        comp = ComparativeEvaluation(strategies, counter_currencies=[counter_currency], resample_periods=['60'],
                                      sources=[source], start_cash=start_cash, start_crypto=start_crypto,
                                      start_time=start_time, end_time=end_time, debug=False)
 
