@@ -19,29 +19,7 @@ def best_performing_signals_of_the_period(start_time=None, end_time=None, additi
     if full_report_filename is None:
         full_report_filename = f"full_report_{datetime.datetime.utcfromtimestamp(end_time).strftime('%Y-%m-%d')}.xlsx"
 
-
-    basic_strategies = StrategyEvaluationSetBuilder.build_from_signal_set(
-        buy_signals=['rsi_buy_3', 'rsi_buy_2', 'rsi_cumulat_buy_2', 'rsi_cumulat_buy_3', 'ichi_kumo_up', 'ann_simple_bull'],
-        sell_signals=['rsi_sell_3', 'rsi_sell_2', 'rsi_cumulat_sell_2', 'rsi_cumulat_sell_3', 'ichi_kumo_down', 'ann_simple_bear'],
-        num_buy=2,
-        num_sell=2,
-        signal_combination_mode=SignalCombinationMode.SAME_TYPE)
-
-    vbi_strategies = StrategyEvaluationSetBuilder.build_from_signal_set(
-        buy_signals=['vbi_buy'],
-        sell_signals=['rsi_sell_1', 'rsi_sell_2', 'rsi_sell_3'],
-        num_buy=1,
-        num_sell=1,
-        signal_combination_mode=SignalCombinationMode.ANY
-    )
-
-    ann_rsi_strategies = StrategyEvaluationSetBuilder.build_from_signal_set(
-        buy_signals=['rsi_buy_1', 'rsi_buy_2', 'rsi_buy_3'],
-        sell_signals=["ann_simple_bear"],
-        num_buy=1,
-        num_sell=1,
-        signal_combination_mode=SignalCombinationMode.ANY
-    )
+    ann_rsi_strategies, basic_strategies, vbi_strategies = build_itf_baseline_strategies()
     strategies = basic_strategies + vbi_strategies + ann_rsi_strategies + additional_strategies
 
     comparison = ComparativeEvaluation(
@@ -58,6 +36,32 @@ def best_performing_signals_of_the_period(start_time=None, end_time=None, additi
     )
 
     comparison.report.all_coins_report(full_report_filename, group_strategy_variants=group_strategy_variants)
+
+
+def build_itf_baseline_strategies():
+    basic_strategies = StrategyEvaluationSetBuilder.build_from_signal_set(
+        buy_signals=['rsi_buy_3', 'rsi_buy_2', 'rsi_cumulat_buy_2', 'rsi_cumulat_buy_3', 'ichi_kumo_up',
+                     'ann_simple_bull'],
+        sell_signals=['rsi_sell_3', 'rsi_sell_2', 'rsi_cumulat_sell_2', 'rsi_cumulat_sell_3', 'ichi_kumo_down',
+                      'ann_simple_bear'],
+        num_buy=2,
+        num_sell=2,
+        signal_combination_mode=SignalCombinationMode.SAME_TYPE)
+    vbi_strategies = StrategyEvaluationSetBuilder.build_from_signal_set(
+        buy_signals=['vbi_buy'],
+        sell_signals=['rsi_sell_1', 'rsi_sell_2', 'rsi_sell_3'],
+        num_buy=1,
+        num_sell=1,
+        signal_combination_mode=SignalCombinationMode.ANY
+    )
+    ann_rsi_strategies = StrategyEvaluationSetBuilder.build_from_signal_set(
+        buy_signals=['rsi_buy_1', 'rsi_buy_2', 'rsi_buy_3'],
+        sell_signals=["ann_simple_bear"],
+        num_buy=1,
+        num_sell=1,
+        signal_combination_mode=SignalCombinationMode.ANY
+    )
+    return ann_rsi_strategies, basic_strategies, vbi_strategies
 
 
 def in_depth_signal_comparison(out_path):
