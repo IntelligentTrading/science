@@ -5,7 +5,7 @@ import logging
 from dateutil import parser
 from tick_provider import PriceDataframeTickProvider
 from backtester_ticks import TickDrivenBacktester
-from data_sources import get_resampled_prices_in_range
+from data_sources import get_resampled_prices_in_range, get_timestamp_n_ticks_earlier
 from charting import time_series_chart
 
 
@@ -14,6 +14,8 @@ from charting import time_series_chart
 # determined by the longest_function_history_size parameter of the used grammar
 strategy_logger = logging.getLogger("strategies")
 strategy_logger.setLevel(logging.ERROR)
+
+TICKS_FOR_PRECOMPUTE = 200
 
 
 class Data:
@@ -35,8 +37,11 @@ class Data:
         self.start_crypto = start_crypto
         self.source = source
 
+        self.precalc_start_time = get_timestamp_n_ticks_earlier(self.start_time, TICKS_FOR_PRECOMPUTE, transaction_currency,
+                                                                counter_currency, source, resample_period)
+
         self.price_data = get_resampled_prices_in_range\
-            (self.start_time, self.end_time, transaction_currency, counter_currency, resample_period)
+            (self.precalc_start_time, self.end_time, transaction_currency, counter_currency, resample_period)
 
         self.price_data = self.price_data[~self.price_data.index.duplicated(keep='first')]
 
@@ -53,18 +58,23 @@ class Data:
                             f"the set end time!")
 
         prices = np.array(self.price_data.close_price, dtype=float)
-        self.rsi_data = talib.RSI(prices, timeperiod=14)
-        self.sma20_data = talib.SMA(prices, timeperiod=20)
-        self.ema20_data = talib.EMA(prices, timeperiod=20)
-        self.sma50_data = talib.SMA(prices, timeperiod=50)
-        self.ema50_data = talib.EMA(prices, timeperiod=50)
-        self.sma200_data = talib.SMA(prices, timeperiod=200)
-        self.ema200_data = talib.EMA(prices, timeperiod=200)
+        self.rsi_data = talib.RSI(prices, timeperiod=14)[TICKS_FOR_PRECOMPUTE:]
+        self.sma20_data = talib.SMA(prices, timeperiod=20)[TICKS_FOR_PRECOMPUTE:]
+        self.ema20_data = talib.EMA(prices, timeperiod=20)[TICKS_FOR_PRECOMPUTE:]
+        self.sma50_data = talib.SMA(prices, timeperiod=50)[TICKS_FOR_PRECOMPUTE:]
+        self.ema50_data = talib.EMA(prices, timeperiod=50)[TICKS_FOR_PRECOMPUTE:]
+        self.sma200_data = talib.SMA(prices, timeperiod=200)[TICKS_FOR_PRECOMPUTE:]
+        self.ema200_data = talib.EMA(prices, timeperiod=200)[TICKS_FOR_PRECOMPUTE:]
         self.macd, self.macd_signal, self.macd_hist = talib.MACD(
             prices, fastperiod=12, slowperiod=26, signalperiod=9)
+        self.macd = self.macd[TICKS_FOR_PRECOMPUTE:]
+        self.macd_signal = self.macd_signal[TICKS_FOR_PRECOMPUTE:]
+        self.macd_hist = self.macd_hist[TICKS_FOR_PRECOMPUTE:]
         self.adx = talib.ADX(np.array(self.price_data.high_price, dtype=float),
                              np.array(self.price_data.low_price, dtype=float),
-                             np.array(self.price_data.close_price, dtype=float))
+                             np.array(self.price_data.close_price, dtype=float))[TICKS_FOR_PRECOMPUTE:]
+
+        self.price_data = self.price_data.iloc[TICKS_FOR_PRECOMPUTE:]
         self.prices = self.price_data.as_matrix(columns=["close_price"])
         self.timestamps = pd.to_datetime(self.price_data.index.values, unit='s')
         assert len(self.prices) == len(self.timestamps)

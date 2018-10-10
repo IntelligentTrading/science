@@ -12,9 +12,11 @@ from grammar import Grammar
 from chart_plotter import *
 from order_generator import OrderGenerator
 from config import INF_CASH, INF_CRYPTO
-from comparative_evaluation import StrategyEvaluationSetBuilder, SignalCombinationMode, ComparativeEvaluation, ComparativeReportBuilder
+from comparative_evaluation import ComparativeEvaluation, ComparativeReportBuilder
 from data_sources import get_currencies_trading_against_counter
 from backtesting_runs import build_itf_baseline_strategies
+from data_sources import NoPriceDataException
+
 SAVE_HOF_AND_BEST = True
 HOF_AND_BEST_FILENAME = 'rockstars.txt'
 LOAD_ROCKSTARS = True
@@ -216,7 +218,8 @@ class ExperimentManager:
         df = df.sort_values(by=sort_by, ascending=False)
         return df
 
-    def produce_report(self, top_n, out_filename):
+    def produce_report(self, top_n, out_filename, start_time, end_time, counter_currency,
+                       sources=[0], resample_periods=[60], start_cash=1000, start_crypto=0):
         performance_df = self.get_best_performing_across_variants_and_datasets(self.training_data)
 
         genetic_strategies = []
@@ -229,51 +232,94 @@ class ExperimentManager:
         ann_rsi_strategies, basic_strategies, vbi_strategies = build_itf_baseline_strategies()
         strategies = ann_rsi_strategies + basic_strategies + vbi_strategies
 
-        start_cash = self.training_data[0].start_cash
-        start_crypto = self.training_data[0].start_crypto
-        start_time = self.training_data[0].start_time + 200 # TODO! self.grammar.longest_function_history_size()
-        end_time = self.training_data[0].end_time
-        source = 0
-        resample_period=60
-        counter_currency = 'USDT'
 
         logging.info('Running baseline evaluations')
-        comp = ComparativeEvaluation(strategies, counter_currencies=[counter_currency], resample_periods=['60'],
-                                     sources=[source], start_cash=start_cash, start_crypto=start_crypto,
-                                     start_time=start_time, end_time=end_time, debug=False)
 
-        transaction_currencies = get_currencies_trading_against_counter(counter_currency, source)
         genetic_backtests = []
+        genetic_baselines = []
 
-        logging.info('Running genetic backtests')
-        data_collection = []
+        for (source, resample_period) in itertools.product(sources, resample_periods):
+            transaction_currencies = get_currencies_trading_against_counter(counter_currency, source)
 
-        for transaction_currency in transaction_currencies:
-            try:
-                data = Data(
-                    start_time=self.training_data[0].start_time,
-                    end_time=end_time,
-                    transaction_currency=transaction_currency,
-                    counter_currency=counter_currency,
-                    resample_period=resample_period,
-                    source=source,
-                    start_cash=start_cash,
-                    start_crypto=start_crypto
-                )
-                data_collection.append(data)
-            except: # in case of missing data
-                logging.error(f'Unable to load data for {transaction_currency}-{counter_currency}, skipping...')
+            logging.info(f'Running genetic backtests for source {source}, resample period {resample_period}')
+            data_collection = []
 
-        # build a new TAProvider based on the loaded data
-        ta_provider = TAProviderCollection(data_collection)
+            for transaction_currency in transaction_currencies:
+                try:
+                    data = Data(
+                        start_time=start_time,
+                        end_time=end_time,
+                        transaction_currency=transaction_currency,
+                        counter_currency=counter_currency,
+                        resample_period=resample_period,
+                        source=source,
+                        start_cash=start_cash,
+                        start_crypto=start_crypto
+                    )
+                    data_collection.append(data)
+                except Exception as e: # in case of missing data
+                    logging.error(f'Unable to load data for {transaction_currency}-{counter_currency}, skipping...')
+                    logging.error(str(e))
 
-        # do genetic program backtesting on the new data
-        for data in data_collection:
-            for i in range(top_n):
-                row = performance_df.iloc[i]
-                genetic_backtests.append(self._build_evaluation_object(row.individual, row.variant, data,
-                                                                       function_provider=ta_provider))
-        genetic_baselines = [x.benchmark_backtest for x in genetic_backtests]
+            # build a new TAProvider based on the loaded data
+            ta_provider = TAProviderCollection(data_collection)
+
+            # do genetic program backtesting on the new data
+            for data in data_collection:
+                for i in range(top_n):
+                    row = performance_df.iloc[i]
+                    try:
+                        evaluation = self._build_evaluation_object(row.individual, row.variant, data, function_provider=ta_provider)
+
+                        """
+                        from backtester_ticks import TickDrivenBacktester
+                        from tick_provider import PriceDataframeTickProvider
+                        
+
+                        from strategies import BuyAndHoldTimebasedStrategy
+                        from backtester_signals import SignalDrivenBacktester
+
+                        
+                        baseline = BuyAndHoldTimebasedStrategy(start_time, end_time, data.transaction_currency,
+                                                               data.counter_currency, data.source)
+                        baseline_evaluation = SignalDrivenBacktester(strategy=baseline,
+                            transaction_currency=data.transaction_currency,
+                            counter_currency=data.counter_currency,
+                            start_cash=start_cash,
+                            start_crypto=start_crypto,
+                            start_time=start_time,
+                            end_time=end_time,
+                            source=source,)
+
+                        # evaluation.benchmark_backtest = benchmark
+                        """
+
+                        genetic_backtests.append(evaluation)
+                        genetic_baselines.append(evaluation.benchmark_backtest)
+
+                    except NoPriceDataException as e:
+                        print(e)
+
+                    """
+                    benchmark = TickDrivenBacktester.build_benchmark(
+                        transaction_currency=data.transaction_currency,
+                        counter_currency=data.counter_currency,
+                        start_cash=start_cash,
+                        start_crypto=start_crypto,
+                        start_time=start_time,
+                        end_time=end_time,
+                        source=source,
+                        tick_provider=PriceDataframeTickProvider(data.price_data)
+                    )
+                    """
+
+        comp = ComparativeEvaluation(strategies, counter_currencies=[counter_currency],
+                                     resample_periods=resample_periods,
+                                     sources=sources, start_cash=start_cash, start_crypto=start_crypto,
+                                     #start_time=evaluation.benchmark_backtest._start_time, end_time=evaluation.benchmark_backtest._end_time, debug=False)
+                                     start_time=start_time, end_time=end_time, debug = False)
+
+
         report = ComparativeReportBuilder(comp.backtests + genetic_backtests, comp.baselines + genetic_baselines)
         report.all_coins_report(out_filename, group_strategy_variants=False)
 
@@ -496,7 +542,18 @@ class ExperimentDB:
 ####################################
 
 if __name__ == "__main__":
-    e = ExperimentManager("position_experiment.json")
+    e = ExperimentManager("gv4_experiments.json")
+
+    import datetime
+    start_time = datetime.datetime(2018, 4, 1, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
+    end_time = datetime.datetime(2018, 6, 1, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
+    e.produce_report(5, 'gp_backtesting_BTC_train.xlsx', start_time, end_time, 'BTC')
+
+    #start_time = datetime.datetime(2018, 6, 1, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
+    #end_time = datetime.datetime(2018, 8, 1, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
+    #e.produce_report(5, 'gp_backtesting_USDT_6_res60_2.xlsx', start_time, end_time, 'USDT')
+    #e.produce_report(5, 'gp_backtesting_BTC_6_res60_2.xlsx', start_time, end_time, 'BTC')
+
     e.run_experiments()
     e.produce_report(1, 'gp_backtesting.xlsx')
     performance_dfs = e.get_joined_performance_dfs_over_all_variants()

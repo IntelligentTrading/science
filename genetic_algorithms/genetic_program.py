@@ -42,14 +42,13 @@ class Grammar(ABC):
 
 class GeneticTickerStrategy(TickerStrategy):
     def __init__(self, tree, transaction_currency, counter_currency, resample_period, source,
-                 gp_object, history_size=HISTORY_SIZE):
+                 gp_object):
         self.transaction_currency = transaction_currency
         self.counter_currency = counter_currency
         self.resample_period = resample_period
         self.source = source
         self.tree = tree
         self.gp_object = gp_object
-        self.history_size = history_size
         self.i = 0
         self.func = self.gp_object.toolbox.compile(expr=self.tree)
 
@@ -65,11 +64,7 @@ class GeneticTickerStrategy(TickerStrategy):
         return self.get_decision(timestamp, price, signals)
 
     def get_decision(self, timestamp, price, signals):
-        self.i += 1
 
-        if self.i <= self.history_size:
-            # outcomes.append("skipped")
-            return StrategyDecision(timestamp, outcome=StrategyDecision.IGNORE)
         outcome = self.func([timestamp, self.transaction_currency, self.counter_currency])
 
         decision = None
@@ -405,6 +400,8 @@ class GeneticProgram:
                 strategy=strategy,
                 transaction_currency=data.transaction_currency,
                 counter_currency=data.counter_currency,
+                source=data.source,
+                resample_period=data.resample_period,
                 start_cash=data.start_cash,
                 start_crypto=data.start_crypto,
                 start_time=data.start_time,

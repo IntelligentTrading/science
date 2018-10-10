@@ -4,6 +4,7 @@ from tick_provider_itf_db import TickProviderITFDB
 from config import INF_CASH, INF_CRYPTO
 from strategies import BuyAndHoldTimebasedStrategy
 from order_generator import OrderGenerator
+from utils import datetime_from_timestamp
 
 
 class TickDrivenBacktester(Evaluation, TickListener):
@@ -25,15 +26,11 @@ class TickDrivenBacktester(Evaluation, TickListener):
         # the provider will call the broadcast_ended() method when no ticks remain
 
     def process_event(self, price_data, signals_now):
-        # self._current_timestamp = price_data['timestamp']
-        # self._current_price = price_data['close_price'].item()
+        if price_data.Index < self._start_time or price_data.Index > self._end_time:
+            return
 
-        # price = row.close_price
         self._current_timestamp = price_data.Index
         self._current_price = price_data.close_price
-
-        # self._current_timestamp = signals_now
-        # self._current_price = price_data
 
         decision = self._strategy.get_decision(self._current_timestamp, self._current_price, signals_now)
         order = self._order_generator.generate_order(decision)
