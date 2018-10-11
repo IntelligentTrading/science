@@ -95,18 +95,14 @@ class Data:
     def __str__(self):
         return f"{self.transaction_currency}-{self.counter_currency}-{int(self.start_time)}-{int(self.end_time)}"
 
-    def build_buy_and_hold_benchmark(self, num_ticks_to_skip):
-
-        # need to skip first num_ticks_to_skip, as strategies don't generate signals before all
-        # the historical data is available to them
-        benchmark_start_time = self.price_data.iloc[num_ticks_to_skip].name
+    def build_buy_and_hold_benchmark(self):
 
         benchmark = TickDrivenBacktester.build_benchmark(
             transaction_currency=self.transaction_currency,
             counter_currency=self.counter_currency,
             start_cash=self.start_cash,
             start_crypto=self.start_crypto,
-            start_time=benchmark_start_time,
+            start_time=self.start_time,
             end_time=self.end_time,
             source=self.source,
             tick_provider=PriceDataframeTickProvider(self.price_data)

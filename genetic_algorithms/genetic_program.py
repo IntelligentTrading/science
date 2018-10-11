@@ -390,8 +390,7 @@ class GeneticProgram:
                                              counter_currency=data.counter_currency,
                                              source=data.source,
                                              resample_period=data.resample_period,
-                                             gp_object=self,
-                                             history_size=self.grammar.longest_function_history_size)
+                                             gp_object=self)
             tick_provider = PriceDataframeTickProvider(data.price_data)
 
             # create a new tick based backtester
@@ -406,9 +405,7 @@ class GeneticProgram:
                 start_crypto=data.start_crypto,
                 start_time=data.start_time,
                 end_time=data.end_time,
-                benchmark_backtest=data.build_buy_and_hold_benchmark(
-                    num_ticks_to_skip=self.grammar.longest_function_history_size
-                ),
+                benchmark_backtest=data.build_buy_and_hold_benchmark(),
                 time_delay=0,
                 slippage=0,
                 verbose=False,

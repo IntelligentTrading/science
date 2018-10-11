@@ -16,10 +16,16 @@ from comparative_evaluation import ComparativeEvaluation, ComparativeReportBuild
 from data_sources import get_currencies_trading_against_counter
 from backtesting_runs import build_itf_baseline_strategies
 from data_sources import NoPriceDataException
+from utils import time_performance
+from functools import partial
 
 SAVE_HOF_AND_BEST = True
 HOF_AND_BEST_FILENAME = 'rockstars.txt'
 LOAD_ROCKSTARS = True
+
+
+
+
 
 @experiment_root
 def run_evolution(experiment_id, data, function_provider, grammar_version, fitness_function, mating_prob,
@@ -106,6 +112,29 @@ class ExperimentManager:
     def get_variants(self):
         return run_evolution.get_variants()
 
+    @staticmethod
+    def run_variant(variant, keep_record, display_results, rerun_existing, saved_figure_ext):
+        if len(variant.get_records(only_completed=True)) > 0 and not rerun_existing:
+            logging.info(f">>> Variant {variant.name} already has completed records, skipping...")
+            return
+
+        return variant.run(keep_record=keep_record, display_results=display_results, saved_figure_ext=saved_figure_ext)
+
+    @time_performance
+    def run_parallel_experiments(self, num_processes=8, rerun_existing=False, display_results=True):
+        from pathos.multiprocessing import ProcessingPool as Pool
+
+        partial_run_func = partial(ExperimentManager.run_variant, keep_record=True, display_results=display_results,
+                           rerun_existing=rerun_existing, saved_figure_ext='.fig.png')
+
+        with Pool(num_processes) as pool:
+            records = pool.map(partial_run_func, self.variants)
+
+        for record in records:
+            self._save_rockstars(record)
+
+
+    @time_performance
     def run_experiments(self, rerun_existing=False, display_results=True):
         for i, variant in enumerate(self.variants):
             if len(variant.get_records(only_completed=True)) > 0 and not rerun_existing:
@@ -114,19 +143,22 @@ class ExperimentManager:
 
             logging.info(f"Running variant {i}")
             record = variant.run(keep_record=True, display_results=display_results, saved_figure_ext='.fig.png')
-            if SAVE_HOF_AND_BEST:
-                hof, best = record.get_result()
-                fitness_function = record.get_args()['fitness_function']
-                grammar_version = record.get_args()['grammar_version']
-                with open(HOF_AND_BEST_FILENAME, 'a') as f:
-                    f.write(
-                        f'hof:{variant.name}:{grammar_version}:{fitness_function._name}:'
-                        f'{"&".join([str(i) + "/" + str(i.fitness.values[0]) for i in hof])}\n'
-                    )
-                    f.write(
-                        f'gen_best:{variant.name}:{grammar_version}:{fitness_function._name}:'
-                        f'{"&".join([str(i) + "/" + str(i.fitness.values[0]) for i in best])}\n'
-                    )
+            self._save_rockstars(record)
+
+    def _save_rockstars(self, record):
+        if SAVE_HOF_AND_BEST:
+            hof, best = record.get_result()
+            fitness_function = record.get_args()['fitness_function']
+            grammar_version = record.get_args()['grammar_version']
+            with open(HOF_AND_BEST_FILENAME, 'a') as f:
+                f.write(
+                    f'hof:{record.get_experiment_id()}:{grammar_version}:{fitness_function._name}:'
+                    f'{"&".join([str(i) + "/" + str(i.fitness.values[0]) for i in hof])}\n'
+                )
+                f.write(
+                    f'gen_best:{record.get_experiment_id()}:{grammar_version}:{fitness_function._name}:'
+                    f'{"&".join([str(i) + "/" + str(i.fitness.values[0]) for i in best])}\n'
+                )
 
     def explore_records(self, use_validation_data=True):
         if use_validation_data:
@@ -541,20 +573,33 @@ class ExperimentDB:
 #
 ####################################
 
+e = ExperimentManager("parallel_test.json")
+
 if __name__ == "__main__":
-    e = ExperimentManager("gv4_experiments.json")
+
 
     import datetime
-    start_time = datetime.datetime(2018, 4, 1, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
+    start_time = datetime.datetime(2018, 4, 9, 14, 0, tzinfo=datetime.timezone.utc).timestamp()
     end_time = datetime.datetime(2018, 6, 1, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
-    e.produce_report(5, 'gp_backtesting_BTC_train.xlsx', start_time, end_time, 'BTC')
+    #e.produce_report(5, 'gp_backtesting_BTC_train.xlsx', start_time, end_time, 'BTC')
+
+
 
     #start_time = datetime.datetime(2018, 6, 1, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
     #end_time = datetime.datetime(2018, 8, 1, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
     #e.produce_report(5, 'gp_backtesting_USDT_6_res60_2.xlsx', start_time, end_time, 'USDT')
     #e.produce_report(5, 'gp_backtesting_BTC_6_res60_2.xlsx', start_time, end_time, 'BTC')
+    from utils import time_performance
+
 
     e.run_experiments()
+    #e.run_parallel_experiments()
+    #from pathos.multiprocessing import ProcessingPool as Pool
+
+    #with Pool(1) as pool:
+    #    print(pool.map(run_variant, e.variants))
+
+    exit(0)
     e.produce_report(1, 'gp_backtesting.xlsx')
     performance_dfs = e.get_joined_performance_dfs_over_all_variants()
     e.performance_df_row_info(performance_dfs[0].iloc[0])
