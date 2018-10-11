@@ -8,8 +8,10 @@ mysql_database_config = {
   'raise_on_warnings': True,
 }
 '''
+import redis
 
-postgres_connection_string = "host='localhost' dbname='itf_09_30' user='postgres' password='itfscience'"
+postgres_connection_string = "host='localhost' dbname='itf_10_08' user='postgres' password='itfscience'"
+
 
 backtesting_cols_to_names = {
     "strategy": "Strategy",
@@ -45,3 +47,9 @@ COINMARKETCAP_TOP_20_ALTS = "ETH,XRP,BCH,EOS,XLM,LTC,ADA,MIOTA,XMR,TRX,DASH,ETC,
 
 INF_CASH = 100000000000
 INF_CRYPTO = 100000000000
+
+ENABLE_REDIS_CACHE = False
+if ENABLE_REDIS_CACHE:
+    redis_instance = redis.Redis(host='localhost', port=6379, db=0)
+else:
+    redis_instance = None

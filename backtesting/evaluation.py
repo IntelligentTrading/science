@@ -19,10 +19,33 @@ pd.options.mode.chained_assignment = None
 
 
 class Evaluation(ABC):
+
+    @staticmethod
+    def redis_key_f(**kwargs):
+        return (
+            str(kwargs['strategy']),
+            kwargs['transaction_currency'],
+            kwargs['counter_currency'],
+            kwargs['start_cash'],
+            kwargs['start_crypto'],
+            kwargs['start_time'],
+            kwargs['end_time'],
+            kwargs['source'],
+            kwargs['resample_period'],
+#            kwargs['evaluate_profit_on_last_order'],
+#            kwargs['transaction_cost_percent'],
+#            kwargs['benchmark_backtest'].redis_key if kwargs['benchmark_backtest'] is not None else None,
+#            kwargs['time_delay'],
+#            kwargs['slippage'],
+#            kwargs['order_generator_type']
+        )
+
+
     def __init__(self, strategy, transaction_currency, counter_currency,
                  start_cash, start_crypto, start_time, end_time, source=0,
                  resample_period=60, evaluate_profit_on_last_order=True, verbose=True,
                  benchmark_backtest=None, time_delay=0, slippage=0, order_generator=OrderGenerator.ALTERNATING):
+
         self._strategy = strategy
         self._transaction_currency = transaction_currency
         self._counter_currency = counter_currency
@@ -38,6 +61,7 @@ class Evaluation(ABC):
         self._benchmark_backtest = benchmark_backtest
         self._time_delay = time_delay
         self._slippage = slippage
+        self._order_generator_type = order_generator
 
         if order_generator == OrderGenerator.POSITION_BASED and not \
             (start_cash == INF_CASH and start_crypto == INF_CRYPTO):
@@ -59,6 +83,26 @@ class Evaluation(ABC):
         # Init backtesting variables
         self._init_backtesting(start_cash, start_crypto)
         #self.trading_df = pd.DataFrame(columns=['close_price', 'signal', 'order', 'cash', 'crypto', 'total_value'])
+
+    @property
+    def redis_key(self):
+        return (
+            str(self._strategy),
+            self._transaction_currency,
+            self._counter_currency,
+            self._start_cash,
+            self._start_crypto,
+            self._start_time,
+            self._end_time,
+            self._source,
+            self._resample_period,
+            self._evaluate_profit_on_last_order,
+            self._transaction_cost_percent,
+            self._benchmark_backtest.redis_key if self._benchmark_backtest is not None else None,
+            self._time_delay,
+            self._slippage,
+            self._order_generator_type
+        )
 
 
     def _reevaluate_inf_bank(self):
@@ -387,6 +431,11 @@ class Evaluation(ABC):
             logging.info(self.get_report())
             # logging.info(self.trading_df)
             # self.plot_portfolio()
+
+ #       if ENABLE_REDIS_CACHE:
+ #           if not r.exists(self.redis_key):
+ #               pickled_object = pickle.dumps(self)
+ #               r.set(self.redis_key, pickled_object)
 
     def _fill_returns(self, df):
         df['return_from_initial_investment'] = (df['total_value'] - self.start_value) / self.start_value

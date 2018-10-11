@@ -1,13 +1,51 @@
 from evaluation import Evaluation
 from tick_listener import TickListener
 from tick_provider_itf_db import TickProviderITFDB
-from config import INF_CASH, INF_CRYPTO
+from config import INF_CASH, INF_CRYPTO, redis_instance, ENABLE_REDIS_CACHE
 from strategies import BuyAndHoldTimebasedStrategy
 from order_generator import OrderGenerator
 from utils import datetime_from_timestamp
+import cloudpickle
 
 
+class memoize(object):
+    def __init__(self, cls):
+        self.cls = cls
+        self.__dict__.update(cls.__dict__)
+
+        # This bit allows staticmethods to work as you would expect.
+        for attr, val in cls.__dict__.items():
+            if type(val) is staticmethod:
+                self.__dict__[attr] = val.__func__
+
+    def __call__(self, *args, **kwargs):
+        if not ENABLE_REDIS_CACHE:
+            return self.cls(*args, **kwargs)
+
+        key = Evaluation.redis_key_f(**kwargs)
+        if redis_instance.exists(key):
+            print("::::::::::::::::::::::: Returning cached value!!")
+        if not redis_instance.exists(key):
+            evaluation = self.cls(*args, **kwargs)
+            #instance._benchmark_backtest = None
+            redis_instance.set(key, cloudpickle.dumps(evaluation))
+            #data[key] = instance
+        return cloudpickle.loads(redis_instance.get(key))
+
+@memoize
 class TickDrivenBacktester(Evaluation, TickListener):
+
+    """
+    def __new__(cls, *args, **kwargs):
+        if ENABLE_REDIS_CACHE:
+            key = Evaluation.redis_key_f(**kwargs)
+            if r.exists(key):
+                print(f"Experiment {key} found in Redis cache, loading...")
+                return pickle.loads(r.get(key))
+        else:
+            evaluation = super(TickDrivenBacktester, cls).__new__(cls)
+            return evaluation
+    """
 
     def __init__(self, tick_provider, **kwargs):
         super().__init__(**kwargs)
