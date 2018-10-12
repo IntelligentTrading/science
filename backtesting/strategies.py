@@ -300,10 +300,15 @@ class BuyAndHoldTimebasedStrategy(SignalStrategy):
                                     )
 
     def get_short_summary(self):
-        return "Buy & hold"
+        return str(self)
 
     def belongs_to_this_strategy(self, signal):
         return False
+
+    def __str__(self):
+        return f"Buy&hold, start_time={self._start_time}, end_time={self._end_time}, " \
+               f"transaction_currency={self._transaction_currency}, " \
+               f"counter_currency={self._counter_currency}, source={self._source}"
 
 
 class TickerStrategy(Strategy):

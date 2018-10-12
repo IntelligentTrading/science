@@ -21,9 +21,9 @@ pd.options.mode.chained_assignment = None
 class Evaluation(ABC):
 
     @staticmethod
-    def redis_key_f(**kwargs):
+    def signature_key(**kwargs):
         return (
-            str(kwargs['strategy']),
+            kwargs['strategy'].get_short_summary(),
             kwargs['transaction_currency'],
             kwargs['counter_currency'],
             kwargs['start_cash'],
@@ -422,8 +422,14 @@ class Evaluation(ABC):
             self._buy_sell_pair_losses = np.array([np.nan])
 
         if self._benchmark_backtest is not None:
-            self._alpha, self._beta = \
-                empyrical.alpha_beta(self.noncumulative_returns, self._benchmark_backtest.noncumulative_returns)
+            if len(self.benchmark_backtest.noncumulative_returns) != len(self.noncumulative_returns):
+                logging.warning('Incompatible noncumulative returns fields of backtester and benchmark! '
+                                'Alpha and beta not calculated.')
+                self._alpha = None
+                self._beta = None
+            else:
+                self._alpha, self._beta = \
+                    empyrical.alpha_beta(self.noncumulative_returns, self._benchmark_backtest.noncumulative_returns)
         else:
             self._alpha = self._beta = np.nan
 

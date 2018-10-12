@@ -1,11 +1,14 @@
 from evaluation import Evaluation
 from tick_listener import TickListener
 from tick_provider_itf_db import TickProviderITFDB
-from config import INF_CASH, INF_CRYPTO, redis_instance, ENABLE_REDIS_CACHE
+from config import INF_CASH, INF_CRYPTO, ENABLE_BACKTEST_CACHE, CACHE_MODE, CACHE_MODE_REDIS, CACHE_MODE_DICTIONARY
 from strategies import BuyAndHoldTimebasedStrategy
 from order_generator import OrderGenerator
 from utils import datetime_from_timestamp
 import cloudpickle
+
+if CACHE_MODE_REDIS:
+    from config import redis_instance
 
 
 class memoize(object):
@@ -13,24 +16,36 @@ class memoize(object):
         self.cls = cls
         self.__dict__.update(cls.__dict__)
 
-        # This bit allows staticmethods to work as you would expect.
+        # This bit allows staticmethods to work as you would expect. (code adapted from StackOverflow)
         for attr, val in cls.__dict__.items():
             if type(val) is staticmethod:
                 self.__dict__[attr] = val.__func__
+        if CACHE_MODE == CACHE_MODE_DICTIONARY:
+            self.data = {}
 
-    def __call__(self, *args, **kwargs):
-        if not ENABLE_REDIS_CACHE:
-            return self.cls(*args, **kwargs)
-
-        key = Evaluation.redis_key_f(**kwargs)
-        if redis_instance.exists(key):
-            print("::::::::::::::::::::::: Returning cached value!!")
+    def _process_redis(self, key, *args, **kwargs):
         if not redis_instance.exists(key):
             evaluation = self.cls(*args, **kwargs)
-            #instance._benchmark_backtest = None
             redis_instance.set(key, cloudpickle.dumps(evaluation))
-            #data[key] = instance
+            return evaluation
         return cloudpickle.loads(redis_instance.get(key))
+
+    def _process_dict(self, key, *args, **kwargs):
+        if not key in self.data:
+            evaluation = self.cls(*args, **kwargs)
+            self.data[key] = evaluation
+            return evaluation
+        return self.data[key]
+
+    def __call__(self, *args, **kwargs):
+        if not ENABLE_BACKTEST_CACHE:
+            return self.cls(*args, **kwargs)
+
+        key = Evaluation.signature_key(**kwargs)
+        if CACHE_MODE == CACHE_MODE_REDIS:
+            return self._process_redis(key, *args, **kwargs)
+        elif CACHE_MODE == CACHE_MODE_DICTIONARY:
+            return self._process_dict(key, *args, **kwargs)
 
 @memoize
 class TickDrivenBacktester(Evaluation, TickListener):

@@ -7,7 +7,7 @@ from signals import ALL_SIGNALS
 from strategies import BuyAndHoldTimebasedStrategy, SignalSignatureStrategy, SimpleRSIStrategy
 from enum import Enum
 from order_generator import OrderGenerator
-
+from config import POOL_SIZE
 import pandas.io.formats.excel
 
 pandas.io.formats.excel.header_style = None
@@ -115,7 +115,7 @@ class ComparativeEvaluation:
 
     def __init__(self, strategy_set, counter_currencies, resample_periods, sources,
                  start_cash, start_crypto, start_time, end_time, output_file=None, time_delay=0, debug=False,
-                 order_generator=OrderGenerator.ALTERNATING):
+                 order_generator=OrderGenerator.ALTERNATING, parallelize=True):
 
         self.strategy_set = sorted(strategy_set)
         self.counter_currencies = counter_currencies
@@ -130,6 +130,7 @@ class ComparativeEvaluation:
         self.output_file = output_file
         self.time_delay = time_delay
         self.order_generator = order_generator
+        self._parallelize = parallelize
 
         self._run_backtests(debug)
         self._report = ComparativeReportBuilder(self.backtests, self.baselines)
@@ -147,6 +148,8 @@ class ComparativeEvaluation:
         self.baselines = []
         transaction_currencies_cache = {}
 
+        param_list = []
+
         for strategy, counter_currency, resample_period, source in \
                 itertools.product(self.strategy_set, self.counter_currencies, self.resample_periods, self.sources):
 
@@ -156,41 +159,58 @@ class ComparativeEvaluation:
                 transaction_currencies_cache[(counter_currency, source)] \
                     = get_currencies_trading_against_counter(counter_currency, source)
             transaction_currencies = transaction_currencies_cache[(counter_currency, source)]
-
             for transaction_currency in transaction_currencies:
-                try:
-                    backtest, baseline = self._evaluate(strategy, transaction_currency, counter_currency, resample_period, source)
-                    if backtest.profit_percent is None or baseline.profit_percent is None:
-                        continue
-                    self.backtests.append(backtest)
-                    self.baselines.append(baseline)
-                    if debug:
-                        break
-                except NoPriceDataException:
+                params = {}
+                params['strategy'] = strategy
+                params['start_time'] = self.start_time
+                params['end_time'] = self.end_time
+                params['transaction_currency'] = transaction_currency
+                params['counter_currency'] = counter_currency
+                params['resample_period'] = resample_period
+                params['start_cash'] = self.start_cash
+                params['start_crypto'] = self.start_crypto
+                params['evaluate_profit_on_last_order'] = self.evaluate_profit_on_last_order
+                params['verbose'] = False
+                params['source'] = source
+                params['order_generator'] = self.order_generator
+
+                param_list.append(params)
+
+        if self._parallelize:
+            from pathos.multiprocessing import ProcessingPool as Pool
+            with Pool(POOL_SIZE) as pool:
+                backtests = pool.map(self._evaluate, param_list)
+        else:
+            backtests = map(self._evaluate, param_list)
+
+        for backtest in backtests:
+            if backtest is None:
+                continue
+            if backtest.profit_percent is None or backtest.benchmark_backtest.profit_percent is None:
                     continue
+            self.backtests.append(backtest)
+            self.baselines.append(backtest.benchmark_backtest)
+            if debug:
+                return
 
-
-    def _evaluate(self, strategy, transaction_currency, counter_currency, resample_period, source):
+    def _evaluate(self, params):
         logging.info("Evaluating strategy...")
+        strategy = params['strategy']
+        del params['strategy']
+        try:
+            baseline = BuyAndHoldTimebasedStrategy(self.start_time, self.end_time, params['transaction_currency'],
+                                                   params['counter_currency'], params['source'])
 
-        params = {}
-        params['start_time'] = self.start_time
-        params['end_time'] = self.end_time
-        params['transaction_currency'] = transaction_currency
-        params['counter_currency'] = counter_currency
-        params['resample_period'] = resample_period
-        params['start_cash'] = self.start_cash
-        params['start_crypto'] = self.start_crypto
-        params['evaluate_profit_on_last_order'] = self.evaluate_profit_on_last_order
-        params['verbose'] = False
-        params['source'] = source
-        params['order_generator'] = self.order_generator
-
-        baseline = BuyAndHoldTimebasedStrategy(self.start_time, self.end_time, transaction_currency, counter_currency, source)
-        baseline_evaluation = SignalDrivenBacktester(strategy=baseline, **params)
-        evaluation = SignalDrivenBacktester(strategy=strategy, **params)
-
-        return evaluation, baseline_evaluation
+            baseline_evaluation = SignalDrivenBacktester(strategy=baseline, **params)
+            evaluation = SignalDrivenBacktester(strategy=strategy,
+                                                benchmark_backtest=baseline_evaluation, **params)
+            return evaluation
+        except NoPriceDataException as e:
+            logging.info('Error while fetching price, skipping...')
+            return None
+        except Exception as e:
+            logging.info(f'Error during strategy evaluation: {str(e)}')
+            return None
 
     @property
     def report(self):
