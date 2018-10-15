@@ -20,26 +20,6 @@ pd.options.mode.chained_assignment = None
 
 class Evaluation(ABC):
 
-    @staticmethod
-    def signature_key(**kwargs):
-        return (
-            kwargs['strategy'].get_short_summary(),
-            kwargs['transaction_currency'],
-            kwargs['counter_currency'],
-            kwargs['start_cash'],
-            kwargs['start_crypto'],
-            kwargs['start_time'],
-            kwargs['end_time'],
-            kwargs['source'],
-            kwargs['resample_period'],
-#            kwargs['evaluate_profit_on_last_order'],
-#            kwargs['transaction_cost_percent'],
-#            kwargs['benchmark_backtest'].redis_key if kwargs['benchmark_backtest'] is not None else None,
-#            kwargs['time_delay'],
-#            kwargs['slippage'],
-#            kwargs['order_generator_type']
-        )
-
 
     def __init__(self, strategy, transaction_currency, counter_currency,
                  start_cash, start_crypto, start_time, end_time, source=0,
@@ -423,8 +403,8 @@ class Evaluation(ABC):
 
         if self._benchmark_backtest is not None:
             if len(self.benchmark_backtest.noncumulative_returns) != len(self.noncumulative_returns):
-                logging.warning('Incompatible noncumulative returns fields of backtester and benchmark! '
-                                'Alpha and beta not calculated.')
+                logging.debug('Incompatible noncumulative returns fields of backtester and benchmark! '
+                              'Alpha and beta not calculated.')
                 self._alpha = None
                 self._beta = None
             else:
@@ -438,10 +418,6 @@ class Evaluation(ABC):
             # logging.info(self.trading_df)
             # self.plot_portfolio()
 
- #       if ENABLE_REDIS_CACHE:
- #           if not r.exists(self.redis_key):
- #               pickled_object = pickle.dumps(self)
- #               r.set(self.redis_key, pickled_object)
 
     def _fill_returns(self, df):
         df['return_from_initial_investment'] = (df['total_value'] - self.start_value) / self.start_value
@@ -601,7 +577,86 @@ class Evaluation(ABC):
         return result
 
 
+    def _print_dict(self):
+        dictionary = vars(self).copy()
+        del dictionary["orders"]
+        if "signals" in dictionary:
+            del dictionary["signals"]
+        for k in dictionary:
+            if k.startswith("_"):
+                print(f"'{k[1:]}':self.{k},")
+            else:
+                print(f"'{k}':self.{k},")
+
+
     def to_dictionary(self):
+        dictionary = {
+            'strategy': self._strategy,
+            'transaction_currency': self._transaction_currency,
+            'counter_currency': self._counter_currency,
+            'start_cash': self._start_cash,
+            'start_crypto': self._start_crypto,
+            'start_time': self._start_time,
+            'end_time': self._end_time,
+            'source': self._source,
+            'resample_period': self._resample_period,
+            'evaluate_profit_on_last_order': self._evaluate_profit_on_last_order,
+            'transaction_cost_percent': self._transaction_cost_percent,
+            'benchmark_backtest': self._benchmark_backtest,
+            'time_delay': self._time_delay,
+            'slippage': self._slippage,
+            'order_generator_type': self._order_generator_type,
+            'cash': self._cash,
+            'crypto': self._crypto,
+            'num_trades': self._num_trades,
+            'num_buys': self._num_buys,
+            'num_sells': self._num_sells,
+            'order_signals': self.order_signals,
+            'trading_df': self.trading_df,
+            'end_cash': self._end_cash,
+            'end_crypto': self._end_crypto,
+            'max_drawdown': self._max_drawdown,
+            'max_drawdown_duration': self._max_drawdown_duration,
+            'sharpe_ratio': self._sharpe_ratio,
+            'orders_df': self.orders_df,
+            'buy_sell_pair_returns': self._buy_sell_pair_returns,
+            'buy_sell_pair_gains': self._buy_sell_pair_gains,
+            'buy_sell_pair_losses': self._buy_sell_pair_losses,
+            'num_gains': self._num_gains,
+            'num_losses': self._num_losses,
+            'alpha': self._alpha,
+            'beta': self._beta,
+        }
+
+        dictionary["strategy"] = dictionary["strategy"].get_short_summary()
+        dictionary["utilized_signals"] = ", ".join(get_distinct_signal_types(self.order_signals))
+        dictionary["start_time"] = datetime_from_timestamp(dictionary["start_time"])
+        dictionary["end_time"] = datetime_from_timestamp(dictionary["end_time"])
+        dictionary["mean_buy_sell_pair_return"] = self.mean_buy_sell_pair_return
+
+        if self.end_price == None:
+            dictionary["profit"] = "N/A"
+            dictionary["profit_percent"] = "N/A"
+            dictionary["profit_USDT"] = "N/A"
+            dictionary["profit_percent_USDT"] = "N/A"
+        else:
+            try:
+                dictionary["profit"] = self.profit
+                dictionary["profit_percent"] = self.profit_percent
+                dictionary["profit_USDT"] = self.profit_usdt
+                dictionary["profit_percent_USDT"] = self.profit_percent_usdt
+            except NoPriceDataException:
+                logging.error("No price data!")
+                dictionary["profit"] = "N/A"
+                dictionary["profit_percent"] = "N/A"
+                dictionary["profit_USDT"] = "N/A"
+                dictionary["profit_percent_USDT"] = "N/A"
+        return dictionary
+
+
+
+
+    def to_dictionary_slow(self):
         dictionary = vars(self).copy()
         # remove trailing underscores
         tmp = {(k[1:] if k.startswith("_") else k): dictionary[k] for k in dictionary.keys()}
@@ -665,6 +720,28 @@ class Evaluation(ABC):
             return
         chart = BacktestingChart(self, self._benchmark_backtest)
         chart.draw_price_chart()
+
+
+    @staticmethod
+    def signature_key(**kwargs):
+        return (
+            kwargs['strategy'].get_short_summary(),
+            kwargs['transaction_currency'],
+            kwargs['counter_currency'],
+            kwargs['start_cash'],
+            kwargs['start_crypto'],
+            kwargs['start_time'],
+            kwargs['end_time'],
+            kwargs['source'],
+            kwargs['resample_period'],
+            kwargs['evaluate_profit_on_last_order'],
+            kwargs['transaction_cost_percent'],
+            kwargs['benchmark_backtest'].signature_key if kwargs['benchmark_backtest'] is not None else None,
+            kwargs['time_delay'],
+            kwargs['slippage'],
+            kwargs['order_generator_type']
+        )
+
 
 
 class StrategyDecision:

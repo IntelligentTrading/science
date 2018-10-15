@@ -302,53 +302,15 @@ class ExperimentManager:
                     row = performance_df.iloc[i]
                     try:
                         evaluation = self._build_evaluation_object(row.individual, row.variant, data, function_provider=ta_provider)
-
-                        """
-                        from backtester_ticks import TickDrivenBacktester
-                        from tick_provider import PriceDataframeTickProvider
-                        
-
-                        from strategies import BuyAndHoldTimebasedStrategy
-                        from backtester_signals import SignalDrivenBacktester
-
-                        
-                        baseline = BuyAndHoldTimebasedStrategy(start_time, end_time, data.transaction_currency,
-                                                               data.counter_currency, data.source)
-                        baseline_evaluation = SignalDrivenBacktester(strategy=baseline,
-                            transaction_currency=data.transaction_currency,
-                            counter_currency=data.counter_currency,
-                            start_cash=start_cash,
-                            start_crypto=start_crypto,
-                            start_time=start_time,
-                            end_time=end_time,
-                            source=source,)
-
-                        # evaluation.benchmark_backtest = benchmark
-                        """
-
                         genetic_backtests.append(evaluation)
                         genetic_baselines.append(evaluation.benchmark_backtest)
 
                     except NoPriceDataException as e:
-                        print(e)
-
-                    """
-                    benchmark = TickDrivenBacktester.build_benchmark(
-                        transaction_currency=data.transaction_currency,
-                        counter_currency=data.counter_currency,
-                        start_cash=start_cash,
-                        start_crypto=start_crypto,
-                        start_time=start_time,
-                        end_time=end_time,
-                        source=source,
-                        tick_provider=PriceDataframeTickProvider(data.price_data)
-                    )
-                    """
+                        logging.error(e)
 
         comp = ComparativeEvaluation(strategies, counter_currencies=[counter_currency],
                                      resample_periods=resample_periods,
                                      sources=sources, start_cash=start_cash, start_crypto=start_crypto,
-                                     #start_time=evaluation.benchmark_backtest._start_time, end_time=evaluation.benchmark_backtest._end_time, debug=False)
                                      start_time=start_time, end_time=end_time, debug = False)
 
 
@@ -557,8 +519,6 @@ class ExperimentDB:
     def __getitem__(self, key):
         return self._experiments[key]
 
-    # def build_experiment_id(**kwargs):
-    #    return ';'.join(['{}_{}'.format(k, v) for k, v in kwargs.iteritems()])
 
 
 ####################################
@@ -574,22 +534,21 @@ class ExperimentDB:
 ####################################
 
 e = ExperimentManager("parallel_test.json")
+#e = ExperimentManager("gv4_experiments.json")
 
 if __name__ == "__main__":
-
-
     import datetime
     start_time = datetime.datetime(2018, 4, 9, 14, 0, tzinfo=datetime.timezone.utc).timestamp()
     end_time = datetime.datetime(2018, 6, 1, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
-    #e.produce_report(5, 'gp_backtesting_BTC_train.xlsx', start_time, end_time, 'BTC')
 
+    #e.run_experiments()
+    #e.produce_report(5, 'gp_backtesting_BTC_train.xlsx', start_time, end_time, 'BTC')
 
 
     #start_time = datetime.datetime(2018, 6, 1, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
     #end_time = datetime.datetime(2018, 8, 1, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
     #e.produce_report(5, 'gp_backtesting_USDT_6_res60_2.xlsx', start_time, end_time, 'USDT')
     #e.produce_report(5, 'gp_backtesting_BTC_6_res60_2.xlsx', start_time, end_time, 'BTC')
-    from utils import time_performance
 
 
     e.run_experiments()
@@ -599,8 +558,8 @@ if __name__ == "__main__":
     #with Pool(1) as pool:
     #    print(pool.map(run_variant, e.variants))
 
-    exit(0)
-    e.produce_report(1, 'gp_backtesting.xlsx')
+    #e.produce_report(1, 'gp_backtesting.xlsx')
+
     performance_dfs = e.get_joined_performance_dfs_over_all_variants()
     e.performance_df_row_info(performance_dfs[0].iloc[0])
     #e.explore_records()

@@ -4,14 +4,15 @@ import numpy as np
 import datetime
 from backtesting_helpers import find_num_cumulative_outperforms
 from data_sources import get_currencies_trading_against_counter
+from utils import time_performance
 
-
+@time_performance
 def best_performing_signals_of_the_period(start_time=None, end_time=None, additional_strategies=[],
                                           best_performing_filename=None, full_report_filename=None,
                                           group_strategy_variants=False):
     if start_time is None or end_time is None:
-        start_time = datetime.datetime(2018, 9, 24, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
-        end_time = datetime.datetime(2018, 9, 28, 23, 59, tzinfo=datetime.timezone.utc).timestamp()
+        start_time = datetime.datetime(2018, 10, 8, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
+        end_time = datetime.datetime(2018, 10, 12, 23, 59, tzinfo=datetime.timezone.utc).timestamp()
 
     if best_performing_filename is None:
         best_performing_filename = f"best_performing_{datetime.datetime.utcfromtimestamp(end_time).strftime('%Y-%m-%d')}.xlsx"
@@ -124,7 +125,6 @@ def in_depth_signal_comparison(out_path):
         )
 
         comparison.report.all_coins_report(writer=writer, sheet_prefix=f'({period}) ', group_strategy_variants=False)
-
 
     writer.save()
     writer.close()

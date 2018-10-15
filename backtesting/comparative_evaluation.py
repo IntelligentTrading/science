@@ -115,7 +115,7 @@ class ComparativeEvaluation:
 
     def __init__(self, strategy_set, counter_currencies, resample_periods, sources,
                  start_cash, start_crypto, start_time, end_time, output_file=None, time_delay=0, debug=False,
-                 order_generator=OrderGenerator.ALTERNATING, parallelize=True):
+                 order_generator=OrderGenerator.ALTERNATING, parallelize=False):
 
         self.strategy_set = sorted(strategy_set)
         self.counter_currencies = counter_currencies
@@ -191,10 +191,14 @@ class ComparativeEvaluation:
             self.backtests.append(backtest)
             self.baselines.append(backtest.benchmark_backtest)
             if debug:
-                return
+                break
+
+        logging.info("Finished backtesting, building report...")
 
     def _evaluate(self, params):
-        logging.info("Evaluating strategy...")
+        logging.info(f"Evaluating strategy {params['strategy'].get_short_summary()}, "
+                     f"{params['transaction_currency']}-{params['counter_currency']}, "
+                     f"start_time {self.start_time}, end_time {self.end_time}...")
         strategy = params['strategy']
         del params['strategy']
         try:
@@ -202,9 +206,9 @@ class ComparativeEvaluation:
                                                    params['counter_currency'], params['source'])
 
             baseline_evaluation = SignalDrivenBacktester(strategy=baseline, **params)
-            evaluation = SignalDrivenBacktester(strategy=strategy,
-                                                benchmark_backtest=baseline_evaluation, **params)
-            return evaluation
+            return SignalDrivenBacktester(strategy=strategy,
+                                          benchmark_backtest=baseline_evaluation, **params)
+
         except NoPriceDataException as e:
             logging.info('Error while fetching price, skipping...')
             return None
@@ -250,7 +254,8 @@ class ComparativeReportBuilder:
         # save full results
         self.results_df = output
 
-
+    #from utils import time_performance
+    #@time_performance
     def _create_row_dict(self, evaluation, baseline):
         evaluation_dict = evaluation.to_dictionary()
         baseline_dict = baseline.to_dictionary()
