@@ -2,6 +2,8 @@ from evaluation import Evaluation
 from tick_listener import TickListener
 from tick_provider_itf_db import TickProviderITFDB
 from config import INF_CASH, INF_CRYPTO
+from strategies import BuyAndHoldTimebasedStrategy
+from order_generator import OrderGenerator
 from caching import memoize
 
 

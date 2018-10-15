@@ -22,8 +22,10 @@ def get_default_args(func):
 class memoize(object):
     def __init__(self, cls):
         self.cls = cls
+
         self.default_args = get_default_args(cls.__init__)
-        self.__dict__.update(cls.__dict__)
+        for base in cls.__bases__:
+            self.default_args = dict(self.default_args, **get_default_args(base))
 
         # This bit allows staticmethods to work as you would expect. (code adapted from StackOverflow)
         for attr, val in cls.__dict__.items():

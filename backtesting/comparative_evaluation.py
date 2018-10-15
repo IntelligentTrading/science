@@ -8,6 +8,8 @@ from strategies import BuyAndHoldTimebasedStrategy, SignalSignatureStrategy, Sim
 from enum import Enum
 from order_generator import OrderGenerator
 from config import POOL_SIZE
+from utils import time_performance
+
 import pandas.io.formats.excel
 
 pandas.io.formats.excel.header_style = None
@@ -115,7 +117,7 @@ class ComparativeEvaluation:
 
     def __init__(self, strategy_set, counter_currencies, resample_periods, sources,
                  start_cash, start_crypto, start_time, end_time, output_file=None, time_delay=0, debug=False,
-                 order_generator=OrderGenerator.ALTERNATING, parallelize=False):
+                 order_generator=OrderGenerator.ALTERNATING, parallelize=True):
 
         self.strategy_set = sorted(strategy_set)
         self.counter_currencies = counter_currencies
@@ -143,6 +145,8 @@ class ComparativeEvaluation:
         if output_file is not None:
             self._report.write_summary(output_file)
 
+
+    @time_performance
     def _run_backtests(self, debug):
         self.backtests = []
         self.baselines = []
@@ -180,6 +184,7 @@ class ComparativeEvaluation:
             from pathos.multiprocessing import ProcessingPool as Pool
             with Pool(POOL_SIZE) as pool:
                 backtests = pool.map(self._evaluate, param_list)
+            logging.info("Parallel processing finished.")
         else:
             backtests = map(self._evaluate, param_list)
 
@@ -194,6 +199,7 @@ class ComparativeEvaluation:
                 break
 
         logging.info("Finished backtesting, building report...")
+
 
     def _evaluate(self, params):
         logging.info(f"Evaluating strategy {params['strategy'].get_short_summary()}, "
@@ -236,6 +242,7 @@ class ComparativeReportBuilder:
         self.baselines = baselines
         self._build_dataframe()
 
+    @time_performance
     def _build_dataframe(self):
         evaluation_dicts = [self._create_row_dict(backtest, baseline) for backtest, baseline in zip(self.backtests, self.baselines)]
         output = pd.DataFrame(evaluation_dicts)
@@ -268,7 +275,8 @@ class ComparativeReportBuilder:
 
 
     def get_best_performing_backtest(self):
-        return self.results_df[self.results_df.num_trades > 0].iloc[0]["evaluation_object"]
+        sorted_df = self.results_df.sort_values(by=['profit_percent'], ascending=False)
+        return sorted_df[self.results_df.num_trades > 0].iloc[0]["evaluation_object"]
 
 
     def write_summary(self, output_file):

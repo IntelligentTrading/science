@@ -64,28 +64,10 @@ class Evaluation(ABC):
         self._init_backtesting(start_cash, start_crypto)
         #self.trading_df = pd.DataFrame(columns=['close_price', 'signal', 'order', 'cash', 'crypto', 'total_value'])
 
-    @property
-    def redis_key(self):
-        return (
-            str(self._strategy),
-            self._transaction_currency,
-            self._counter_currency,
-            self._start_cash,
-            self._start_crypto,
-            self._start_time,
-            self._end_time,
-            self._source,
-            self._resample_period,
-            self._evaluate_profit_on_last_order,
-            self._transaction_cost_percent,
-            self._benchmark_backtest.redis_key if self._benchmark_backtest is not None else None,
-            self._time_delay,
-            self._slippage,
-            self._order_generator_type
-        )
-
 
     def _reevaluate_inf_bank(self):
+        start_cash = self._start_cash
+        start_crypto = self._start_crypto
         if self._start_cash == INF_CASH:
             # simulate how the trading would have gone
             evaluation = copy.deepcopy(self)
@@ -93,14 +75,17 @@ class Evaluation(ABC):
             evaluation._verbose = False
             evaluation.run()
             if evaluation._end_cash < 0:
-                self._start_cash = self._cash = -evaluation.end_cash
+                start_cash = -evaluation.end_cash
+                #self._start_cash = self._cash = -evaluation.end_cash
         if self._start_crypto == INF_CRYPTO:
             evaluation = copy.deepcopy(self)
             evaluation._start_crypto = evaluation._crypto = 0
             evaluation._verbose = False
             evaluation.run()
             if evaluation._end_crypto < 0:
-                self._start_crypto = self._crypto = -evaluation.end_crypto
+                start_crypto = -evaluation.end_crypto
+                #self._start_crypto = self._crypto = -evaluation.end_crypto
+        self._init_backtesting(start_cash, start_crypto)
 
     def _init_backtesting(self, start_cash, start_crypto):
         self._cash = start_cash
@@ -108,9 +93,13 @@ class Evaluation(ABC):
         self._num_trades = 0
         self._num_buys = 0
         self._num_sells = 0
+        self._end_price = None
         self.orders = []
         self.order_signals = []
         self.trading_df_rows = []  # optimization for speed
+        self._init_start_value()
+        self._init_start_value_USDT()
+
 
     @property
     def noncumulative_returns(self):
@@ -138,24 +127,21 @@ class Evaluation(ABC):
 
     @property
     def start_value_usdt(self):
+        return self._start_value_USDT
+
+    def _init_start_value_USDT(self):
         try:
-            start_value_USDT = convert_value_to_USDT(self._start_cash, self._start_time,
+            self._start_value_USDT = convert_value_to_USDT(self._start_cash, self._start_time,
                                                      self._counter_currency, self._source)
             if self._start_crypto > 0 and self._transaction_currency is not None:
-                start_value_USDT += convert_value_to_USDT(self._start_crypto, self._start_time,
+                self._start_value_USDT += convert_value_to_USDT(self._start_crypto, self._start_time,
                                                           self._transaction_currency, self._source)
-            return start_value_USDT
         except NoPriceDataException:
-            return None
+            self._start_value_USDT = None
 
     @property
     def end_value_usdt(self):
-        try:
-            end_value_USDT = convert_value_to_USDT(self.end_cash, self._end_time, self._counter_currency, self._source) + \
-                             convert_value_to_USDT(self.end_crypto, self._end_time, self._end_crypto_currency, self._source)
-            return end_value_USDT
-        except NoPriceDataException:
-            return None
+        return self._end_value_USDT
 
     @property
     def profit_usdt(self):
@@ -173,16 +159,19 @@ class Evaluation(ABC):
 
     @property
     def start_value(self):
+        return self._start_value
+
+    def _init_start_value(self):
         try:
-            return self._start_cash + \
+            self._start_value = self._start_cash + \
                    (self._start_crypto * get_price(
-                   self._transaction_currency,
-                   self._start_time,
-                   self._source,
-                   self._counter_currency) if self._start_crypto > 0 else 0)
-                   # because more often than not we start with 0 crypto and at the "beginning of time"
+                       self._transaction_currency,
+                       self._start_time,
+                       self._source,
+                       self._counter_currency) if self._start_crypto > 0 else 0)
+            # because more often than not we start with 0 crypto and at the "beginning of time"
         except NoPriceDataException:
-            return None
+            self._start_value = None
 
     @property
     def end_cash(self):
@@ -201,13 +190,19 @@ class Evaluation(ABC):
 
     @property
     def end_price(self):
+        """"
+        global counter_enter, counter_exception
+        counter_enter += 1
         if not self.orders_df.empty and (self._evaluate_profit_on_last_order or self.orders_df.tail(1)['order'].item() == "SELL"):
             return self.orders_df.tail(1)['close_price'].item()
         else:
             try:
                 return get_price(self._transaction_currency, self._end_time, self._source, self._counter_currency)
             except:
+                counter_exception += 1
                 return None
+        """
+        return self._end_price
 
     @property
     def profit(self):
@@ -413,11 +408,37 @@ class Evaluation(ABC):
         else:
             self._alpha = self._beta = np.nan
 
+        # fill end price
+        self._fill_end_price()
+
+        # fill end USDT value
+        self._fill_end_usdt_value()
+
         if self._verbose:
             logging.info(self.get_report())
             # logging.info(self.trading_df)
             # self.plot_portfolio()
 
+
+    def _fill_end_usdt_value(self):
+        try:
+            self._end_value_USDT = convert_value_to_USDT(self.end_cash, self._end_time, self._counter_currency,
+                                                         self._source) + \
+                                   convert_value_to_USDT(self.end_crypto, self._end_time, self._end_crypto_currency,
+                                                         self._source)
+        except NoPriceDataException:
+            self._end_value_USDT = None
+
+    def _fill_end_price(self):
+        if not self.orders_df.empty and (
+                self._evaluate_profit_on_last_order or self.orders_df.tail(1)['order'].item() == "SELL"):
+            self._end_price = self.orders_df.tail(1)['close_price'].item()
+        else:
+            try:
+                self._end_price = get_price(self._transaction_currency, self._end_time, self._source,
+                                            self._counter_currency)
+            except:
+                self._end_price = None
 
     def _fill_returns(self, df):
         df['return_from_initial_investment'] = (df['total_value'] - self.start_value) / self.start_value
@@ -735,11 +756,10 @@ class Evaluation(ABC):
             kwargs['source'],
             kwargs['resample_period'],
             kwargs['evaluate_profit_on_last_order'],
-            kwargs['transaction_cost_percent'],
             kwargs['benchmark_backtest'].signature_key if kwargs['benchmark_backtest'] is not None else None,
             kwargs['time_delay'],
             kwargs['slippage'],
-            kwargs['order_generator_type']
+            kwargs['order_generator']
         )
 
 

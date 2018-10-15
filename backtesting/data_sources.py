@@ -34,20 +34,6 @@ class Strength(Enum):
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 class PostgresDatabaseConnection:
     def __init__(self):
         self.conn = psycopg2.connect(postgres_connection_string)
