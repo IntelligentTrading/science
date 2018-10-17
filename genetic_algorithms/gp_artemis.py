@@ -129,9 +129,12 @@ class ExperimentManager:
 
         with Pool(num_processes) as pool:
             records = pool.map(partial_run_func, self.variants)
+            pool.close()
+            pool.join()
 
         for record in records:
-            self._save_rockstars(record)
+            if record is not None: # empty records if experiments already exist
+                self._save_rockstars(record)
 
 
     @time_performance
@@ -250,6 +253,8 @@ class ExperimentManager:
         df = df.sort_values(by=sort_by, ascending=False)
         return df
 
+
+    @time_performance
     def produce_report(self, top_n, out_filename, start_time, end_time, counter_currency,
                        sources=[0], resample_periods=[60], start_cash=1000, start_crypto=0):
         performance_df = self.get_best_performing_across_variants_and_datasets(self.training_data)
@@ -533,8 +538,8 @@ class ExperimentDB:
 #
 ####################################
 
-e = ExperimentManager("parallel_test.json")
-#e = ExperimentManager("gv4_experiments.json")
+#e = ExperimentManager("parallel_test.json")
+e = ExperimentManager("gv4_experiments.json")
 
 if __name__ == "__main__":
     import datetime
@@ -548,10 +553,10 @@ if __name__ == "__main__":
     #start_time = datetime.datetime(2018, 6, 1, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
     #end_time = datetime.datetime(2018, 8, 1, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
     #e.produce_report(5, 'gp_backtesting_USDT_6_res60_2.xlsx', start_time, end_time, 'USDT')
-    #e.produce_report(5, 'gp_backtesting_BTC_6_res60_2.xlsx', start_time, end_time, 'BTC')
+    e.produce_report(5, 'gp_backtesting_BTC_6_res60_2.xlsx', start_time, end_time, 'BTC')
 
 
-    e.run_experiments()
+    #e.run_experiments()
     #e.run_parallel_experiments()
     #from pathos.multiprocessing import ProcessingPool as Pool
 
@@ -559,9 +564,13 @@ if __name__ == "__main__":
     #    print(pool.map(run_variant, e.variants))
 
     #e.produce_report(1, 'gp_backtesting.xlsx')
+    exit(0)
+
 
     performance_dfs = e.get_joined_performance_dfs_over_all_variants()
     e.performance_df_row_info(performance_dfs[0].iloc[0])
+
+
     #e.explore_records()
     #e.best_individuals_across_variants_and_datasets = e.get_best_performing_across_variants_and_datasets(e.training_data)
     #dfs = e.get_joined_performance_dfs_over_all_variants()

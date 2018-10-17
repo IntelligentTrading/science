@@ -9,8 +9,12 @@ from enum import Enum
 from order_generator import OrderGenerator
 from config import POOL_SIZE
 from utils import time_performance
-
+from collections import namedtuple
 import pandas.io.formats.excel
+
+Ticker = namedtuple("Ticker", "source transaction_currency counter_currency")
+
+
 
 pandas.io.formats.excel.header_style = None
 
@@ -134,6 +138,8 @@ class ComparativeEvaluation:
         self.order_generator = order_generator
         self._parallelize = parallelize
 
+        self._tickers = self._build_tickers(counter_currencies, sources)
+
         self._run_backtests(debug)
         self._report = ComparativeReportBuilder(self.backtests, self.baselines)
         try:
@@ -145,45 +151,45 @@ class ComparativeEvaluation:
         if output_file is not None:
             self._report.write_summary(output_file)
 
+    def _build_tickers(self, counter_currencies, sources):
+        currency_tuples = []
+        for source, counter_currency in itertools.product(sources, counter_currencies):
+            currency_tuples += [Ticker(source, transaction_currency, counter_currency)
+                                for transaction_currency in get_currencies_trading_against_counter(counter_currency, source)]
+        return currency_tuples
+
 
     @time_performance
     def _run_backtests(self, debug):
         self.backtests = []
         self.baselines = []
-        transaction_currencies_cache = {}
-
         param_list = []
 
-        for strategy, counter_currency, resample_period, source in \
-                itertools.product(self.strategy_set, self.counter_currencies, self.resample_periods, self.sources):
+        for strategy, resample_period, ticker in \
+                itertools.product(self.strategy_set, self.resample_periods, self._tickers):
 
-            # performance optimization, ensure we get each list of transaction_currencies only once
-            # per counter and source
-            if (counter_currency, source) not in transaction_currencies_cache:
-                transaction_currencies_cache[(counter_currency, source)] \
-                    = get_currencies_trading_against_counter(counter_currency, source)
-            transaction_currencies = transaction_currencies_cache[(counter_currency, source)]
-            for transaction_currency in transaction_currencies:
-                params = {}
-                params['strategy'] = strategy
-                params['start_time'] = self.start_time
-                params['end_time'] = self.end_time
-                params['transaction_currency'] = transaction_currency
-                params['counter_currency'] = counter_currency
-                params['resample_period'] = resample_period
-                params['start_cash'] = self.start_cash
-                params['start_crypto'] = self.start_crypto
-                params['evaluate_profit_on_last_order'] = self.evaluate_profit_on_last_order
-                params['verbose'] = False
-                params['source'] = source
-                params['order_generator'] = self.order_generator
+            params = {}
+            params['strategy'] = strategy
+            params['start_time'] = self.start_time
+            params['end_time'] = self.end_time
+            params['transaction_currency'] = ticker.transaction_currency
+            params['counter_currency'] = ticker.counter_currency
+            params['resample_period'] = resample_period
+            params['start_cash'] = self.start_cash
+            params['start_crypto'] = self.start_crypto
+            params['evaluate_profit_on_last_order'] = self.evaluate_profit_on_last_order
+            params['verbose'] = False
+            params['source'] = ticker.source
+            params['order_generator'] = self.order_generator
 
-                param_list.append(params)
+            param_list.append(params)
 
         if self._parallelize:
             from pathos.multiprocessing import ProcessingPool as Pool
             with Pool(POOL_SIZE) as pool:
                 backtests = pool.map(self._evaluate, param_list)
+                pool.close()
+                pool.join()
             logging.info("Parallel processing finished.")
         else:
             backtests = map(self._evaluate, param_list)
