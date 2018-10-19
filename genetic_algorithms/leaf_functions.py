@@ -39,7 +39,8 @@ class TAProvider(FunctionProvider):
         return("TAprovider")
 
     def _get_timestamp_index(self, input):
-        return np.where(self.data.price_data.index == input[0])[0]
+        assert self.data.price_data.index.get_loc(input[0]) == np.where(self.data.price_data.index == input[0])[0][0]
+        return self.data.price_data.index.get_loc(input[0])
 
     def rsi(self, input):
         return self.data.rsi_data[self._get_timestamp_index(input)]
@@ -63,18 +64,80 @@ class TAProvider(FunctionProvider):
         return self.data.rsi_data[self._get_timestamp_index(input)] > 80
 
     def macd_bullish(self, input):
-        index = self._get_timestamp_index(input)
-        if index == 0:
-            return False
-        return self.data.macd[index] > self.data.macd_signal[index] \
-               and self.data.macd[index-1] <= self.data.macd_signal[index-1]
+        return self._crosses_from_below(self.data.macd, self.data.macd_signal, input)
+        #index = self._get_timestamp_index(input)
+        #if index == 0:
+        #    return False
+        #return self.data.macd[index] > self.data.macd_signal[index] \
+        #       and self.data.macd[index-1] <= self.data.macd_signal[index-1]
 
     def macd_bearish(self, input):
+        return self._crosses_from_above(self.data.macd, self.data.macd_signal, input)
+        # index = self._get_timestamp_index(input)
+        # if index == 0:
+        #     return False
+        # return self.data.macd[index] < self.data.macd_signal[index] \
+        #       and self.data.macd[index-1] >= self.data.macd_signal[index-1]
+
+    def ema_bullish_cross(self, input):
+        return self._crosses_from_above(self.data.ema55_data, self.data.ema21_data, input)
+
+    def ema_bearish_cross(self, input):
+        return self._crosses_from_below(self.data.ema55_data, self.data.ema21_data, input)
+
+    def bbands_bearish_cross(self, input):
+        return self._crosses_from_below(self.data.prices, self.data.bb_up, input)
+
+    def bbands_bullish_cross(self, input):
+        return self._crosses_from_above(self.data.prices, self.data.bb_low, input)
+
+    def bbands_squeeze_bullish(self, input):
+        index = self._get_timestamp_index(input)
+        return self.data.bb_width[index] <= self.data.min_bbw_180[index] \
+               and self._crosses_from_below(self.data.prices, self.data.bb_up, input)
+
+    def bbands_squeeze_bearish(self, input):
+        index = self._get_timestamp_index(input)
+        return self.data.bb_width[index] <= self.data.min_bbw_180[index] \
+               and self._crosses_from_above(self.data.prices, self.data.bb_low, input)
+
+    def bbands_price_gt_up(self, input):
+        index = self._get_timestamp_index(input)
+        return self.data.prices[index] > self.data.bb_up[index]
+
+    def bbands_price_lt_low(self, input):
+        index = self._get_timestamp_index(input)
+        return self.data.prices[index] < self.data.bb_low[index]
+
+    def slowd_gt_80(self, input):
+        return self.data.slowd[self._get_timestamp_index(input)] > 80
+
+    def slowd_lt_20(self, input):
+        return self.data.slowd[self._get_timestamp_index(input)] < 20
+
+    def candlestick_momentum_buy(self, input):
         index = self._get_timestamp_index(input)
         if index == 0:
             return False
-        return self.data.macd[index] < self.data.macd_signal[index] \
-               and self.data.macd[index-1] >= self.data.macd_signal[index-1]
+        return self.data.prices[index] > 0.5 * self.data.prices[index-1]
+
+    def candlestick_momentum_sell(self, input):
+        index = self._get_timestamp_index(input)
+        if index == 0:
+            return False
+        return self.data.prices[index] < 0.5 * self.data.prices[index-1]
+
+    def _crosses_from_below(self, data, other, input):
+        index = self._get_timestamp_index(input)
+        if index == 0:
+            return False
+        return data[index] > other[index] and data[index-1] <= other[index-1]
+
+    def _crosses_from_above(self, data, other, input):
+        index = self._get_timestamp_index(input)
+        if index == 0:
+            return False
+        return data[index] < other[index] and data[index-1] >= other[index-1]
 
     def adx(self, input):
         return self.data.adx[self._get_timestamp_index(input)]
@@ -100,6 +163,15 @@ class TAProvider(FunctionProvider):
     def price(self, input):
         timestamp = input[0]
         return self.data.price_data.loc[timestamp, "close_price"]
+
+    def macd_stoch_sell(self, input):
+        index = self._get_timestamp_index(input)
+        return self.data.macd_hist[index] < 0 and self.data.slowd[index] > 71
+
+    def macd_stoch_buy(self, input):
+        index = self._get_timestamp_index(input)
+        return self.data.macd_hist[index] > 0 and self.data.slowd[index] < 29
+
 
 
 class TAProviderCollection(FunctionProvider):

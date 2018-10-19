@@ -58,6 +58,9 @@ class Data:
                             f"the set end time!")
 
         prices = np.array(self.price_data.close_price, dtype=float)
+        high_prices = np.array(self.price_data.high_price, dtype=float)
+        low_prices = np.array(self.price_data.low_price, dtype=float)
+
         self.rsi_data = talib.RSI(prices, timeperiod=14)[TICKS_FOR_PRECOMPUTE:]
         self.sma20_data = talib.SMA(prices, timeperiod=20)[TICKS_FOR_PRECOMPUTE:]
         self.ema20_data = talib.EMA(prices, timeperiod=20)[TICKS_FOR_PRECOMPUTE:]
@@ -65,6 +68,25 @@ class Data:
         self.ema50_data = talib.EMA(prices, timeperiod=50)[TICKS_FOR_PRECOMPUTE:]
         self.sma200_data = talib.SMA(prices, timeperiod=200)[TICKS_FOR_PRECOMPUTE:]
         self.ema200_data = talib.EMA(prices, timeperiod=200)[TICKS_FOR_PRECOMPUTE:]
+
+        self.ema21_data = talib.EMA(prices, timeperiod=21)[TICKS_FOR_PRECOMPUTE:]
+        self.ema55_data = talib.EMA(prices, timeperiod=55)[TICKS_FOR_PRECOMPUTE:]
+        self.bb_up, self.bb_mid, self.bb_low = talib.BBANDS(prices, timeperiod=20, nbdevup=2, nbdevdn=2, matype=0)
+
+        self.bb_width = self.bb_up - self.bb_low
+        self.min_bbw_180 = np.array(list(map(min, [self.bb_width[i:i+180] for i in range(len(self.bb_width)-180+1)])))
+        self.min_bbw_180 = self.min_bbw_180[len(self.min_bbw_180) - (len(prices)-TICKS_FOR_PRECOMPUTE):]
+
+        self.bb_up = self.bb_up[TICKS_FOR_PRECOMPUTE:]
+        self.bb_mid = self.bb_mid[TICKS_FOR_PRECOMPUTE:]
+        self.bb_low = self.bb_low[TICKS_FOR_PRECOMPUTE:]
+        self.bb_width = self.bb_width[TICKS_FOR_PRECOMPUTE:]
+
+        _, self.slowd = talib.STOCH(high_prices, low_prices, prices, fastk_period=5,
+                                    slowk_period=3, slowk_matype=0, slowd_period=3, slowd_matype=0)
+        self.slowd = self.slowd[TICKS_FOR_PRECOMPUTE:]
+
+
         self.macd, self.macd_signal, self.macd_hist = talib.MACD(
             prices, fastperiod=12, slowperiod=26, signalperiod=9)
         self.macd = self.macd[TICKS_FOR_PRECOMPUTE:]
@@ -73,6 +95,9 @@ class Data:
         self.adx = talib.ADX(np.array(self.price_data.high_price, dtype=float),
                              np.array(self.price_data.low_price, dtype=float),
                              np.array(self.price_data.close_price, dtype=float))[TICKS_FOR_PRECOMPUTE:]
+
+
+
 
         self.price_data = self.price_data.iloc[TICKS_FOR_PRECOMPUTE:]
         self.prices = self.price_data.as_matrix(columns=["close_price"])

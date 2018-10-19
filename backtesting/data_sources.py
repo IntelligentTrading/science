@@ -75,6 +75,8 @@ def get_resampled_prices_in_range(start_time, end_time, transaction_currency, co
                              index_col="timestamp")
     if normalize:
         price_data.loc[:, 'close_price'] /= 1E8
+        price_data.loc[:, 'high_price'] /= 1E8
+        price_data.loc[:, 'low_price'] /= 1E8
     return price_data
 
 def get_filtered_signals(signal_type=None, transaction_currency=None, start_time=None, end_time=None, horizon=Horizon.any,

@@ -11,13 +11,15 @@ from leaf_functions import TAProviderCollection
 from grammar import Grammar
 from chart_plotter import *
 from order_generator import OrderGenerator
-from config import INF_CASH, INF_CRYPTO
+from config import INF_CASH, INF_CRYPTO, POOL_SIZE
 from comparative_evaluation import ComparativeEvaluation, ComparativeReportBuilder
 from data_sources import get_currencies_trading_against_counter
 from backtesting_runs import build_itf_baseline_strategies
 from data_sources import NoPriceDataException
 from utils import time_performance
 from functools import partial
+from pathos.multiprocessing import ProcessingPool as Pool
+from utils import parallel_run
 
 SAVE_HOF_AND_BEST = True
 HOF_AND_BEST_FILENAME = 'rockstars.txt'
@@ -122,15 +124,16 @@ class ExperimentManager:
 
     @time_performance
     def run_parallel_experiments(self, num_processes=8, rerun_existing=False, display_results=True):
-        from pathos.multiprocessing import ProcessingPool as Pool
+        #from pathos.multiprocessing import ProcessingPool as Pool
 
         partial_run_func = partial(ExperimentManager.run_variant, keep_record=True, display_results=display_results,
                            rerun_existing=rerun_existing, saved_figure_ext='.fig.png')
 
-        with Pool(num_processes) as pool:
-            records = pool.map(partial_run_func, self.variants)
-            pool.close()
-            pool.join()
+        records = parallel_run(partial_run_func, self.variants)
+        #with Pool(num_processes) as pool:
+        #    records = pool.map(partial_run_func, self.variants)
+        #    pool.close()
+        #   pool.join()
 
         for record in records:
             if record is not None: # empty records if experiments already exist
@@ -254,9 +257,42 @@ class ExperimentManager:
         return df
 
 
+    def produce_report_by_periods(self, top_n, out_filename, periods=None, resample_periods=[60], counter_currencies=None,
+                       sources=[0], tickers=None, start_cash=1000, start_crypto=0):
+
+        if tickers is None:
+            tickers = ComparativeEvaluation.build_tickers(counter_currencies, sources)
+
+        if periods is None:
+            periods = {
+                'Mar 2018': ('2018/03/01 00:00:00 UTC', '2018/03/31 23:59:59 UTC'),
+                'Apr 2018': ('2018/04/01 00:00:00 UTC', '2018/04/30 23:59:59 UTC'),
+                'May 2018': ('2018/05/01 00:00:00 UTC', '2018/05/31 23:59:59 UTC'),
+                'Jun 2018': ('2018/06/01 00:00:00 UTC', '2018/06/30 23:59:59 UTC'),
+                'Jul 2018': ('2018/07/01 00:00:00 UTC', '2018/07/31 23:59:59 UTC'),
+                'Aug 2018': ('2018/08/01 00:00:00 UTC', '2018/08/31 23:59:59 UTC'),
+                'Q1 2018': ('2018/01/01 00:00:00 UTC', '2018/03/31 23:59:59 UTC'),
+                'Q2 2018': ('2018/04/01 00:00:00 UTC', '2018/06/30 23:59:59 UTC'),
+                '678 2018': ('2018/06/01 00:00:00 UTC', '2018/08/31 23:59:59 UTC'),
+            }
+
+        writer = pd.ExcelWriter(out_filename)
+
+        from dateutil import parser
+        for period in periods:
+            start_time = parser.parse(periods[period][0]).timestamp()
+            end_time = parser.parse(periods[period][1]).timestamp()
+            self.produce_report(top_n, out_filename, start_time, end_time, resample_periods,
+                           counter_currencies,
+                           sources, tickers, start_cash, start_crypto, writer, sheet_prefix=f"({period}) ")
+
+        writer.save()
+        writer.close()
+
+
     @time_performance
-    def produce_report(self, top_n, out_filename, start_time, end_time, counter_currency,
-                       sources=[0], resample_periods=[60], start_cash=1000, start_crypto=0):
+    def produce_report(self, top_n, out_filename, start_time, end_time, resample_periods=[60], counter_currencies=None,
+                       sources=[0], tickers=None, start_cash=1000, start_crypto=0, writer=None, sheet_prefix=None):
         performance_df = self.get_best_performing_across_variants_and_datasets(self.training_data)
 
         genetic_strategies = []
@@ -269,58 +305,78 @@ class ExperimentManager:
         ann_rsi_strategies, basic_strategies, vbi_strategies = build_itf_baseline_strategies()
         strategies = ann_rsi_strategies + basic_strategies + vbi_strategies
 
-
-        logging.info('Running baseline evaluations')
+        logging.info('Evaluating GP strategies...')
 
         genetic_backtests = []
         genetic_baselines = []
 
-        for (source, resample_period) in itertools.product(sources, resample_periods):
-            transaction_currencies = get_currencies_trading_against_counter(counter_currency, source)
+        # prepare tickers
+        if tickers is None:
+            tickers = ComparativeEvaluation.build_tickers(counter_currencies, sources)
 
-            logging.info(f'Running genetic backtests for source {source}, resample period {resample_period}')
-            data_collection = []
+        data_collection = []
 
-            for transaction_currency in transaction_currencies:
-                try:
-                    data = Data(
-                        start_time=start_time,
-                        end_time=end_time,
-                        transaction_currency=transaction_currency,
-                        counter_currency=counter_currency,
-                        resample_period=resample_period,
-                        source=source,
-                        start_cash=start_cash,
-                        start_crypto=start_crypto
-                    )
-                    data_collection.append(data)
-                except Exception as e: # in case of missing data
-                    logging.error(f'Unable to load data for {transaction_currency}-{counter_currency}, skipping...')
-                    logging.error(str(e))
+        for (ticker, resample_period) in itertools.product(tickers, resample_periods):
+            try:
+                data = Data(
+                    start_time=start_time,
+                    end_time=end_time,
+                    transaction_currency=ticker.transaction_currency,
+                    counter_currency=ticker.counter_currency,
+                    resample_period=resample_period,
+                    source=ticker.source,
+                    start_cash=start_cash,
+                    start_crypto=start_crypto
+                )
+                data_collection.append(data)
+            except Exception as e: # in case of missing data
+                logging.error(f'Unable to load data for {ticker.transaction_currency}-{ticker.counter_currency}, skipping...')
+                logging.error(str(e))
 
-            # build a new TAProvider based on the loaded data
-            ta_provider = TAProviderCollection(data_collection)
+        # build a new TAProvider based on the loaded data
+        ta_provider = TAProviderCollection(data_collection)
 
-            # do genetic program backtesting on the new data
-            for data in data_collection:
-                for i in range(top_n):
-                    row = performance_df.iloc[i]
-                    try:
-                        evaluation = self._build_evaluation_object(row.individual, row.variant, data, function_provider=ta_provider)
-                        genetic_backtests.append(evaluation)
-                        genetic_baselines.append(evaluation.benchmark_backtest)
+        param_list = []
 
-                    except NoPriceDataException as e:
-                        logging.error(e)
+        # do genetic program backtesting on the new data
+        for data in data_collection:
+            for i in range(top_n):
+                row = performance_df.iloc[i]
 
-        comp = ComparativeEvaluation(strategies, counter_currencies=[counter_currency],
-                                     resample_periods=resample_periods,
-                                     sources=sources, start_cash=start_cash, start_crypto=start_crypto,
-                                     start_time=start_time, end_time=end_time, debug = False)
+                param_list.append({'individual': row.individual,
+                                    'db_record': self.get_db_record(row.variant),
+                                    'data': data,
+                                    'function_provider':ta_provider}
 
+                                  )
+        """
+        with Pool(POOL_SIZE) as pool:
+            backtests = pool.map(self._build_evaluation_object_parallel, param_list)
+            pool.close()
+            pool.join()
+            logging.info("Parallel processing finished.")
+        """
+
+        backtests = map(self._build_evaluation_object_parallel, param_list)
+
+        for evaluation in backtests:
+            if evaluation is None:
+                continue
+            genetic_backtests.append(evaluation)
+            genetic_baselines.append(evaluation.benchmark_backtest)
+
+        logging.info("Evaluating baseline strategies...")
+
+        comp = ComparativeEvaluation(strategies, start_cash=start_cash, start_crypto=start_crypto,
+                                     start_time=start_time, end_time=end_time, resample_periods=resample_periods,
+                                     counter_currencies=counter_currencies, sources=sources, debug=False, tickers=tickers)
 
         report = ComparativeReportBuilder(comp.backtests + genetic_backtests, comp.baselines + genetic_baselines)
-        report.all_coins_report(out_filename, group_strategy_variants=False)
+        if writer is None:
+            report.all_coins_report(out_filename, group_strategy_variants=False)
+        else:
+            report.all_coins_report(writer=writer, sheet_prefix=sheet_prefix,
+                                               group_strategy_variants=False)
 
 
     def get_performance_df_for_dataset_and_variant(self, variant, data):
@@ -423,6 +479,11 @@ class ExperimentManager:
         if function_provider is None:
             function_provider = self.function_provider
         db_record = self.get_db_record(variant)
+
+        return self.build_genetic_program(data, function_provider, db_record)
+
+    @staticmethod
+    def build_genetic_program(data, function_provider, db_record):
         grammar = Grammar.construct(
             grammar_name=db_record['grammar_version'],
             function_provider=function_provider,
@@ -439,11 +500,22 @@ class ExperimentManager:
         )
         return genetic_program
 
+
     def _build_evaluation_object(self, individual, variant, data, function_provider=None):
+
         genetic_program = self._build_genetic_program(variant, data, function_provider)
         if function_provider is not None: # rebuild individual with the new data
             individual = genetic_program.individual_from_string(str(individual))
         return genetic_program.build_evaluation_object(individual, data)
+
+    @staticmethod
+    def _build_evaluation_object_parallel(params):
+        try:
+            genetic_program = ExperimentManager.build_genetic_program(params['data'], params['function_provider'], params['db_record'])
+            individual = genetic_program.individual_from_string(str(params['individual']))
+            return genetic_program.build_evaluation_object(individual, params['data'])
+        except NoPriceDataException:
+            return None
 
     def _get_fitness(self, individual, variant, data):
         genetic_program = self._build_genetic_program(variant, data)
@@ -538,8 +610,8 @@ class ExperimentDB:
 #
 ####################################
 
-#e = ExperimentManager("parallel_test.json")
-e = ExperimentManager("gv4_experiments.json")
+e = ExperimentManager("parallel_test.json")
+#e = ExperimentManager("gv4_experiments.json")
 
 if __name__ == "__main__":
     import datetime
@@ -549,27 +621,23 @@ if __name__ == "__main__":
     #e.run_experiments()
     #e.produce_report(5, 'gp_backtesting_BTC_train.xlsx', start_time, end_time, 'BTC')
 
-
     #start_time = datetime.datetime(2018, 6, 1, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
     #end_time = datetime.datetime(2018, 8, 1, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
     #e.produce_report(5, 'gp_backtesting_USDT_6_res60_2.xlsx', start_time, end_time, 'USDT')
-    e.produce_report(5, 'gp_backtesting_BTC_6_res60_2.xlsx', start_time, end_time, 'BTC')
 
+    from comparative_evaluation import Ticker
+    tickers = [Ticker(0, 'BTC','USDT')] #, Ticker(0, 'ETH', 'BTC')]
+    #e.produce_report(5, 'gp_backtesting_BTC_6_res60_2.xlsx', start_time, end_time, counter_currencies=['BTC'])
+
+    #e.produce_report_by_periods(top_n=5, out_filename="period_test.xlsx", counter_currencies=['BTC'], periods=None)
+    #e.produce_report_by_periods(top_n=5, out_filename="period_test_limited.xlsx", tickers=tickers, periods=None)
 
     #e.run_experiments()
-    #e.run_parallel_experiments()
-    #from pathos.multiprocessing import ProcessingPool as Pool
+    e.run_parallel_experiments()
+    #exit(0)
 
-    #with Pool(1) as pool:
-    #    print(pool.map(run_variant, e.variants))
-
-    #e.produce_report(1, 'gp_backtesting.xlsx')
-    exit(0)
-
-
-    performance_dfs = e.get_joined_performance_dfs_over_all_variants()
-    e.performance_df_row_info(performance_dfs[0].iloc[0])
-
+    #performance_dfs = e.get_joined_performance_dfs_over_all_variants()
+    #e.performance_df_row_info(performance_dfs[0].iloc[0])
 
     #e.explore_records()
     #e.best_individuals_across_variants_and_datasets = e.get_best_performing_across_variants_and_datasets(e.training_data)

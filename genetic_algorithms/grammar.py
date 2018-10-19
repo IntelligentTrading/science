@@ -186,3 +186,56 @@ class GrammarV4(Grammar):
     @property
     def longest_function_history_size(self):
         return 200
+
+
+
+class GrammarV5(Grammar):
+
+    _name = "gv5"
+
+    def __init__(self, function_provider, ephemeral_suffix=""):
+        super(GrammarV5, self).__init__(function_provider)
+        self._ephemeral_suffix = ephemeral_suffix
+        self._build_grammar()
+
+    def _build_grammar(self):
+        pset = super()._init_basic_grammar()
+        pset.addPrimitive(self.function_provider.rsi_lt_20, [list], bool)
+        pset.addPrimitive(self.function_provider.rsi_lt_25, [list], bool)
+        pset.addPrimitive(self.function_provider.rsi_lt_30, [list], bool)
+        pset.addPrimitive(self.function_provider.rsi_gt_70, [list], bool)
+        pset.addPrimitive(self.function_provider.rsi_gt_75, [list], bool)
+        pset.addPrimitive(self.function_provider.rsi_gt_80, [list], bool)
+        pset.addPrimitive(self.function_provider.macd_bullish, [list], bool)
+        pset.addPrimitive(self.function_provider.macd_bearish, [list], bool)
+        pset.addPrimitive(self.function_provider.adx, [list], float)
+        pset.addPrimitive(self.function_provider.sma20, [list], float)
+        pset.addPrimitive(self.function_provider.sma50, [list], float)
+        pset.addPrimitive(self.function_provider.sma200, [list], float)
+        pset.addPrimitive(self.function_provider.ema20, [list], float)
+        pset.addPrimitive(self.function_provider.ema50, [list], float)
+        pset.addPrimitive(self.function_provider.ema200, [list], float)
+        pset.addPrimitive(self.function_provider.price, [list], float)
+        pset.addPrimitive(self.function_provider.ema_bullish_cross, [list], bool)
+        pset.addPrimitive(self.function_provider.ema_bearish_cross, [list], bool)
+        pset.addPrimitive(self.function_provider.bbands_bullish_cross, [list], bool)
+        pset.addPrimitive(self.function_provider.bbands_bearish_cross, [list], bool)
+        pset.addPrimitive(self.function_provider.bbands_squeeze_bullish, [list], bool)
+        pset.addPrimitive(self.function_provider.bbands_squeeze_bearish, [list], bool)
+        pset.addPrimitive(self.function_provider.bbands_price_gt_up, [list], bool)
+        pset.addPrimitive(self.function_provider.bbands_price_lt_low, [list], bool)
+        pset.addPrimitive(self.function_provider.slowd_gt_80, [list], bool)
+        pset.addPrimitive(self.function_provider.slowd_lt_20, [list], bool)
+        pset.addPrimitive(self.function_provider.candlestick_momentum_buy, [list], bool)
+        pset.addPrimitive(self.function_provider.candlestick_momentum_sell, [list], bool)
+        pset.addPrimitive(self.function_provider.macd_stoch_sell, [list], bool)
+        pset.addPrimitive(self.function_provider.macd_stoch_buy, [list], bool)
+
+        pset.addTerminal(20.0, float)
+        pset.addTerminal(30.0, float)
+        pset.addTerminal(40.0, float)
+        self._pset = pset
+
+    @property
+    def longest_function_history_size(self):
+        return 200
