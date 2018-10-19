@@ -11,6 +11,7 @@ from config import POOL_SIZE
 from utils import time_performance
 from collections import namedtuple
 import pandas.io.formats.excel
+from utils import parallel_run
 
 Ticker = namedtuple("Ticker", "source transaction_currency counter_currency")
 
@@ -119,8 +120,8 @@ class ComparativeEvaluation:
     Uses SignalDrivenBacktester.
     """
 
-    def __init__(self, strategy_set, counter_currencies, resample_periods, sources,
-                 start_cash, start_crypto, start_time, end_time, output_file=None, time_delay=0, debug=False,
+    def __init__(self, strategy_set, start_cash, start_crypto, start_time, end_time, resample_periods,
+                 counter_currencies=None, sources=None, tickers=None, output_file=None, time_delay=0, debug=False,
                  order_generator=OrderGenerator.ALTERNATING, parallelize=True):
 
         self.strategy_set = sorted(strategy_set)
@@ -138,7 +139,10 @@ class ComparativeEvaluation:
         self.order_generator = order_generator
         self._parallelize = parallelize
 
-        self._tickers = self._build_tickers(counter_currencies, sources)
+        if tickers is None:
+            self.tickers = self.build_tickers(counter_currencies, sources)
+        else:
+            self.tickers = tickers
 
         self._run_backtests(debug)
         self._report = ComparativeReportBuilder(self.backtests, self.baselines)
@@ -151,7 +155,8 @@ class ComparativeEvaluation:
         if output_file is not None:
             self._report.write_summary(output_file)
 
-    def _build_tickers(self, counter_currencies, sources):
+    @staticmethod
+    def build_tickers( counter_currencies, sources):
         currency_tuples = []
         for source, counter_currency in itertools.product(sources, counter_currencies):
             currency_tuples += [Ticker(source, transaction_currency, counter_currency)
@@ -166,7 +171,7 @@ class ComparativeEvaluation:
         param_list = []
 
         for strategy, resample_period, ticker in \
-                itertools.product(self.strategy_set, self.resample_periods, self._tickers):
+                itertools.product(self.strategy_set, self.resample_periods, self.tickers):
 
             params = {}
             params['strategy'] = strategy
@@ -185,11 +190,12 @@ class ComparativeEvaluation:
             param_list.append(params)
 
         if self._parallelize:
-            from pathos.multiprocessing import ProcessingPool as Pool
-            with Pool(POOL_SIZE) as pool:
-                backtests = pool.map(self._evaluate, param_list)
-                pool.close()
-                pool.join()
+            # from pathos.multiprocessing import ProcessingPool as Pool
+            # with Pool(POOL_SIZE) as pool:
+            #    backtests = pool.map(self._evaluate, param_list)
+            #    pool.close()
+            #    pool.join()
+            backtests = parallel_run(self._evaluate, param_list)
             logging.info("Parallel processing finished.")
         else:
             backtests = map(self._evaluate, param_list)

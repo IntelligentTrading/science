@@ -1,6 +1,8 @@
 import datetime
 import logging
 import time
+from config import POOL_SIZE
+from pathos.multiprocessing import Pool
 
 
 def datetime_from_timestamp(timestamp):
@@ -20,3 +22,14 @@ def time_performance(func):
         return result
 
     return wrapper
+
+
+def parallel_run(func, param_list, pool_size=POOL_SIZE):
+    with Pool(pool_size) as pool:
+        results = pool.map(func, param_list)
+        pool.close()
+        pool.join()
+        pool.terminate() # needed for Pathos,
+#        pool.restart()   # see https://stackoverflow.com/questions/49888485/pathos-multiprocessings-pool-appears-to-be-nonlocal
+    return results
+

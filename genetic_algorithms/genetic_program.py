@@ -375,8 +375,8 @@ class GeneticProgram:
 
         return self.combined_fitness_operator(fitnesses),
 
-    def build_evaluation_object(self, individual, data, ticker=True):
-        if not ticker:
+    def build_evaluation_object(self, individual, data, tick_based=True):
+        if not tick_based:
             strategy = GeneticSignalStrategy(individual, data, self,
                                              history_size=self.grammar.longest_function_history_size)
             evaluation = strategy.evaluate(data.transaction_currency, data.counter_currency,
@@ -411,12 +411,10 @@ class GeneticProgram:
                 verbose=False,
                 order_generator=self.order_generator
             )
-
         return evaluation
 
     def individual_from_string(self, code):
         return creator.Individual(PrimitiveTree.from_string(code, self.grammar.pset))
-
 
 
     @staticmethod

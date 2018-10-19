@@ -27,7 +27,7 @@ class FunctionProvider:
         return x
 
 
-DataKey = namedtuple('DataKey', 'transaction_currency counter_currency start_time end_time')
+DataKey = namedtuple('DataKey', 'source resample_period transaction_currency counter_currency start_time end_time')
 
 
 class TAProvider(FunctionProvider):
@@ -105,7 +105,7 @@ class TAProvider(FunctionProvider):
 class TAProviderCollection(FunctionProvider):
 
     def __init__(self, data_collection):
-        self.providers = {DataKey(data.transaction_currency, data.counter_currency,
+        self.providers = {DataKey(data.source, data.resample_period, data.transaction_currency, data.counter_currency,
                                   data.start_time, data.end_time): TAProvider(data) for data in data_collection}
         # create methods
         members = inspect.getmembers(TAProvider, predicate=inspect.isfunction)

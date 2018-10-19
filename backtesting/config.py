@@ -10,7 +10,7 @@ mysql_database_config = {
 '''
 import redis
 
-postgres_connection_string = "host='localhost' dbname='itf_10_08' user='postgres' password='itfscience'"
+postgres_connection_string = "host='localhost' dbname='itf_10_14' user='postgres' password='itfscience'"
 
 
 backtesting_cols_to_names = {
@@ -56,4 +56,4 @@ if ENABLE_BACKTEST_CACHE and CACHE_MODE == CACHE_MODE_REDIS:
 else:
     redis_instance = None
 
-POOL_SIZE = 8
+POOL_SIZE = 12

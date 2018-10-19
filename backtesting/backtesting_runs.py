@@ -11,8 +11,8 @@ def best_performing_signals_of_the_period(start_time=None, end_time=None, additi
                                           best_performing_filename=None, full_report_filename=None,
                                           group_strategy_variants=False):
     if start_time is None or end_time is None:
-        start_time = datetime.datetime(2018, 10, 8, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
-        end_time = datetime.datetime(2018, 10, 12, 23, 59, tzinfo=datetime.timezone.utc).timestamp()
+        start_time = datetime.datetime(2018, 9, 24, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
+        end_time = datetime.datetime(2018, 9, 28, 23, 59, tzinfo=datetime.timezone.utc).timestamp()
 
     if best_performing_filename is None:
         best_performing_filename = f"best_performing_{datetime.datetime.utcfromtimestamp(end_time).strftime('%Y-%m-%d')}.xlsx"
@@ -23,18 +23,9 @@ def best_performing_signals_of_the_period(start_time=None, end_time=None, additi
     ann_rsi_strategies, basic_strategies, vbi_strategies = build_itf_baseline_strategies()
     strategies = basic_strategies + vbi_strategies + ann_rsi_strategies + additional_strategies
 
-    comparison = ComparativeEvaluation(
-        strategy_set=strategies,
-        counter_currencies=["BTC"],
-        resample_periods=[60,240,1440],
-        sources=[0,1,2],
-        start_cash=1,
-        start_crypto=0,
-        start_time=start_time,
-        end_time=end_time,
-        output_file=best_performing_filename,
-        debug=False
-    )
+    comparison = ComparativeEvaluation(strategy_set=strategies, start_cash=1, start_crypto=0, start_time=start_time,
+                                       end_time=end_time, resample_periods=[60, 240, 1440], counter_currencies=["BTC"],
+                                       sources=[0, 1, 2], output_file=best_performing_filename, debug=False)
 
     comparison.report.all_coins_report(full_report_filename, group_strategy_variants=group_strategy_variants)
 
@@ -111,18 +102,11 @@ def in_depth_signal_comparison(out_path):
         start_time = parser.parse(periods[period][0]).timestamp()
         end_time = parser.parse(periods[period][1]).timestamp()
 
-        comparison = ComparativeEvaluation(
-            strategy_set=strategies,
-            counter_currencies=["BTC"],
-            resample_periods=[60,240,1440],
-            sources=[0,1,2],
-            start_cash=1,
-            start_crypto=0,
-            start_time=start_time,
-            end_time=end_time,
-            output_file=f"debug_best_performing_{datetime.datetime.utcfromtimestamp(end_time).strftime('%Y-%m-%d')}.xlsx",
-            debug=False
-        )
+        comparison = ComparativeEvaluation(strategy_set=strategies, start_cash=1, start_crypto=0, start_time=start_time,
+                                           end_time=end_time, resample_periods=[60, 240, 1440],
+                                           counter_currencies=["BTC"], sources=[0, 1, 2],
+                                           output_file=f"debug_best_performing_{datetime.datetime.utcfromtimestamp(end_time).strftime('%Y-%m-%d')}.xlsx",
+                                           debug=False)
 
         comparison.report.all_coins_report(writer=writer, sheet_prefix=f'({period}) ', group_strategy_variants=False)
 
@@ -142,18 +126,9 @@ def rsi_vs_rsi_cumulative(start_time, end_time, time_delay=0):
     strategies_rsi_cumulative = StrategyEvaluationSetBuilder.build_from_rsi_thresholds("RSI_Cumulative", [75], [25])
     strategies_rsi.extend(strategies_rsi_cumulative)
 
-    ComparativeEvaluation(
-        strategy_set=strategies_rsi,
-        currency_pairs=currency_pairs,
-        resample_periods=resample_periods,
-        sources=[0],
-        start_cash=1,
-        start_crypto=0,
-        start_time=start_time,
-        end_time=end_time,
-        output_file="RSI_cumulative_delayed.xlsx",
-        time_delay=time_delay
-    )
+    ComparativeEvaluation(strategy_set=strategies_rsi, start_cash=1, start_crypto=0, start_time=start_time,
+                          end_time=end_time, resample_periods=resample_periods, counter_currencies=None, sources=[0],
+                          output_file="RSI_cumulative_delayed.xlsx", time_delay=time_delay)
     find_num_cumulative_outperforms(
         currency_pairs=currency_pairs,
         resample_periods=resample_periods,
