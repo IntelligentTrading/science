@@ -36,7 +36,7 @@ class StrategyDecision:
     def ignore(self):
         return self.outcome == StrategyDecision.IGNORE
 
-
+@total_ordering
 class Strategy(ABC):
     """
     Base class for trading strategies.
@@ -88,6 +88,12 @@ class Strategy(ABC):
     def get_sell_signals(strategy, signals):
         return [signal for signal in signals
                 if strategy.belongs_to_this_strategy(signal) and strategy.indicates_sell(signal)]
+
+    def __eq__(self, other):
+        return self.get_short_summary() == other.get_short_summary()
+
+    def __lt__(self, other):
+        return self.get_short_summary() < other.get_short_summary()
 
 
 class SignalStrategy(Strategy):

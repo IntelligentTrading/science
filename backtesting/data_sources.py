@@ -335,7 +335,7 @@ def get_currencies_for_signal(counter_currency, signal, source):
                                                   WHERE counter_currency = %s 
                                                   AND signal_signal.signal = %s AND source = %s"""
     counter_currency_id = CounterCurrency[counter_currency].value
-    cursor = dbc.execute(trading_against_counter_and_signal_query, params=(counter_currency_id,signal,source,))
+    cursor = dbc.execute(trading_against_counter_and_signal_query, params=(counter_currency_id, signal, source,))
     data = cursor.fetchall()
     currencies = []
     for currency in data:

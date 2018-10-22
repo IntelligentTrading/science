@@ -23,8 +23,9 @@ def evaluate_rsi_cumulative_compare(overbought_threshold, oversold_threshold, **
     return evaluation_rsi_cumulative, evaluation_rsi
 
 
-def find_num_cumulative_outperforms(currency_pairs, resample_periods, **kwargs):
-    resample_periods = (60, 240, 1440)
+def find_num_cumulative_outperforms(tickers, **kwargs):
+    resample_periods = kwargs["resample_periods"]
+    del kwargs["resample_periods"]
     total_rsi_cumulative_better = 0
     total_rsi_cumulative_eq = 0
     total_evaluated_pairs = 0
@@ -32,12 +33,12 @@ def find_num_cumulative_outperforms(currency_pairs, resample_periods, **kwargs):
     rsi_cumulative_profitable = 0
     total_rsi = 0
     total_cumulative = 0
-    for transaction_currency, counter_currency in currency_pairs:
+    for ticker in tickers:
         for resample_period in resample_periods:
             try:
                 kwargs['resample_period'] = resample_period
-                kwargs['transaction_currency'] = transaction_currency
-                kwargs['counter_currency'] = counter_currency
+                kwargs['transaction_currency'] = ticker.transaction_currency
+                kwargs['counter_currency'] = ticker.counter_currency
                 evaluation_cumulative, evaluation_rsi = evaluate_rsi_cumulative_compare(75, 25, **kwargs)
 
                 profit_rsi_cumulative = evaluation_cumulative.profit_percent
