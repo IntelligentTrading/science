@@ -2,8 +2,8 @@ from strategies import *
 from backtester_signals import SignalDrivenBacktester
 
 
-def evaluate_rsi_signature(**kwargs):
-    rsi_strategy = SignalSignatureStrategy(['rsi_buy_2', 'rsi_sell_2','rsi_buy_1', 'rsi_sell_1','rsi_buy_3', 'rsi_sell_3'])
+def evaluate_rsi_signature(signature=['rsi_buy_2', 'rsi_sell_2','rsi_buy_1', 'rsi_sell_1','rsi_buy_3', 'rsi_sell_3'], **kwargs):
+    rsi_strategy = SignalSignatureStrategy(signature)
     return SignalDrivenBacktester(strategy=rsi_strategy, **kwargs)
 
 
@@ -20,6 +20,11 @@ def evaluate_trend_based(signal_type, **kwargs):
 def evaluate_rsi_cumulative_compare(overbought_threshold, oversold_threshold, **kwargs):
     evaluation_rsi = evaluate_rsi(overbought_threshold, oversold_threshold, "RSI", **kwargs)
     evaluation_rsi_cumulative = evaluate_rsi(overbought_threshold, overbought_threshold, "RSI_Cumulative", **kwargs)
+    return evaluation_rsi_cumulative, evaluation_rsi
+
+def evaluate_rsi_cumulative_compare_signals(**kwargs):
+    evaluation_rsi = evaluate_rsi_signature(['rsi_buy_2', 'rsi_sell_2'], **kwargs)
+    evaluation_rsi_cumulative = evaluate_rsi_signature(['rsi_cumulat_buy_2', 'rsi_cumulat_sell_2'], **kwargs)
     return evaluation_rsi_cumulative, evaluation_rsi
 
 
@@ -39,7 +44,9 @@ def find_num_cumulative_outperforms(tickers, **kwargs):
                 kwargs['resample_period'] = resample_period
                 kwargs['transaction_currency'] = ticker.transaction_currency
                 kwargs['counter_currency'] = ticker.counter_currency
-                evaluation_cumulative, evaluation_rsi = evaluate_rsi_cumulative_compare(75, 25, **kwargs)
+                kwargs['evaluate_profit_on_last_order'] = False
+                #evaluation_cumulative, evaluation_rsi = evaluate_rsi_cumulative_compare(75, 25, **kwargs)
+                evaluation_cumulative, evaluation_rsi = evaluate_rsi_cumulative_compare_signals(**kwargs)
 
                 profit_rsi_cumulative = evaluation_cumulative.profit_percent
                 profit_rsi = evaluation_rsi.profit_percent

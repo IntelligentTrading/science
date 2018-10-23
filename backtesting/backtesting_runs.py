@@ -118,17 +118,19 @@ def rsi_vs_rsi_cumulative(start_time, end_time, time_delay=0):
     source = 0
     counter_currency = "BTC"
     transaction_currencies = get_currencies_for_signal(counter_currency, "RSI_Cumulative", source=0)
-    currency_pairs = []
     resample_periods = [60, 240, 1440]
     tickers = [Ticker(source, transaction_currency, counter_currency) for transaction_currency in transaction_currencies]
 
-    strategies_rsi = StrategyEvaluationSetBuilder.build_from_rsi_thresholds("RSI", [75], [25])
-    strategies_rsi_cumulative = StrategyEvaluationSetBuilder.build_from_rsi_thresholds("RSI_Cumulative", [75], [25])
+    strategies_rsi = StrategyEvaluationSetBuilder.build_from_signal_set(
+        ['rsi_buy_2'], ['rsi_sell_2'], 1, 1, SignalCombinationMode.SAME_TYPE)
+    strategies_rsi_cumulative = StrategyEvaluationSetBuilder.build_from_signal_set(
+        ['rsi_cumulat_buy_2'], ['rsi_cumulat_sell_2'], 1, 1, SignalCombinationMode.SAME_TYPE)
     strategies_rsi.extend(strategies_rsi_cumulative)
 
     ComparativeEvaluation(strategy_set=strategies_rsi, start_cash=1, start_crypto=0, start_time=start_time,
                           end_time=end_time, resample_periods=resample_periods, tickers=tickers,
                           output_file="RSI_cumulative_delayed.xlsx", time_delay=time_delay, parallelize=False)
+
     find_num_cumulative_outperforms(
         tickers=tickers,
         resample_periods=resample_periods,
@@ -306,9 +308,11 @@ if __name__ == "__main__":
     #in_depth_signal_comparison('comp_no_ann.xlsx')
 
     # RSI vs RSI cumulative
-    start_time = 1518523200  # first instance of RSI_Cumulative signal
-    end_time = 1526637600
-    rsi_vs_rsi_cumulative(start_time, end_time, 60*5)
+    #start_time = 1518523200  # first instance of RSI_Cumulative signal
+    #end_time = 1526637600
+    start_time =  datetime.datetime(2018, 5, 1, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
+    end_time = datetime.datetime(2018, 7, 31, 23, 59, tzinfo=datetime.timezone.utc).timestamp()
+    rsi_vs_rsi_cumulative(start_time, end_time, 0)
 
     # Other runs
     # evaluate_rsi_any_currency("BTC", start, end, 1000, 0, 70, 30)

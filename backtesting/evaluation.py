@@ -47,6 +47,10 @@ class Evaluation(ABC):
             (start_cash == INF_CASH and start_crypto == INF_CRYPTO):
             logging.warning('Position-based generator selected, and cash not set to infinite. '
                             'Be careful of currency scale errors!')
+
+        if self._evaluate_profit_on_last_order is True:
+            logging.warning('Evaluating profit on last order. '
+                            'Strategies generating only one buy and no sells will have zero profit.')
         self._order_generator = OrderGenerator.create(
             generator_type=order_generator,
             start_cash=start_cash,
