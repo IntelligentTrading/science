@@ -55,7 +55,7 @@ dbc = PostgresDatabaseConnection()
 
 def get_resampled_prices_in_range(start_time, end_time, transaction_currency, counter_currency, resample_period, source=0,
                                   normalize=True):
-    resampled_price_range_query = """SELECT timestamp, close_price, high_price, low_price
+    resampled_price_range_query = """SELECT timestamp, close_price, high_price, low_price, close_volume
                                      FROM indicator_priceresampl 
                                      WHERE transaction_currency = %s 
                                      AND counter_currency = %s 

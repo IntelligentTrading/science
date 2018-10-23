@@ -230,6 +230,8 @@ class GrammarV5(Grammar):
         pset.addPrimitive(self.function_provider.candlestick_momentum_sell, [list], bool)
         pset.addPrimitive(self.function_provider.macd_stoch_sell, [list], bool)
         pset.addPrimitive(self.function_provider.macd_stoch_buy, [list], bool)
+        pset.addPrimitive(self.function_provider.volume_cross_up, [list], bool)
+        pset.addPrimitive(self.function_provider.volume_cross_down, [list], bool)
 
         pset.addTerminal(20.0, float)
         pset.addTerminal(30.0, float)

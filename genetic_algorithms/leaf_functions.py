@@ -164,6 +164,18 @@ class TAProvider(FunctionProvider):
         timestamp = input[0]
         return self.data.price_data.loc[timestamp, "close_price"]
 
+    def volume(self, input):
+        return self.data.close_volume_data[self._get_timestamp_index(input)]
+
+    def sma50_volume(self, input):
+        return self.data.sma50_volume_data[self._get_timestamp_index(input)]
+
+    def volume_cross_up(self, input):
+        return self._crosses_from_below(self.data.close_volume_data, self.data.sma50_volume_data, input)
+
+    def volume_cross_down(self, input):
+        return self._crosses_from_above(self.data.close_volume_data, self.data.sma50_volume_data, input)
+
     def macd_stoch_sell(self, input):
         index = self._get_timestamp_index(input)
         return self.data.macd_hist[index] < 0 and self.data.slowd[index] > 71

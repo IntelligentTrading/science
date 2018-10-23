@@ -60,6 +60,15 @@ class Data:
         prices = np.array(self.price_data.close_price, dtype=float)
         high_prices = np.array(self.price_data.high_price, dtype=float)
         low_prices = np.array(self.price_data.low_price, dtype=float)
+        volumes = np.array(self.price_data.close_volume, dtype=float)
+
+        if np.isnan(volumes).all():
+            logging.warning(f'Unable to load valid volume data for for {transaction_currency}-{counter_currency}.')
+            self.sma50_volume_data = volumes[TICKS_FOR_PRECOMPUTE:]
+        else:
+            self.sma50_volume_data = talib.SMA(volumes, timeperiod=50)[TICKS_FOR_PRECOMPUTE:]
+
+        self.close_volume_data = volumes[TICKS_FOR_PRECOMPUTE:]
 
         self.rsi_data = talib.RSI(prices, timeperiod=14)[TICKS_FOR_PRECOMPUTE:]
         self.sma20_data = talib.SMA(prices, timeperiod=20)[TICKS_FOR_PRECOMPUTE:]
