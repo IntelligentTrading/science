@@ -3,7 +3,7 @@ import logging
 import time
 from config import POOL_SIZE
 from pathos.multiprocessing import Pool
-
+import tqdm
 
 def datetime_from_timestamp(timestamp):
     return datetime.datetime.utcfromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
@@ -26,7 +26,8 @@ def time_performance(func):
 
 def parallel_run(func, param_list, pool_size=POOL_SIZE):
     with Pool(pool_size) as pool:
-        results = pool.map(func, param_list)
+        #results = pool.map(func, param_list)
+        results = list(tqdm.tqdm(pool.imap(func, param_list), total=len(param_list)))
         pool.close()
         pool.join()
         pool.terminate() # needed for Pathos,
