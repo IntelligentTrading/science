@@ -384,6 +384,116 @@ def to_text(node, children_dict, labels):
         '''
     return output
 
+def format_dot_node(node, children_dict, labels):
+    if labels[node] == "if_then_else":
+        return f'''
+            {node} [label="{labels[children_dict[node][0]]}",
+                     shape=diamond];     
+        '''
+    elif labels[node] in ["lt", "gt", "and_", "or_", "xor"]:
+
+        label = f"{labels[children_dict[node][0]]} {labels[node]} {labels[children_dict[node][1]]}"
+        return f'''
+                    {node} [label="{label}",
+                             shape=circle];     
+                '''
+
+    else:
+        return f'''
+            {node} [label="{labels[node]}",
+                     shape=circle];     
+        '''
+
+
+def condition_to_string(node, children_dict, labels):
+    children = children_dict[node]
+    if len(children) == 0:
+        return labels[node]
+    if len(children) == 1:
+        ch1 = condition_to_string(children[0], children_dict, labels)
+        return f'{labels[node]} ({ch1})'
+    if len(children) == 2:
+        ch1 = condition_to_string(children[0], children_dict, labels)
+        ch2 = condition_to_string(children[1], children_dict, labels)
+        return f'({ch1}) {labels[node]} ({ch2})'
+    return "???"
+
+
+def build_node_style(label):
+    if label.lower() == "sell":
+        return "shape=ellipse, fillcolor=firebrick2, fixedsize=true, width=1, color=white"
+    elif label.lower() == "buy":
+        return "shape=ellipse, fillcolor=forestgreen, fixedsize=true, width=1, color=white"
+    elif label.lower() == "ignore":
+        return "shape=ellipse, fillcolor=gold, fixedsize=true, width=1, color=white"
+    return ""
+
+
+def to_dot(node, children_dict, labels):
+    children = children_dict[node]
+    if len(children) == 1:
+        return to_dot(children[0], children_dict, labels)
+
+    if labels[node] == "if_then_else":
+        label = condition_to_string(children[0], children_dict, labels)
+        children = children[1:]
+    else:
+        label = labels[node]
+
+    output = f'''{node} [label="{prettify_label(label)}",
+                         {build_node_style(label)}];'''
+    for i, child in enumerate(children):
+        output += to_dot(child, children_dict, labels)
+        if i == 0:
+            edge_label_setting = 'label=" yes "'
+        else:
+            edge_label_setting = 'label="    no "'
+
+        output += f"{node} -> {child} [{edge_label_setting}, minlen=3];"
+    return output
+
+
+def prettify_label(label):
+    label = label.split()
+    out = ""
+    for part in label:
+        part = part.replace("_lt_", " < ")
+        part = part.replace("_gt_", " > ")
+        if part.startswith("(ARG0)"):
+            out += part[len("(ARG0)")+1:]
+        elif part == "lt":
+            out += " < "
+        elif part == "gt":
+            out += ">"
+        elif part in ["and_", "or_"]:
+            out += " " + part[:-1] + " "
+        else:
+            part = part.strip("()")
+            out += part.upper()
+    return out
+
+
+
+def dot_graph(individual, out_file):
+    dot_template = """"
+    digraph {{
+      node [ fontcolor=white,
+             shape=rectangle,
+             color=gray,
+             style=filled,
+             fontname="helvetica",
+             fillcolor=gray20];
+                
+      edge [ fontname="helvetica", color=gray40, fontcolor=gray20];
+      {}
+      }}
+    """
+    print(str(individual))
+    nodes, edges, labels = gp.graph(individual)
+    d = recompute_tree_graph(nodes, edges)
+    print(dot_template.format(to_dot(0, d, labels)))
+
+
 def rewrite_graph_as_tree(individual, json_file_name):
     nodes, edges, labels = gp.graph(individual)
     d = recompute_tree_graph(nodes, edges)
