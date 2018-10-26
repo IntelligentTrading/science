@@ -13,17 +13,21 @@ from chart_plotter import *
 from order_generator import OrderGenerator
 from config import INF_CASH, INF_CRYPTO, POOL_SIZE
 from comparative_evaluation import ComparativeEvaluation, ComparativeReportBuilder
-from data_sources import get_currencies_trading_against_counter
+#from data_sources import get_currencies_trading_against_counter
 from backtesting_runs import build_itf_baseline_strategies
 from data_sources import NoPriceDataException
 from utils import time_performance
 from functools import partial
-from pathos.multiprocessing import ProcessingPool as Pool
+#from pathos.multiprocessing import ProcessingPool as Pool
 from utils import parallel_run
 
 SAVE_HOF_AND_BEST = True
 HOF_AND_BEST_FILENAME = 'rockstars.txt'
 LOAD_ROCKSTARS = True
+
+from utils import LogDuplicateFilter
+dup_filter = LogDuplicateFilter()
+logging.getLogger().addFilter(dup_filter)
 
 
 
@@ -133,7 +137,8 @@ class ExperimentManager:
         #with Pool(num_processes) as pool:
         #    records = pool.map(partial_run_func, self.variants)
         #    pool.close()
-        #   pool.join()
+        #    pool.join()
+        #    pool.terminate()
 
         for record in records:
             if record is not None: # empty records if experiments already exist
@@ -461,11 +466,16 @@ class ExperimentManager:
         if not data is None:
             data.plot(evaluation.orders, str(individual))
         print(f'String representation:\n{str(individual)}\n')
-        draw_tree(individual)
-        try:
-            networkx_graph(individual)
-        except:
-            logging.warning("Failed to plot networkx graph (not installed?), skipping...")
+        if in_notebook():
+            g = self.get_graph(individual)
+            from IPython.display import display
+            display(g)
+        #g.view()
+        # draw_tree(individual)
+        # try:
+        #    networkx_graph(individual)
+        # except:
+        #    logging.warning("Failed to plot networkx graph (not installed?), skipping...")
         print(f'Backtesting report:\n {evaluation.get_report()}\n')
         print(f'Benchmark backtesting report:\n {evaluation.benchmark_backtest.get_report()}\n')
 
@@ -547,6 +557,10 @@ class ExperimentManager:
         else:
             return individuals[:min(len(individuals), limit_top)]
 
+    def get_graph(self, individual):
+        return get_dot_graph(individual)
+
+
 
 class ExperimentDB:
 
@@ -610,8 +624,15 @@ class ExperimentDB:
 #
 ####################################
 
-e = ExperimentManager("parallel_test.json")
+#e = ExperimentManager("parallel_test.json")
 #e = ExperimentManager("gv4_experiments.json")
+
+#e = ExperimentManager("gv5_experiments.json")
+
+from utils import in_notebook
+
+if not in_notebook():
+    e = ExperimentManager("gv5_experiments_positions.json")
 
 if __name__ == "__main__":
     import datetime
@@ -633,7 +654,17 @@ if __name__ == "__main__":
     #e.produce_report_by_periods(top_n=5, out_filename="period_test_limited.xlsx", tickers=tickers, periods=None)
 
     #e.run_experiments()
+    #import tracemalloc
+
+    #tracemalloc.start()
+
     e.run_parallel_experiments()
+    #snapshot = tracemalloc.take_snapshot()
+    #top_stats = snapshot.statistics('lineno')
+
+    #print("[ Top 10 ]")
+    #for stat in top_stats[:10]:
+    #    print(stat)
     #exit(0)
 
     #performance_dfs = e.get_joined_performance_dfs_over_all_variants()
@@ -647,6 +678,7 @@ if __name__ == "__main__":
 
     print(compress(df.iloc[0].individual))
     print(str(df.iloc[0].individual))
+    e.show_individual(df.iloc[0].individual)
     #e.browse_variants()
 
 

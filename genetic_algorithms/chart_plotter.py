@@ -1,7 +1,10 @@
 import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
 from deap import gp
 from string import Template
 import networkx as nx
+from graphviz import Source
+from utils import in_notebook
 
 from gp_utils import recompute_tree_graph
 
@@ -384,6 +387,7 @@ def to_text(node, children_dict, labels):
         '''
     return output
 
+
 def format_dot_node(node, children_dict, labels):
     if labels[node] == "if_then_else":
         return f'''
@@ -467,16 +471,18 @@ def prettify_label(label):
             out += ">"
         elif part in ["and_", "or_"]:
             out += " " + part[:-1] + " "
+        elif part == "xor":
+            out += " " + part + " "
         else:
             part = part.strip("()")
+            # if part.startswith("(") and part.endswith(")"):
+            #    part = part[1:len(part)-1]
             out += part.upper()
     return out
 
 
-
-def dot_graph(individual, out_file):
-    dot_template = """"
-    digraph {{
+def dot_graph(individual):
+    dot_template = """digraph {{
       node [ fontcolor=white,
              shape=rectangle,
              color=gray,
@@ -488,10 +494,19 @@ def dot_graph(individual, out_file):
       {}
       }}
     """
-    print(str(individual))
     nodes, edges, labels = gp.graph(individual)
     d = recompute_tree_graph(nodes, edges)
-    print(dot_template.format(to_dot(0, d, labels)))
+    dot_str = dot_template.format(to_dot(0, d, labels))
+
+    return dot_str
+
+def save_dot_graph(individual, out_filename):
+    g = Source(dot_graph(individual))
+    g.render(out_filename)
+
+
+def get_dot_graph(individual):
+    return Source(dot_graph(individual))
 
 
 def rewrite_graph_as_tree(individual, json_file_name):
@@ -499,7 +514,6 @@ def rewrite_graph_as_tree(individual, json_file_name):
     d = recompute_tree_graph(nodes, edges)
     print(to_text(0, d, labels))
     print(d)
-
 
 
 def networkx_graph(individual):
@@ -517,6 +531,7 @@ def networkx_graph(individual):
     nx.draw_networkx_edges(g, pos)
     nx.draw_networkx_labels(g, pos, labels)
     plt.show()
+
 
 class DogeDNACanvas:
     def __init__(self, individual, container_name):

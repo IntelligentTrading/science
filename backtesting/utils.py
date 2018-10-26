@@ -34,3 +34,15 @@ def parallel_run(func, param_list, pool_size=POOL_SIZE):
 #        pool.restart()   # see https://stackoverflow.com/questions/49888485/pathos-multiprocessings-pool-appears-to-be-nonlocal
     return results
 
+def in_notebook():
+    import sys
+    return 'ipykernel' in sys.modules
+
+class LogDuplicateFilter(object):
+    def __init__(self):
+        self.msgs = set()
+
+    def filter(self, record):
+        rv = record.msg not in self.msgs
+        self.msgs.add(record.msg)
+        return rv
