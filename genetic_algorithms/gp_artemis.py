@@ -20,6 +20,8 @@ from utils import time_performance
 from functools import partial
 #from pathos.multiprocessing import ProcessingPool as Pool
 from utils import parallel_run
+from dateutil import parser
+
 
 SAVE_HOF_AND_BEST = True
 HOF_AND_BEST_FILENAME = 'rockstars.txt'
@@ -283,10 +285,8 @@ class ExperimentManager:
 
         writer = pd.ExcelWriter(out_filename)
 
-        from dateutil import parser
         for period in periods:
-            start_time = parser.parse(periods[period][0]).timestamp()
-            end_time = parser.parse(periods[period][1]).timestamp()
+            start_time, end_time = self._get_start_and_end_timestamp(periods[period])
             self.produce_report(top_n, out_filename, start_time, end_time, resample_periods,
                            counter_currencies,
                            sources, tickers, start_cash, start_crypto, writer, sheet_prefix=f"({period}) ")
@@ -294,81 +294,24 @@ class ExperimentManager:
         writer.save()
         writer.close()
 
+    def _get_start_and_end_timestamp(self, period_dict_item):
+        start_time = parser.parse(period_dict_item[0]).timestamp()
+        end_time = parser.parse(period_dict_item[1]).timestamp()
+        return start_time, end_time
 
     @time_performance
     def produce_report(self, top_n, out_filename, start_time, end_time, resample_periods=[60], counter_currencies=None,
                        sources=[0], tickers=None, start_cash=1000, start_crypto=0, writer=None, sheet_prefix=None):
-        performance_df = self.get_best_performing_across_variants_and_datasets(self.training_data)
 
-        genetic_strategies = []
-
-        # we will evaluate the performance of top n individuals
-        for i in range(top_n):
-            individual = performance_df.iloc[i].individual
-            genetic_strategies.append(individual)
 
         ann_rsi_strategies, basic_strategies, vbi_strategies = build_itf_baseline_strategies()
         strategies = ann_rsi_strategies + basic_strategies + vbi_strategies
 
         logging.info('Evaluating GP strategies...')
 
-        genetic_backtests = []
-        genetic_baselines = []
-
-        # prepare tickers
-        if tickers is None:
-            tickers = ComparativeEvaluation.build_tickers(counter_currencies, sources)
-
-        data_collection = []
-
-        for (ticker, resample_period) in itertools.product(tickers, resample_periods):
-            try:
-                data = Data(
-                    start_time=start_time,
-                    end_time=end_time,
-                    transaction_currency=ticker.transaction_currency,
-                    counter_currency=ticker.counter_currency,
-                    resample_period=resample_period,
-                    source=ticker.source,
-                    start_cash=start_cash,
-                    start_crypto=start_crypto
-                )
-                data_collection.append(data)
-            except Exception as e: # in case of missing data
-                logging.error(f'Unable to load data for {ticker.transaction_currency}-{ticker.counter_currency}, skipping...')
-                logging.error(str(e))
-
-        # build a new TAProvider based on the loaded data
-        ta_provider = TAProviderCollection(data_collection)
-
-        param_list = []
-
-        # do genetic program backtesting on the new data
-        for data in data_collection:
-            for i in range(top_n):
-                row = performance_df.iloc[i]
-
-                param_list.append({'individual': row.individual,
-                                    'db_record': self.get_db_record(row.variant),
-                                    'data': data,
-                                    'function_provider':ta_provider}
-
-                                  )
-        """
-        with Pool(POOL_SIZE) as pool:
-            backtests = pool.map(self._build_evaluation_object_parallel, param_list)
-            pool.close()
-            pool.join()
-            logging.info("Parallel processing finished.")
-        """
-
-        backtests = map(self._build_evaluation_object_parallel, param_list)
-
-        for evaluation in backtests:
-            if evaluation is None:
-                continue
-            genetic_backtests.append(evaluation)
-            genetic_baselines.append(evaluation.benchmark_backtest)
+        genetic_backtests, genetic_baselines = self._get_genetic_backtests(top_n, start_time, end_time,
+                                                                           resample_periods, counter_currencies,
+                                                                           sources, tickers, start_cash, start_crypto)
 
         logging.info("Evaluating baseline strategies...")
 
@@ -383,6 +326,68 @@ class ExperimentManager:
             report.all_coins_report(writer=writer, sheet_prefix=sheet_prefix,
                                                group_strategy_variants=False)
 
+    def _get_genetic_backtests(self, top_n, start_time, end_time, resample_periods, counter_currencies, sources,
+                               tickers, start_cash, start_crypto):
+
+        performance_df = self.get_best_performing_across_variants_and_datasets(self.training_data)
+        genetic_strategies = []
+
+        # we will evaluate the performance of top n individuals
+        for i in range(top_n):
+            individual = performance_df.iloc[i].individual
+            genetic_strategies.append(individual)
+
+        genetic_backtests = []
+        genetic_baselines = []
+        # prepare tickers
+        if tickers is None:
+            tickers = ComparativeEvaluation.build_tickers(counter_currencies, sources)
+        data_collection = []
+        for (ticker, resample_period) in itertools.product(tickers, resample_periods):
+            try:
+                data = Data(
+                    start_time=start_time,
+                    end_time=end_time,
+                    transaction_currency=ticker.transaction_currency,
+                    counter_currency=ticker.counter_currency,
+                    resample_period=resample_period,
+                    source=ticker.source,
+                    start_cash=start_cash,
+                    start_crypto=start_crypto
+                )
+                data_collection.append(data)
+            except Exception as e:  # in case of missing data
+                logging.error(
+                    f'Unable to load data for {ticker.transaction_currency}-{ticker.counter_currency}, skipping...')
+                logging.error(str(e))
+        # build a new TAProvider based on the loaded data
+        ta_provider = TAProviderCollection(data_collection)
+        param_list = []
+        # do genetic program backtesting on the new data
+        for data in data_collection:
+            for i in range(top_n):
+                row = performance_df.iloc[i]
+
+                param_list.append({'individual': row.individual,
+                                   'db_record': self.get_db_record(row.variant),
+                                   'data': data,
+                                   'function_provider': ta_provider}
+
+                                  )
+        """
+                with Pool(POOL_SIZE) as pool:
+                    backtests = pool.map(self._build_evaluation_object_parallel, param_list)
+                    pool.close()
+                    pool.join()
+                    logging.info("Parallel processing finished.")
+                """
+        backtests = map(self._build_evaluation_object_parallel, param_list)
+        for evaluation in backtests:
+            if evaluation is None:
+                continue
+            genetic_backtests.append(evaluation)
+            genetic_baselines.append(evaluation.benchmark_backtest)
+        return genetic_backtests, genetic_baselines
 
     def get_performance_df_for_dataset_and_variant(self, variant, data):
         """
@@ -560,6 +565,115 @@ class ExperimentManager:
     def get_graph(self, individual):
         return get_dot_graph(individual)
 
+    def analyze_performance_in_period(self, period_dict, training_tickers, top_n, out_filename, resample_periods=[60],
+                                      sources=[0], start_cash=1000, start_crypto=0, additional_fields={}, prefix=""):
+        assert len(period_dict) == 1
+        start_time, end_time = self._get_start_and_end_timestamp(list(period_dict.items())[0][1])
+        results = {}
+        for source, resample_period in itertools.product(sources, resample_periods):
+            # check performance on all coins trading against USDT
+
+            self._fill_strategy_performance_dict(results, f"all_coins_trading_against_USDT", top_n, start_time,
+                                                 end_time, resample_period, source, start_cash, start_crypto,
+                                                 tickers=None, counter_currencies=['USDT'], prefix=prefix)
+            self._fill_strategy_performance_dict(results, f"all_coins_trading_against_BTC", top_n, start_time,
+                                                 end_time, resample_period, source, start_cash, start_crypto,
+                                                 tickers=None, counter_currencies=['BTC'], prefix=prefix)
+            self._fill_strategy_performance_dict(results, f"all_training_coins", top_n, start_time,
+                                                 end_time, resample_period, source, start_cash, start_crypto,
+                                                 tickers=training_tickers, counter_currencies=None, prefix=prefix)
+            self._fill_strategy_performance_dict(results, f"training_coins_trading_against_BTC", top_n, start_time,
+                                                 end_time, resample_period, source, start_cash, start_crypto,
+                                                 tickers=[ticker for ticker in training_tickers if
+                                                          ticker.counter_currency == 'BTC'],
+                                                 counter_currencies=None, prefix=prefix)
+            
+
+            self._fill_strategy_performance_dict(results, f"training_coins_trading_against_USDT", top_n, start_time,
+                                                 end_time, resample_period, source, start_cash, start_crypto,
+                                                 tickers=[ticker for ticker in training_tickers if
+                                                          ticker.counter_currency == 'USDT'],
+                                                 counter_currencies=None, prefix=prefix)
+
+
+        # unroll data into rows and add to a DataFrame
+        row_dicts = []
+        for key in results:
+            item = results[key]
+            item['source'] = key[0]
+            item['resample_period'] = key[1]
+            item['strategy'] = key[2]
+            row_dicts.append(item)
+            for field in additional_fields: # stuff like experiment name, etc, to add to dataframe
+                item[field] = additional_fields[field]
+
+
+
+        df = pd.DataFrame(row_dicts)
+        df = df[list(additional_fields.keys()) + ['source', 'resample_period', 'strategy', f'{prefix}all_coins_trading_against_BTC', f'{prefix}baseline_all_coins_trading_against_BTC',
+                 f'{prefix}all_coins_trading_against_USDT', f'{prefix}baseline_all_coins_trading_against_USDT', f'{prefix}all_training_coins',
+                 f'{prefix}baseline_all_training_coins', f'{prefix}training_coins_trading_against_BTC', f'{prefix}baseline_training_coins_trading_against_BTC',
+                 f'{prefix}training_coins_trading_against_USDT', f'{prefix}baseline_training_coins_trading_against_USDT']]
+
+
+        return df
+
+    def build_training_and_validation_dataframe(self, training_period_dict, validation_period_dict, training_tickers,
+                                                top_n, out_filename, resample_periods=[60], sources=[0],
+                                                start_cash=1000, start_crypto=0):
+        additional_fields = {'training_period': training_period_dict[list(training_period_dict.keys())[0]],
+                            'validation_period': validation_period_dict[list(validation_period_dict.keys())[0]]}
+        training_df = self.analyze_performance_in_period(training_period_dict, training_tickers, top_n, out_filename, resample_periods,
+                                      sources, start_cash, start_crypto, additional_fields=additional_fields, prefix="training_")
+        validation_df = self.analyze_performance_in_period(validation_period_dict, training_tickers, top_n, out_filename, resample_periods,
+                                      sources, start_cash, start_crypto, additional_fields=additional_fields, prefix="validation_")
+        #df = pd.concat([training_df, validation_df], axis=1)
+        df = pd.merge(training_df, validation_df, on=['training_period', 'validation_period',
+                                                               'source', 'resample_period', 'strategy'])
+
+
+        writer = pd.ExcelWriter('output2.xlsx')
+        df.to_excel(writer, 'Sheet1')
+        writer.save()
+
+    def _fill_strategy_performance_dict(self, results_dict, field_name, top_n, start_time, end_time, resample_period, source,
+                                        start_cash, start_crypto, tickers, counter_currencies, prefix=''):
+        genetic_backtests, genetic_baselines = self._get_genetic_backtests(
+            top_n=top_n,
+            start_time=start_time,
+            end_time=end_time,
+            resample_periods=[resample_period],
+            counter_currencies=counter_currencies,
+            sources=[source],
+            tickers=tickers,
+            start_cash=start_cash,
+            start_crypto=start_crypto
+        )
+        backtest_results, baseline_results = self._get_evaluation_performance_arrays(genetic_backtests,
+                                                                                     genetic_baselines)
+        for strategy in backtest_results:
+            key = (source, resample_period, strategy)
+            if not key in results_dict:
+                results_dict[key] = {}
+            results_dict[key][f'{prefix}{field_name}'] = np.mean(backtest_results[strategy])
+            results_dict[key][f'{prefix}baseline_{field_name}'] = np.mean(baseline_results[strategy])
+
+
+    def _get_evaluation_performance_arrays(self, backtests, baselines):
+        backtest_results = {}
+        baseline_results = {}
+        for evaluation, baseline in zip(backtests, baselines):
+            if not evaluation._strategy.get_short_summary() in backtest_results:
+                backtest_results[evaluation._strategy.get_short_summary()] = [evaluation.profit_percent]
+                baseline_results[evaluation._strategy.get_short_summary()] = [baseline.profit_percent]
+            else:
+                backtest_results[evaluation._strategy.get_short_summary()].append(evaluation.profit_percent)
+                baseline_results[evaluation._strategy.get_short_summary()].append(baseline.profit_percent)
+
+        return backtest_results, baseline_results
+
+
+
 
 
 class ExperimentDB:
@@ -624,17 +738,16 @@ class ExperimentDB:
 #
 ####################################
 
-#e = ExperimentManager("parallel_test.json")
-#e = ExperimentManager("gv4_experiments.json")
-
-#e = ExperimentManager("gv5_experiments.json")
 
 from utils import in_notebook
 
 if not in_notebook():
-    e = ExperimentManager("gv5_experiments_positions.json")
+    #e = ExperimentManager("gv5_experiments_positions.json")
+    e = ExperimentManager("gv5_experiments.json")
 
 if __name__ == "__main__":
+
+
     import datetime
     start_time = datetime.datetime(2018, 4, 9, 14, 0, tzinfo=datetime.timezone.utc).timestamp()
     end_time = datetime.datetime(2018, 6, 1, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
@@ -648,24 +761,56 @@ if __name__ == "__main__":
 
     from comparative_evaluation import Ticker
     tickers = [Ticker(0, 'BTC','USDT')] #, Ticker(0, 'ETH', 'BTC')]
-    #e.produce_report(5, 'gp_backtesting_BTC_6_res60_2.xlsx', start_time, end_time, counter_currencies=['BTC'])
 
-    #e.produce_report_by_periods(top_n=5, out_filename="period_test.xlsx", counter_currencies=['BTC'], periods=None)
-    #e.produce_report_by_periods(top_n=5, out_filename="period_test_limited.xlsx", tickers=tickers, periods=None)
+
+    training_tickers = [Ticker(0, 'BTC', 'USDT'),
+                        Ticker(0, 'ETH', 'USDT'),
+                        Ticker(0, 'LTC', 'BTC'),
+                        Ticker(0, 'ZEC', 'BTC'),
+                        Ticker(0, 'ETC', 'BTC')]
+
+    training_period = {'Apr 2018': ('2018/04/09 14:00:00 UTC', '2018/06/01 00:00:00 UTC'), }
+    validation_period = {'Jun 2018': ('2018/06/01 00:00:00 UTC', '2018/08/01 00:00:00 UTC'),}
+
+    e.build_training_and_validation_dataframe(training_period, validation_period, training_tickers, 5, "test.xlsx")
+
+    #e.analyze_performance_in_period(validation_period, training_tickers, 5, "test.xlsx")
+    exit(0)
+
+
+    e.produce_report_by_periods(top_n=5, out_filename="validation/period_test_gv5_validation_all_training.xlsx",
+                                tickers=training_tickers,
+                                periods=validation_period)
+    e.produce_report_by_periods(top_n=5, out_filename="validation/period_test_gv5_validation_training_usdt.xlsx",
+                                tickers=[ticker for ticker in training_tickers if ticker.counter_currency == 'USDT'],
+                                periods=validation_period)
+    e.produce_report_by_periods(top_n=5, out_filename="validation/period_test_gv5_validation_training_btc.xlsx",
+                                tickers=[ticker for ticker in training_tickers if ticker.counter_currency == 'BTC'],
+                                periods=validation_period)
+
+    e.produce_report_by_periods(top_n=5, out_filename="validation/period_test_gv5_validation_usdt.xlsx",
+                                counter_currencies=['USDT'], periods=validation_period)
+    e.produce_report_by_periods(top_n=5, out_filename="validation/period_test_gv5_validation_btc.xlsx",
+                                counter_currencies=['BTC'],
+                                periods=validation_period)
+    e.produce_report_by_periods(top_n=5, out_filename="validationperiod_test_gv5_validation_btc_usdt.xlsx",
+                                tickers=tickers, periods=validation_period)
+
+    exit(0)
 
     #e.run_experiments()
     #import tracemalloc
 
     #tracemalloc.start()
 
-    e.run_parallel_experiments()
+    #e.run_parallel_experiments()
     #snapshot = tracemalloc.take_snapshot()
     #top_stats = snapshot.statistics('lineno')
 
     #print("[ Top 10 ]")
     #for stat in top_stats[:10]:
     #    print(stat)
-    #exit(0)
+    exit(0)
 
     #performance_dfs = e.get_joined_performance_dfs_over_all_variants()
     #e.performance_df_row_info(performance_dfs[0].iloc[0])
@@ -678,7 +823,6 @@ if __name__ == "__main__":
 
     print(compress(df.iloc[0].individual))
     print(str(df.iloc[0].individual))
-    e.show_individual(df.iloc[0].individual)
     #e.browse_variants()
 
 

@@ -35,8 +35,17 @@ def parallel_run(func, param_list, pool_size=POOL_SIZE):
     return results
 
 def in_notebook():
-    import sys
-    return 'ipykernel' in sys.modules
+    try:
+        shell = get_ipython().__class__.__name__
+        if shell == 'ZMQInteractiveShell':
+            return True  # Jupyter notebook or qtconsole
+        elif shell == 'TerminalInteractiveShell':
+            return False  # Terminal running IPython
+        else:
+            return False  # Other type (?)
+    except NameError:
+        return False  # Probably standard Python interpreter
+
 
 class LogDuplicateFilter(object):
     def __init__(self):
