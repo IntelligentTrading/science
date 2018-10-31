@@ -6,7 +6,7 @@ from pathos.multiprocessing import Pool
 import tqdm
 
 def datetime_from_timestamp(timestamp):
-    return datetime.datetime.utcfromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+    return datetime.datetime.utcfromtimestamp(timestamp).strftime('%Y/%m/%d %H:%M:%S UTC')
 
 
 def get_distinct_signal_types(signals):

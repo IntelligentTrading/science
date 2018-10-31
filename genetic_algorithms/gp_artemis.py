@@ -5,6 +5,8 @@ import numpy as np
 import pandas as pd
 
 from artemis.experiments import experiment_root
+from artemis.experiments.experiments import clear_all_experiments, _GLOBAL_EXPERIMENT_LIBRARY
+from collections import OrderedDict
 from gp_data import Data
 from genetic_program import GeneticProgram, FitnessFunction
 from leaf_functions import TAProviderCollection
@@ -20,7 +22,7 @@ from utils import time_performance
 from functools import partial
 #from pathos.multiprocessing import ProcessingPool as Pool
 from utils import parallel_run
-from dateutil import parser
+from gp_utils import Period
 
 
 SAVE_HOF_AND_BEST = True
@@ -35,30 +37,30 @@ logging.getLogger().addFilter(dup_filter)
 
 
 
-@experiment_root
-def run_evolution(experiment_id, data, function_provider, grammar_version, fitness_function, mating_prob,
-                  mutation_prob, population_size, num_generations, premade_individuals, order_generator, tree_depth,
-                  reseed_params):
-    grammar = Grammar.construct(grammar_version, function_provider, ephemeral_suffix=experiment_id)
-    genetic_program = GeneticProgram(data_collection=data, function_provider=function_provider,
-                                     grammar=grammar, fitness_function=fitness_function,
-                                     premade_individuals=premade_individuals, order_generator=order_generator,
-                                     tree_depth=tree_depth, reseed_params=reseed_params)
-    hof, best = genetic_program.evolve(mating_prob, mutation_prob, population_size, num_generations, verbose=False)
-    return hof, best
-
-
 class ExperimentManager:
 
     START_CASH = 1000
     START_CRYPTO = 0
+
+    @experiment_root
+    def run_evolution(experiment_id, data, function_provider, grammar_version, fitness_function, mating_prob,
+                      mutation_prob, population_size, num_generations, premade_individuals, order_generator, tree_depth,
+                      reseed_params):
+        grammar = Grammar.construct(grammar_version, function_provider, ephemeral_suffix=experiment_id)
+        genetic_program = GeneticProgram(data_collection=data, function_provider=function_provider,
+                                         grammar=grammar, fitness_function=fitness_function,
+                                         premade_individuals=premade_individuals, order_generator=order_generator,
+                                         tree_depth=tree_depth, reseed_params=reseed_params)
+        hof, best = genetic_program.evolve(mating_prob, mutation_prob, population_size, num_generations, verbose=False)
+        return hof, best
+
 
     def __init__(self, experiment_container, read_from_file=True):
         if read_from_file:
             with open(experiment_container) as f:
                 self.experiment_json = json.load(f)
         else:
-            self.experiment_json = experiment_container
+            self.experiment_json = json.loads(experiment_container)
 
         if self.experiment_json['order_generator'] == OrderGenerator.POSITION_BASED:
             self.START_CASH = INF_CASH
@@ -107,18 +109,22 @@ class ExperimentManager:
 
 
     def _register_variants(self, rebuild_grammar=True):
+        clear_all_experiments()
+
         if rebuild_grammar:
             for experiment_name, experiment in self.experiment_db.get_all():
                 Grammar.construct(experiment['grammar_version'],
                                   experiment['function_provider'],
                                   experiment['experiment_id'])
 
+        self.run_evolution.variants = OrderedDict() # for some reason, Artemis doesn't clear this
+
         for experiment_name, experiment in self.experiment_db.get_all():
-            run_evolution.add_variant(variant_name=experiment_name, **experiment)
-        self.variants = run_evolution.get_variants()
+            self.run_evolution.add_variant(variant_name=experiment_name, **experiment)
+        self.variants = self.run_evolution.get_variants()
 
     def get_variants(self):
-        return run_evolution.get_variants()
+        return self.run_evolution.get_variants()
 
     @staticmethod
     def run_variant(variant, keep_record, display_results, rerun_existing, saved_figure_ext):
@@ -272,32 +278,27 @@ class ExperimentManager:
 
         if periods is None:
             periods = {
-                'Mar 2018': ('2018/03/01 00:00:00 UTC', '2018/03/31 23:59:59 UTC'),
-                'Apr 2018': ('2018/04/01 00:00:00 UTC', '2018/04/30 23:59:59 UTC'),
-                'May 2018': ('2018/05/01 00:00:00 UTC', '2018/05/31 23:59:59 UTC'),
-                'Jun 2018': ('2018/06/01 00:00:00 UTC', '2018/06/30 23:59:59 UTC'),
-                'Jul 2018': ('2018/07/01 00:00:00 UTC', '2018/07/31 23:59:59 UTC'),
-                'Aug 2018': ('2018/08/01 00:00:00 UTC', '2018/08/31 23:59:59 UTC'),
-                'Q1 2018': ('2018/01/01 00:00:00 UTC', '2018/03/31 23:59:59 UTC'),
-                'Q2 2018': ('2018/04/01 00:00:00 UTC', '2018/06/30 23:59:59 UTC'),
-                '678 2018': ('2018/06/01 00:00:00 UTC', '2018/08/31 23:59:59 UTC'),
+                Period('2018/03/01 00:00:00 UTC', '2018/03/31 23:59:59 UTC', 'Mar 2018'),
+                Period('2018/04/01 00:00:00 UTC', '2018/04/30 23:59:59 UTC', 'Apr 2018'),
+                Period('2018/05/01 00:00:00 UTC', '2018/05/31 23:59:59 UTC', 'May 2018'),
+                Period('2018/06/01 00:00:00 UTC', '2018/06/30 23:59:59 UTC', 'Jun 2018'),
+                Period('2018/07/01 00:00:00 UTC', '2018/07/31 23:59:59 UTC', 'Jul 2018'),
+                Period('2018/08/01 00:00:00 UTC', '2018/08/31 23:59:59 UTC', 'Aug 2018'),
+                Period('2018/01/01 00:00:00 UTC', '2018/03/31 23:59:59 UTC', 'Q1 2018'),
+                Period('2018/04/01 00:00:00 UTC', '2018/06/30 23:59:59 UTC', 'Q2 2018'),
+                Period('2018/06/01 00:00:00 UTC', '2018/08/31 23:59:59 UTC', '678 2018'),
             }
 
         writer = pd.ExcelWriter(out_filename)
 
         for period in periods:
-            start_time, end_time = self._get_start_and_end_timestamp(periods[period])
-            self.produce_report(top_n, out_filename, start_time, end_time, resample_periods,
+            self.produce_report(top_n, out_filename, period.start_time, period.end_time, resample_periods,
                            counter_currencies,
-                           sources, tickers, start_cash, start_crypto, writer, sheet_prefix=f"({period}) ")
+                           sources, tickers, start_cash, start_crypto, writer, sheet_prefix=f"({period.name}) ")
 
         writer.save()
         writer.close()
 
-    def _get_start_and_end_timestamp(self, period_dict_item):
-        start_time = parser.parse(period_dict_item[0]).timestamp()
-        end_time = parser.parse(period_dict_item[1]).timestamp()
-        return start_time, end_time
 
     @time_performance
     def produce_report(self, top_n, out_filename, start_time, end_time, resample_periods=[60], counter_currencies=None,
@@ -485,7 +486,7 @@ class ExperimentManager:
         print(f'Benchmark backtesting report:\n {evaluation.benchmark_backtest.get_report()}\n')
 
     def browse_variants(self):
-        run_evolution.browse()
+        self.run_evolution.browse()
 
     def get_db_record(self, variant):
         return self.experiment_db[variant.name[len("run_evolution."):]]
@@ -565,10 +566,9 @@ class ExperimentManager:
     def get_graph(self, individual):
         return get_dot_graph(individual)
 
-    def analyze_performance_in_period(self, period_dict, training_tickers, top_n, out_filename, resample_periods=[60],
+    def analyze_performance_in_period(self, period, training_tickers, top_n, out_filename, resample_periods=[60],
                                       sources=[0], start_cash=1000, start_crypto=0, additional_fields={}, prefix=""):
-        assert len(period_dict) == 1
-        start_time, end_time = self._get_start_and_end_timestamp(list(period_dict.items())[0][1])
+        start_time, end_time = period.start_time, period.end_time
         results = {}
         for source, resample_period in itertools.product(sources, resample_periods):
             # check performance on all coins trading against USDT
@@ -607,26 +607,36 @@ class ExperimentManager:
             for field in additional_fields: # stuff like experiment name, etc, to add to dataframe
                 item[field] = additional_fields[field]
 
-
-
         df = pd.DataFrame(row_dicts)
-        df = df[list(additional_fields.keys()) + ['source', 'resample_period', 'strategy', f'{prefix}all_coins_trading_against_BTC', f'{prefix}baseline_all_coins_trading_against_BTC',
-                 f'{prefix}all_coins_trading_against_USDT', f'{prefix}baseline_all_coins_trading_against_USDT', f'{prefix}all_training_coins',
-                 f'{prefix}baseline_all_training_coins', f'{prefix}training_coins_trading_against_BTC', f'{prefix}baseline_training_coins_trading_against_BTC',
-                 f'{prefix}training_coins_trading_against_USDT', f'{prefix}baseline_training_coins_trading_against_USDT']]
+        df = df[list(additional_fields.keys()) + ['source', 'resample_period', 'strategy',
+                                                  f'{prefix}all_coins_trading_against_BTC',
+                                                  f'{prefix}baseline_all_coins_trading_against_BTC',
+                                                  f'{prefix}all_coins_trading_against_USDT',
+                                                  f'{prefix}baseline_all_coins_trading_against_USDT',
+                                                  f'{prefix}all_training_coins',
+                                                  f'{prefix}baseline_all_training_coins',
+                                                  f'{prefix}training_coins_trading_against_BTC',
+                                                  f'{prefix}baseline_training_coins_trading_against_BTC',
+                                                  f'{prefix}training_coins_trading_against_USDT',
+                                                  f'{prefix}baseline_training_coins_trading_against_USDT']]
 
 
         return df
 
-    def build_training_and_validation_dataframe(self, training_period_dict, validation_period_dict, training_tickers,
+    def build_training_and_validation_dataframe(self, training_period, validation_period, training_tickers,
                                                 top_n, out_filename, resample_periods=[60], sources=[0],
-                                                start_cash=1000, start_crypto=0):
-        additional_fields = {'training_period': training_period_dict[list(training_period_dict.keys())[0]],
-                            'validation_period': validation_period_dict[list(validation_period_dict.keys())[0]]}
-        training_df = self.analyze_performance_in_period(training_period_dict, training_tickers, top_n, out_filename, resample_periods,
-                                      sources, start_cash, start_crypto, additional_fields=additional_fields, prefix="training_")
-        validation_df = self.analyze_performance_in_period(validation_period_dict, training_tickers, top_n, out_filename, resample_periods,
-                                      sources, start_cash, start_crypto, additional_fields=additional_fields, prefix="validation_")
+                                                start_cash=1000, start_crypto=0, additional_fields={}):
+        additional_fields = dict(additional_fields)
+        additional_fields['training_period'] = str(training_period)
+        additional_fields['validation_period'] = str(validation_period)
+        training_df = self.analyze_performance_in_period(training_period, training_tickers, top_n, out_filename,
+                                                         resample_periods,
+                                                         sources, start_cash, start_crypto,
+                                                         additional_fields=additional_fields, prefix="training_")
+        validation_df = self.analyze_performance_in_period(validation_period, training_tickers, top_n,
+                                                           out_filename, resample_periods,
+                                                           sources, start_cash, start_crypto,
+                                                           additional_fields=additional_fields, prefix="validation_")
         #df = pd.concat([training_df, validation_df], axis=1)
         df = pd.merge(training_df, validation_df, on=['training_period', 'validation_period',
                                                                'source', 'resample_period', 'strategy'])
@@ -635,6 +645,7 @@ class ExperimentManager:
         writer = pd.ExcelWriter('output2.xlsx')
         df.to_excel(writer, 'Sheet1')
         writer.save()
+        return df
 
     def _fill_strategy_performance_dict(self, results_dict, field_name, top_n, start_time, end_time, resample_period, source,
                                         start_cash, start_crypto, tickers, counter_currencies, prefix=''):
@@ -741,7 +752,7 @@ class ExperimentDB:
 
 from utils import in_notebook
 
-if not in_notebook():
+if not in_notebook() and False:
     #e = ExperimentManager("gv5_experiments_positions.json")
     e = ExperimentManager("gv5_experiments.json")
 
@@ -769,8 +780,8 @@ if __name__ == "__main__":
                         Ticker(0, 'ZEC', 'BTC'),
                         Ticker(0, 'ETC', 'BTC')]
 
-    training_period = {'Apr 2018': ('2018/04/09 14:00:00 UTC', '2018/06/01 00:00:00 UTC'), }
-    validation_period = {'Jun 2018': ('2018/06/01 00:00:00 UTC', '2018/08/01 00:00:00 UTC'),}
+    training_period = Period('2018/04/09 14:00:00 UTC', '2018/06/01 00:00:00 UTC', 'Apr 2018')
+    validation_period = Period('2018/06/01 00:00:00 UTC', '2018/08/01 00:00:00 UTC', 'Jun 2018')
 
     e.build_training_and_validation_dataframe(training_period, validation_period, training_tickers, 5, "test.xlsx")
 

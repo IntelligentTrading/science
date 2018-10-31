@@ -1,5 +1,7 @@
+from dateutil import parser
 from deap import gp
-
+from utils import datetime_from_timestamp
+import datetime
 
 def recompute_tree_graph(nodes, edges):
     children = {node: [] for node in nodes}
@@ -107,3 +109,25 @@ def optimize(node):
     # can't optimize this node
     # (and children are already optimized)
     return node
+
+
+class Period:
+    def __init__(self, start_time_str, end_time_str, name=None):
+        self.start_time_str = start_time_str
+        self.start_time = self._get_timestamp(start_time_str)
+        self.end_time_str = end_time_str
+        self.end_time = self._get_timestamp(end_time_str)
+        if name == None:
+            name = datetime.datetime.utcfromtimestamp(self.start_time).strftime('%M %d')
+        self.name = name
+
+    def _get_timestamp(self, period_str):
+        return parser.parse(period_str).timestamp()
+
+    def get_shifted_forward(self, seconds, name=None):
+        start_time_str = datetime_from_timestamp(self.start_time + seconds)
+        end_time_str = datetime_from_timestamp(self.end_time + seconds)
+        return Period(start_time_str, end_time_str)
+
+    def __str__(self):
+        return f'{self.start_time_str} - {self.end_time_str}'
