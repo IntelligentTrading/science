@@ -38,9 +38,9 @@ class SlidingWindowValidator:
                             Ticker(0, 'ETC', 'BTC')]
         experiment_json = self.experiment_json_template.format(
             start_time=training_period.start_time_str, end_time=training_period.end_time_str)
-        manager = ExperimentManager(experiment_container=experiment_json, read_from_file=False)
-        manager.run_experiments()
-        df = manager.build_training_and_validation_dataframe(training_period, validation_period, training_tickers, 5,
+        e = ExperimentManager(experiment_container=experiment_json, read_from_file=False)
+        e.run_parallel_experiments()
+        df = e.build_training_and_validation_dataframe(training_period, validation_period, training_tickers, 5,
                                                        "test.xlsx",
                                                        additional_fields={"grammar": "gv5"})
         return df
@@ -48,10 +48,10 @@ class SlidingWindowValidator:
 
 
 if __name__ == '__main__':
-    training_period = Period('2018/04/09 14:00:00 UTC', '2018/05/01 00:00:00 UTC', 'Apr 2018')
-    validation_period = Period('2018/05/09 14:00:00 UTC', '2018/05/15 00:00:00 UTC', 'May 2018')
+    training_period = Period('2018/04/01 00:00:00 UTC', '2018/05/01 00:00:00 UTC')
+    validation_period = Period('2018/04/08 00:00:00 UTC', '2018/05/15 00:00:00 UTC')
     end_time = '2018/06/01 14:00:00 UTC'
     step = 60*60*24*7
 
     val = SlidingWindowValidator('gv5_experiments_sliding_template.json')
-    val.run(training_period, validation_period, step, end_time)
+    val.run(training_period, validation_period, step, end_time, 'sliding_window_experiments.xlsx')
