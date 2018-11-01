@@ -1,10 +1,12 @@
 from abc import ABC, abstractmethod
 from collections import namedtuple
 from nltk.sentiment.vader import SentimentIntensityAnalyzer as SIA
+from bs4 import BeautifulSoup
 import numpy as np
 import praw
 import pandas as pd
 import logging
+import requests
 logging.getLogger().setLevel(logging.INFO)
 
 ForumTopic = namedtuple('ForumTopic', 'headline comments')
@@ -12,6 +14,8 @@ Score = namedtuple('Score', 'positive neutral negative compound')
 reddit = praw.Reddit(client_id='fCrnCZjL30pPxQ',
                      client_secret='qYiFNCI9n9oE9sQrWgGuf_dnnTc',
                      user_agent='Majestic_Algae')
+
+BITCOINTALK_BTC = 'https://bitcointalk.org/index.php?board=1.0;sort=last_post;desc'
 
 
 class SentimentDataSource(ABC):
@@ -58,6 +62,58 @@ class Subreddit(SentimentDataSource):
                comments.append(top_level_comment.body)
             self._topics.append(ForumTopic(headline=submission.title, comments=comments))
             self._topic_headlines.append(submission.title)
+
+
+class Bitcointalk(SentimentDataSource):
+
+    def __init__(self, url=BITCOINTALK_BTC):
+        self.url = url
+
+    def retrieve_data(self):
+        self._topics = []
+        self._topic_headlines = []
+
+        soup = self._get_bs_parser(self.url)
+        if soup is None:
+            return
+
+        # find all spans
+        spans = soup.find_all('span')
+        for span in spans:
+            if str(span).startswith('<span id="msg_'):
+                # print(f'{span} {span.next_element}')
+                topic_link = span.next_element
+                topic_link_url = topic_link['href']
+                topic_title = topic_link.text
+                logging.info(f'Processing topic {topic_title}...')
+                small = topic_link.next_element.next_element.next_element  # parsing is an ugly thing
+                if str(small).startswith('<small id="pages'):  # we have more than one topic page, find the last one
+                    topic_links = small.find_all('a')
+                    if len(topic_links) >= 2:
+                        topic_link = topic_links[-2]
+                        topic_link_url = topic_link['href']
+                comments = self._fetch_posts(topic_link_url)
+                topic = ForumTopic(topic_title, comments)
+                self._topics.append(topic)
+                self._topic_headlines.append(topic_title)
+
+    def _get_bs_parser(self, url):
+        r = requests.get(url)
+        if r.status_code != 200:
+            logging.warning(f'Unable to connect to {url}, status code {r.status_code}')
+            return None
+        return BeautifulSoup(r.text)
+
+
+    def _fetch_posts(self, topic_link_url):
+        posts = []
+        soup = self._get_bs_parser(topic_link_url)
+        data = soup.find_all('div', attrs={'class': 'post'})
+        for div in data:
+            for child in list(div.children):
+                if isinstance(child, str) and not child.isdigit():
+                    posts.append(child)
+        return posts
 
 
 class SentimentAnalyzer(ABC):
@@ -114,7 +170,6 @@ class SentimentAnalyzer(ABC):
 
 
 
-
 class VaderSentimentAnalyzer(SentimentAnalyzer):
 
     def __init__(self, sentiment_data_source):
@@ -128,6 +183,10 @@ class VaderSentimentAnalyzer(SentimentAnalyzer):
 
 
 if __name__ == '__main__':
+
+    b = Bitcointalk()
+    b.retrieve_data()
+    exit(0)
 
     subreddit = Subreddit(reddit, 'CryptoCurrency', max_topics=10)
     analyzer = VaderSentimentAnalyzer(subreddit)
