@@ -9,6 +9,7 @@ import logging
 import requests
 import tweepy
 from tweepy import OAuthHandler
+from nn_sentiment import load_model_and_tokenizer, predict_sentiment
 
 logging.getLogger().setLevel(logging.INFO)
 
@@ -151,7 +152,6 @@ class Twitter(SentimentDataSource):
 
 
 
-
 class SentimentAnalyzer(ABC):
 
     def __init__(self, sentiment_data_source):
@@ -217,14 +217,22 @@ class VaderSentimentAnalyzer(SentimentAnalyzer):
                      negative=score['neg'], compound=score['compound'])
 
 
+class LSTMSentimentAnalyzer(SentimentAnalyzer):
+
+    def __init__(self, sentiment_data_source):
+        super(LSTMSentimentAnalyzer, self).__init__(sentiment_data_source)
+        self.model, self.tokenizer = load_model_and_tokenizer()
+
+    def _calculate_score(self, text):
+        weights = predict_sentiment(text, self.model, self.tokenizer)
+        return Score(positive=weights[1], neutral=np.nan,
+                     negative=weights[0], compound=np.nan)
+
+
 if __name__ == '__main__':
 
-    b = Bitcointalk()
-    b.retrieve_data()
-    exit(0)
-
     subreddit = Subreddit(reddit, 'CryptoCurrency', max_topics=10)
-    analyzer = VaderSentimentAnalyzer(subreddit)
+    analyzer = LSTMSentimentAnalyzer(subreddit)
     print(analyzer.to_dataframe().head())
     print(analyzer.calculate_current_mean_headline_sentiment())
     print(analyzer.calculate_current_mean_topic_sentiment())
