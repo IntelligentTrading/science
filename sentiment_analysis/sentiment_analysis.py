@@ -156,7 +156,8 @@ class SentimentAnalyzer(ABC):
 
     def __init__(self, sentiment_data_source):
         self.sentiment_data_source = sentiment_data_source
-        self.update()
+        if sentiment_data_source is not None:
+            self.update()
 
     @abstractmethod
     def _calculate_score(self, text):
@@ -228,9 +229,19 @@ class LSTMSentimentAnalyzer(SentimentAnalyzer):
         return Score(positive=weights[1], neutral=np.nan,
                      negative=weights[0], compound=np.nan)
 
+def vader_vs_lstm(text):
+    vader = VaderSentimentAnalyzer(None)
+    lstm = LSTMSentimentAnalyzer(None)
+    vader_score = vader._calculate_score(text)
+    lstm_score = lstm._calculate_score(text)
+
+    print(f'Vader:\n    {vader_score.positive*100:.2f}% positive, {vader_score.negative*100:.2f}% negative, '
+          f'{vader_score.neutral*100:.2f}% neutral, {vader_score.compound*100:.2f}% compound')
+
+    print(f'LSTM:\n    {lstm_score.positive*100:.2f}% positive, {lstm_score.negative*100:.2f}% negative')
+
 
 if __name__ == '__main__':
-
     subreddit = Subreddit(reddit, 'CryptoCurrency', max_topics=10)
     analyzer = LSTMSentimentAnalyzer(subreddit)
     print(analyzer.to_dataframe().head())
