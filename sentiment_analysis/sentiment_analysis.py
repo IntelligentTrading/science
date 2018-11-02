@@ -7,6 +7,9 @@ import praw
 import pandas as pd
 import logging
 import requests
+import tweepy
+from tweepy import OAuthHandler
+
 logging.getLogger().setLevel(logging.INFO)
 
 ForumTopic = namedtuple('ForumTopic', 'headline comments')
@@ -116,6 +119,39 @@ class Bitcointalk(SentimentDataSource):
         return posts
 
 
+class Twitter(SentimentDataSource):
+
+    def __init__(self, search_query, num_tweets_to_retrieve):
+        consumer_key = 'jFUNgRVoe3dXAqI3lb2IDg2lC'
+        consumer_secret = 'FFefqZX20jHTtUTQAWPirNpBzW1MkkWsN4oWPJDBLz3KSzgdnL'
+        access_token = '1057931754596642816-BcqUSWU9G0wUrFysbIFLOl3tbi4qZw'
+        access_token_secret = 'd3GJrJkoDjX9oOGlS15C48m4lSgByRCyQqbcy0uJXZv3V'
+
+        self.search_query = search_query
+        self.num_tweets_to_retrieve = num_tweets_to_retrieve
+
+        try:
+            self.auth = OAuthHandler(consumer_key, consumer_secret)
+            self.auth.set_access_token(access_token, access_token_secret)
+            self.api = tweepy.API(self.auth)
+        except Exception as e:
+            logging.error(f'Authentication failed: {str(e)}')
+
+    def retrieve_data(self):
+        self._topics = []
+        self._topic_headlines = []
+
+        try:
+            tweets = self.api.search(q=self.search_query, count=self.num_tweets_to_retrieve)
+            retained_tweets = set([tweet.text for tweet in tweets])
+            self._topic_headlines = list(retained_tweets)
+            self._topics = [ForumTopic(headline, []) for headline in self._topic_headlines]
+        except tweepy.TweepError as e:
+            logging.error(f'Could not retrieve tweets: {str(e)}')
+
+
+
+
 class SentimentAnalyzer(ABC):
 
     def __init__(self, sentiment_data_source):
@@ -169,7 +205,6 @@ class SentimentAnalyzer(ABC):
         return pd.DataFrame.from_records(rows)
 
 
-
 class VaderSentimentAnalyzer(SentimentAnalyzer):
 
     def __init__(self, sentiment_data_source):
@@ -178,7 +213,7 @@ class VaderSentimentAnalyzer(SentimentAnalyzer):
 
     def _calculate_score(self, text):
         score = self.vader.polarity_scores(text)
-        return Score(positive = score['pos'], neutral=score['neu'],
+        return Score(positive=score['pos'], neutral=score['neu'],
                      negative=score['neg'], compound=score['compound'])
 
 
