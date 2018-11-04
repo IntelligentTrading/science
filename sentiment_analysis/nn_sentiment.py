@@ -118,3 +118,6 @@ def predict_sentiment(twt_str, model, tokenizer):
 if __name__ == '__main__':
     model, tokenizer = load_model_and_tokenizer()
     print(predict_sentiment('I spent a nice day with my Mum. We went for lunch and had fun.', model, tokenizer))
+    print(predict_sentiment('Using Geon for charity Geon is an exciting blockchain project that plans '
+                            'to use augmented reality to help people hit by a natural disaster or caught between either side of a war-zone.',
+          model, tokenizer))

@@ -15,11 +15,10 @@ logging.getLogger().setLevel(logging.INFO)
 
 ForumTopic = namedtuple('ForumTopic', 'headline comments')
 Score = namedtuple('Score', 'positive neutral negative compound')
-reddit = praw.Reddit(client_id='fCrnCZjL30pPxQ',
-                     client_secret='qYiFNCI9n9oE9sQrWgGuf_dnnTc',
-                     user_agent='Majestic_Algae')
+
 
 BITCOINTALK_BTC = 'https://bitcointalk.org/index.php?board=1.0;sort=last_post;desc'
+BITCOINTALK_ALT = 'https://bitcointalk.org/index.php?board=67.0;sort=last_post;desc'
 
 
 class SentimentDataSource(ABC):
@@ -42,8 +41,10 @@ class SentimentDataSource(ABC):
 
 class Subreddit(SentimentDataSource):
 
-    def __init__(self, reddit, subreddit, max_topics=None, get_top=False, time_filter='day'):
-        self.reddit = reddit
+    def __init__(self, subreddit, max_topics=None, get_top=False, time_filter='day'):
+        self.reddit = praw.Reddit(client_id='fCrnCZjL30pPxQ',
+                     client_secret='qYiFNCI9n9oE9sQrWgGuf_dnnTc',
+                     user_agent='Majestic_Algae')
         self.subreddit = subreddit
         self.max_topics = max_topics
         self.get_top = get_top
