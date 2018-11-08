@@ -1,17 +1,21 @@
 import numpy as np
 import pandas as pd
 import talib
+import logging
 from dateutil import parser
 from tick_provider import PriceDataframeTickProvider
 from backtester_ticks import TickDrivenBacktester
-from data_sources import get_resampled_prices_in_range
-import logging
+from data_sources import get_resampled_prices_in_range, get_timestamp_n_ticks_earlier
+from charting import time_series_chart
+
 
 # temporarily suspend strategies logging warnings: buy&hold strategy triggers warnings
 # as our buy has to be triggered AFTER the minimum strategy initialization period
 # determined by the longest_function_history_size parameter of the used grammar
 strategy_logger = logging.getLogger("strategies")
 strategy_logger.setLevel(logging.ERROR)
+
+TICKS_FOR_PRECOMPUTE = 200
 
 
 class Data:
@@ -33,23 +37,78 @@ class Data:
         self.start_crypto = start_crypto
         self.source = source
 
-        self.price_data = get_resampled_prices_in_range(self.start_time, self.end_time, transaction_currency, counter_currency, resample_period)
+        self.precalc_start_time = get_timestamp_n_ticks_earlier(self.start_time, TICKS_FOR_PRECOMPUTE, transaction_currency,
+                                                                counter_currency, source, resample_period)
+
+        self.price_data = get_resampled_prices_in_range\
+            (self.precalc_start_time, self.end_time, transaction_currency, counter_currency, resample_period)
+
+        self.price_data = self.price_data[~self.price_data.index.duplicated(keep='first')]
+
+
         # do some sanity checks with data
         if not self.price_data.empty and self.price_data.iloc[0].name > self.start_time + 60*60*2:
-            raise Exception(f"The retrieved price data starts "
+            raise Exception(f"The retrieved price data for {transaction_currency}-{counter_currency} starts "
                             f"{(self.price_data.iloc[0].name - self.start_time)/60:.2f} minutes after "
                             f"the set start time!")
 
         if not self.price_data.empty and self.end_time - self.price_data.iloc[-1].name > 60*60*2:
-            raise Exception(f"The retrieved price data ends "
+            raise Exception(f"The retrieved price data for {transaction_currency}-{counter_currency} ends "
                             f"{(self.end_time - self.price_data.iloc[-1].name)/60:.2f} minutes before "
                             f"the set end time!")
 
-        self.rsi_data = talib.RSI(np.array(self.price_data.close_price, dtype=float), timeperiod=14)
-        self.sma50_data = talib.SMA(np.array(self.price_data.close_price, dtype=float), timeperiod=50)
-        self.ema50_data = talib.EMA(np.array(self.price_data.close_price, dtype=float), timeperiod=50)
-        self.sma200_data = talib.SMA(np.array(self.price_data.close_price, dtype=float), timeperiod=200)
-        self.ema200_data = talib.EMA(np.array(self.price_data.close_price, dtype=float), timeperiod=200)
+        prices = np.array(self.price_data.close_price, dtype=float)
+        high_prices = np.array(self.price_data.high_price, dtype=float)
+        low_prices = np.array(self.price_data.low_price, dtype=float)
+        volumes = np.array(self.price_data.close_volume, dtype=float)
+
+        if np.isnan(volumes).all():
+            logging.warning(f'Unable to load valid volume data for for {transaction_currency}-{counter_currency}.')
+            self.sma50_volume_data = volumes[TICKS_FOR_PRECOMPUTE:]
+        else:
+            self.sma50_volume_data = talib.SMA(volumes, timeperiod=50)[TICKS_FOR_PRECOMPUTE:]
+
+        self.close_volume_data = volumes[TICKS_FOR_PRECOMPUTE:]
+
+        self.rsi_data = talib.RSI(prices, timeperiod=14)[TICKS_FOR_PRECOMPUTE:]
+        self.sma20_data = talib.SMA(prices, timeperiod=20)[TICKS_FOR_PRECOMPUTE:]
+        self.ema20_data = talib.EMA(prices, timeperiod=20)[TICKS_FOR_PRECOMPUTE:]
+        self.sma50_data = talib.SMA(prices, timeperiod=50)[TICKS_FOR_PRECOMPUTE:]
+        self.ema50_data = talib.EMA(prices, timeperiod=50)[TICKS_FOR_PRECOMPUTE:]
+        self.sma200_data = talib.SMA(prices, timeperiod=200)[TICKS_FOR_PRECOMPUTE:]
+        self.ema200_data = talib.EMA(prices, timeperiod=200)[TICKS_FOR_PRECOMPUTE:]
+
+        self.ema21_data = talib.EMA(prices, timeperiod=21)[TICKS_FOR_PRECOMPUTE:]
+        self.ema55_data = talib.EMA(prices, timeperiod=55)[TICKS_FOR_PRECOMPUTE:]
+        self.bb_up, self.bb_mid, self.bb_low = talib.BBANDS(prices, timeperiod=20, nbdevup=2, nbdevdn=2, matype=0)
+
+        self.bb_width = self.bb_up - self.bb_low
+        self.min_bbw_180 = np.array(list(map(min, [self.bb_width[i:i+180] for i in range(len(self.bb_width)-180+1)])))
+        self.min_bbw_180 = self.min_bbw_180[len(self.min_bbw_180) - (len(prices)-TICKS_FOR_PRECOMPUTE):]
+
+        self.bb_up = self.bb_up[TICKS_FOR_PRECOMPUTE:]
+        self.bb_mid = self.bb_mid[TICKS_FOR_PRECOMPUTE:]
+        self.bb_low = self.bb_low[TICKS_FOR_PRECOMPUTE:]
+        self.bb_width = self.bb_width[TICKS_FOR_PRECOMPUTE:]
+
+        _, self.slowd = talib.STOCH(high_prices, low_prices, prices, fastk_period=5,
+                                    slowk_period=3, slowk_matype=0, slowd_period=3, slowd_matype=0)
+        self.slowd = self.slowd[TICKS_FOR_PRECOMPUTE:]
+
+
+        self.macd, self.macd_signal, self.macd_hist = talib.MACD(
+            prices, fastperiod=12, slowperiod=26, signalperiod=9)
+        self.macd = self.macd[TICKS_FOR_PRECOMPUTE:]
+        self.macd_signal = self.macd_signal[TICKS_FOR_PRECOMPUTE:]
+        self.macd_hist = self.macd_hist[TICKS_FOR_PRECOMPUTE:]
+        self.adx = talib.ADX(np.array(self.price_data.high_price, dtype=float),
+                             np.array(self.price_data.low_price, dtype=float),
+                             np.array(self.price_data.close_price, dtype=float))[TICKS_FOR_PRECOMPUTE:]
+
+
+
+
+        self.price_data = self.price_data.iloc[TICKS_FOR_PRECOMPUTE:]
         self.prices = self.price_data.as_matrix(columns=["close_price"])
         self.timestamps = pd.to_datetime(self.price_data.index.values, unit='s')
         assert len(self.prices) == len(self.timestamps)
@@ -58,29 +117,68 @@ class Data:
     def to_dataframe(self):
         df = self.price_data.copy(deep=True)
         df['RSI'] = pd.Series(self.rsi_data, index=df.index)
+        df['SMA20'] = pd.Series(self.sma20_data, index=df.index)
         df['SMA50'] = pd.Series(self.sma50_data, index=df.index)
         df['SMA200'] = pd.Series(self.sma200_data, index=df.index)
+        df['EMA20'] = pd.Series(self.ema20_data, index=df.index)
         df['EMA50'] = pd.Series(self.ema50_data, index=df.index)
         df['EMA200'] = pd.Series(self.ema200_data, index=df.index)
-        return df
+        df['ADX'] = pd.Series(self.adx, index=df.index)
+
 
     def __str__(self):
-        return f"{self.transaction_currency}-{self.counter_currency}-{self.start_time}-{self.end_time}"
+        return f"{self.transaction_currency}-{self.counter_currency}-{int(self.start_time)}-{int(self.end_time)}"
 
-    def build_buy_and_hold_benchmark(self, num_ticks_to_skip):
-
-        # need to skip first num_ticks_to_skip, as strategies don't generate signals before all
-        # the historical data is available to them
-        benchmark_start_time = self.price_data.iloc[num_ticks_to_skip].name
+    def build_buy_and_hold_benchmark(self):
 
         benchmark = TickDrivenBacktester.build_benchmark(
             transaction_currency=self.transaction_currency,
             counter_currency=self.counter_currency,
             start_cash=self.start_cash,
             start_crypto=self.start_crypto,
-            start_time=benchmark_start_time,
+            start_time=self.start_time,
             end_time=self.end_time,
             source=self.source,
             tick_provider=PriceDataframeTickProvider(self.price_data)
         )
         return benchmark
+
+    def _filter_fields(self, fields, individual_str):
+        filtered_dict = {}
+        for field in fields:
+            if not field.lower() in individual_str and field != "Close price" and field != "MACD signal":
+                continue
+            if field == "MACD signal" and "macd" not in individual_str:
+                continue
+            filtered_dict[field] = fields[field]
+        return filtered_dict
+
+
+    def plot(self, orders=None, individual_str=None):
+        timestamps = self.price_data.index
+        data_primary_axis = {
+            "Close price" : self.price_data.close_price,
+            "SMA50": self.sma50_data,
+            "EMA50": self.ema50_data,
+            "SMA200": self.sma200_data,
+            "EMA200": self.ema200_data,
+
+        }
+
+        data_secondary_axis = {
+            "ADX": self.adx,
+            "MACD": self.macd,
+            "MACD signal": self.macd_signal,
+            "RSI": self.rsi_data
+        }
+
+        if individual_str is not None:
+            data_primary_axis = self._filter_fields(data_primary_axis, individual_str)
+            data_secondary_axis = self._filter_fields(data_secondary_axis, individual_str)
+
+
+
+        time_series_chart(timestamps, series_dict_primary=data_primary_axis, series_dict_secondary=data_secondary_axis,
+                          title=f"{self.transaction_currency} - {self.counter_currency}", orders=orders)
+
+

@@ -2,15 +2,23 @@ import operator
 import os
 import logging
 import numpy as np
+import math
 from deap import creator, tools, base
+from deap.gp import PrimitiveTree
 from backtesting.signals import Signal
 from backtesting.strategies import SignalStrategy, Strength, TickerStrategy, StrategyDecision
 from chart_plotter import *
-from custom_deap_algorithms import combined_mutation, eaSimpleCustom
+from custom_deap_algorithms import combined_mutation, eaSimpleCustom, harm
 from backtester_ticks import TickDrivenBacktester
 from tick_provider import PriceDataframeTickProvider
 from abc import ABC, abstractmethod
+from order_generator import OrderGenerator
 import dill as pickle
+#logger = logging.getLogger()
+#logger.setLevel(logging.DEBUG)
+
+np.seterr(divide='ignore', invalid='ignore')
+# prevent Sharpe ratio NaN warnings
 
 creator.create("FitnessMax", base.Fitness, weights=(1.0,))
 creator.create("Individual", gp.PrimitiveTree, fitness=creator.FitnessMax)
@@ -33,18 +41,14 @@ class Grammar(ABC):
 
 
 class GeneticTickerStrategy(TickerStrategy):
-    def __init__(self, tree, data, gp_object, history_size=HISTORY_SIZE):
-        self.data = data
-        self.transaction_currency = data.transaction_currency
-        self.counter_currency = data.counter_currency
-        self.resample_period = data.resample_period
-        self.strength = Strength.any
-        self.source = data.source
-        self.start_time = data.start_time
-        self.end_time = data.end_time
+    def __init__(self, tree, transaction_currency, counter_currency, resample_period, source,
+                 gp_object):
+        self.transaction_currency = transaction_currency
+        self.counter_currency = counter_currency
+        self.resample_period = resample_period
+        self.source = source
         self.tree = tree
         self.gp_object = gp_object
-        self.history_size = history_size
         self.i = 0
         self.func = self.gp_object.toolbox.compile(expr=self.tree)
 
@@ -54,30 +58,33 @@ class GeneticTickerStrategy(TickerStrategy):
         :param signals: ITF signals co-occurring with price tick.
         :return: StrategyDecision.BUY or StrategyDecision.SELL or StrategyDecision.IGNORE
         """
-        self.i += 1
 
         price = price_data.close_price
         timestamp = price_data.Index
+        return self.get_decision(timestamp, price, signals)
 
-        if self.i <= self.history_size:
-            # outcomes.append("skipped")
-            return StrategyDecision.IGNORE, None
-        outcome = self.func([timestamp, self.data.transaction_currency, self.data.counter_currency])
+    def get_decision(self, timestamp, price, signals):
 
-        decision = StrategyDecision.IGNORE
-        signal = None
+        outcome = self.func([timestamp, self.transaction_currency, self.counter_currency])
+
+        decision = None
         if outcome == self.gp_object.function_provider.buy:
-            decision = StrategyDecision.BUY
             signal = Signal("Genetic", 1, None, 3, 3, price, 0, timestamp, None, self.transaction_currency,
                             self.counter_currency, self.source, self.resample_period)
+            decision = StrategyDecision(timestamp, self.transaction_currency, self.counter_currency,
+                                        self.source, StrategyDecision.BUY, signal)
         elif outcome == self.gp_object.function_provider.sell:
-            decision = StrategyDecision.SELL
             signal = Signal("Genetic", -1, None, 3, 3, price, 0, timestamp, None, self.transaction_currency,
                             self.counter_currency, self.source, self.resample_period)
+            decision = StrategyDecision(timestamp, self.transaction_currency, self.counter_currency,
+                                        self.source, StrategyDecision.SELL, signal)
         elif not outcome == self.gp_object.function_provider.ignore:
             logging.warning("Invalid outcome encountered")
 
-        return decision, signal
+        if decision is None:
+            decision = StrategyDecision(timestamp, outcome=StrategyDecision.IGNORE)
+
+        return decision
 
     def belongs_to_this_strategy(self, signal):
         return signal.signal_type == "Genetic"
@@ -172,17 +179,20 @@ class FitnessFunctionV1(FitnessFunction):
         return evaluation.profit_percent + (max_len - len(individual)) / float(max_len) * 20 \
                + evaluation.num_sells * 5,
 
+
 class BenchmarkDiffFitness(FitnessFunction):
     _name = "ff_benchmarkdiff"
 
     def compute(self, individual, evaluation, genetic_program):
         return evaluation.profit_percent - evaluation.benchmark_backtest.profit_percent,
 
+
 class BenchmarkDiffTrades(FitnessFunction):
     _name = "ff_benchmarkdiff_trades"
 
     def compute(self, individual, evaluation, genetic_program):
         return (evaluation.profit_percent - evaluation.benchmark_backtest.profit_percent)*evaluation.num_profitable_trades,
+
 
 class BenchmarkLengthControlFitness(FitnessFunction):
     _name = "ff_benchlenctrl"
@@ -192,6 +202,17 @@ class BenchmarkLengthControlFitness(FitnessFunction):
         return (evaluation.profit_percent - evaluation.benchmark_backtest.profit_percent) + \
                (max_len - len(individual)) / float(max_len) * 20,
 
+class UltimateEpicFunction(FitnessFunction):
+    _name = "ff_ultimateepic"
+
+    def compute(self, individual, evaluation, genetic_program):
+        try:
+            return (math.exp(1)+math.log(1+math.sqrt(evaluation.num_buys * evaluation.num_sells))) ** \
+                   (evaluation.profit_percent / (evaluation.benchmark_backtest.profit_percent + 0.000001)),
+        except:
+            pass
+
+
 class BenchmarkLengthControlFitnessV2(FitnessFunction):
     _name = "ff_benchlenctrl_v2"
 
@@ -199,6 +220,7 @@ class BenchmarkLengthControlFitnessV2(FitnessFunction):
         max_len = 3 ** genetic_program.tree_depth
         return (evaluation.profit_percent - evaluation.benchmark_backtest.profit_percent) * \
                (max_len - len(individual)) / float(max_len),
+
 
 class BenchmarkLengthControlFitnessV3(FitnessFunction):
     _name = "ff_benchlenctrl_v3"
@@ -208,20 +230,25 @@ class BenchmarkLengthControlFitnessV3(FitnessFunction):
         return (evaluation.profit_percent - evaluation.benchmark_backtest.profit_percent) * \
                (1+0.1*(max_len - len(individual)) / float(max_len)),
 
+
 class GeneticProgram:
     def __init__(self, data_collection, **kwargs):
         self.data_collection = data_collection
         self.function_provider = kwargs.get('function_provider')
         self.grammar = kwargs.get('grammar')
         self.fitness = kwargs.get('fitness_function', FitnessFunctionV1())
-        self.tree_depth = kwargs.get('tree_depth', 5)
+        self.tree_depth = kwargs.get('tree_depth', 3)
         self.combined_fitness_operator = kwargs.get('combined_fitness_operator', min)
+        self.premade_individuals = kwargs.get('premade_individuals', [])
+        self.order_generator = kwargs.get('order_generator', OrderGenerator.ALTERNATING)
+
+        self.reseed_params = kwargs.get('reseed_params', None)
         self._build_toolbox()
+
 
     @property
     def pset(self):
         return self.grammar.pset
-
 
     def _build_toolbox(self):
 
@@ -241,10 +268,56 @@ class GeneticProgram:
         toolbox.decorate("mutate", gp.staticLimit(key=operator.attrgetter("height"), max_value=self.tree_depth))  # 17))
         self.toolbox = toolbox
 
+    def _generate_population(self, population_size, min_fitness=0, num_good_individuals=1, max_iterations=20):
+        run_count = 0
+        logging.info('Generating population...')
+        saved = []
+        while True:
+            run_count += 1
+            population = self.toolbox.population(n=population_size)
+            count = 0
+            invalid_ind = [ind for ind in population if not ind.fitness.valid]
+            fitnesses = self.toolbox.map(self.toolbox.evaluate, invalid_ind)
+            for ind, fit in zip(invalid_ind, fitnesses):
+                ind.fitness.values = fit
+                if fit[0] >= min_fitness:
+                    count += 1
+                    saved.append(ind)
+            # option 1, by rolling the dice we got a total of num_good_individuals
+            if count >= num_good_individuals:
+                logging.info(f'Initialized a population with {count} individuals'
+                      f' of fitness >= {min_fitness} after {run_count} iterations.')
+                population = sorted(population, key=lambda x: x.fitness.values[0], reverse=True)
+                return population
+            # option 2, we found some good individuals in the previous runs, some in this run, and we have enough
+            elif len(saved) == num_good_individuals:
+                population = sorted(population, key=lambda x: x.fitness.values[0], reverse=True)
+                population[0:len(saved)] = saved
+                return population
+            # option 3, max runtime exceeded, return what we have
+            if run_count > max_iterations:
+                population = sorted(population, key=lambda x: x.fitness.values[0], reverse=True)
+                population[0:len(saved)] = saved
+                logging.info(f'Reached {run_count} iterations trying to generate initial population, '
+                             f'continuing ({len(saved)} individuals found and inserted)...')
+                return population
+
 
     def evolve(self, mating_prob, mutation_prob, population_size,
                num_generations, verbose=True, output_folder=None, run_id=None):
-        pop = self.toolbox.population(n=population_size)
+        if self.reseed_params is None or not self.reseed_params['enabled']:
+            pop = self.toolbox.population(n=population_size)
+        else:
+            pop = self._generate_population(population_size, min_fitness=self.reseed_params['min_fitness'],
+                                            num_good_individuals=self.reseed_params['num_good_individuals'],
+                                            max_iterations=self.reseed_params['max_iterations'])
+
+        # insert premade individuals into the population (if any)
+        premade = [self.individual_from_string(code) for code in self.premade_individuals]
+        pop[-len(premade):] = premade
+        if len(premade) > 0:
+            logging.info(f'Inserted {len(premade)} individuals into the initial population.')
+
         hof = tools.HallOfFame(10)
 
         stats_fit = tools.Statistics(lambda ind: ind.fitness.values)
@@ -256,7 +329,10 @@ class GeneticProgram:
         mstats.register("max", np.max)
 
         pop, log, best = eaSimpleCustom(pop, self.toolbox, mating_prob, mutation_prob, num_generations, stats=mstats,
-                                        halloffame=hof, verbose=True)
+                                        halloffame=hof, verbose=True, genetic_program=self)
+
+        #pop, log, best = harm(pop, self.toolbox, mating_prob, mutation_prob, num_generations, stats=mstats,
+        #                                halloffame=hof, verbose=True, genetic_program=self)
 
         if verbose:
             logging.info("Winners in each generation: ")
@@ -266,7 +342,6 @@ class GeneticProgram:
             for i in range(len(hof)):
                 logging.info(f"  {i}  {hof[i]}")
             draw_tree(hof[0])
-
 
         if output_folder != None:  # TODO: clean
             hof_name = self.get_hof_filename(mating_prob, mutation_prob, run_id)
@@ -297,22 +372,25 @@ class GeneticProgram:
         fitnesses = []
         for i, data in enumerate(self.data_collection):
             fitnesses.append(self.compute_fitness(individual, data)[0])
-        return self.combined_fitness_operator(fitnesses),
-        
 
-    def build_evaluation_object(self, individual, data, ticker=True):
-        if not ticker:
+        return self.combined_fitness_operator(fitnesses),
+
+    def build_evaluation_object(self, individual, data, tick_based=True):
+        if not tick_based:
             strategy = GeneticSignalStrategy(individual, data, self,
                                              history_size=self.grammar.longest_function_history_size)
             evaluation = strategy.evaluate(data.transaction_currency, data.counter_currency,
                                            data.start_cash, data.start_crypto,
-                                           data.start_time, data.end_time, data.source, 60, verbose=False)
+                                           data.start_time, data.end_time, data.source, 60, verbose=False,
+                                           order_generator=self.order_generator)
 
         else:
             strategy = GeneticTickerStrategy(tree=individual,
-                                             data=data,
-                                             gp_object=self,
-                                             history_size=self.grammar.longest_function_history_size)
+                                             transaction_currency=data.transaction_currency,
+                                             counter_currency=data.counter_currency,
+                                             source=data.source,
+                                             resample_period=data.resample_period,
+                                             gp_object=self)
             tick_provider = PriceDataframeTickProvider(data.price_data)
 
             # create a new tick based backtester
@@ -321,19 +399,22 @@ class GeneticProgram:
                 strategy=strategy,
                 transaction_currency=data.transaction_currency,
                 counter_currency=data.counter_currency,
+                source=data.source,
+                resample_period=data.resample_period,
                 start_cash=data.start_cash,
                 start_crypto=data.start_crypto,
                 start_time=data.start_time,
                 end_time=data.end_time,
-                benchmark_backtest=data.build_buy_and_hold_benchmark(
-                    num_ticks_to_skip=self.grammar.longest_function_history_size
-                ),
+                benchmark_backtest=data.build_buy_and_hold_benchmark(),
                 time_delay=0,
                 slippage=0,
-                verbose=False
+                verbose=False,
+                order_generator=self.order_generator
             )
-
         return evaluation
+
+    def individual_from_string(self, code):
+        return creator.Individual(PrimitiveTree.from_string(code, self.grammar.pset))
 
 
     @staticmethod
@@ -356,69 +437,6 @@ class GeneticProgram:
 
     def load_evolution_file(self, file_path):
         return pickle.load(open(file_path, "rb"))
-
-    @staticmethod
-    def compress_individual(individual):
-        for i, element in enumerate(individual):
-
-            if individual == 'True':
-                return True
-            if individual == 'False':
-                return False
-            if individual == 'identity':
-                return 'identity'
-
-            if individual.arity == 0:
-                return individual
-            elements = individual[i:i+element.arity]
-            if str(individual) == 'if_then_else':
-                if GeneticProgram.compress_individual(elements[1]) == False:
-                    return GeneticProgram.compress_individual(elements[2])
-                elif GeneticProgram.compress_individual(elements[1]) == True:
-                    return GeneticProgram.compress_individual(elements[1])
-                else:
-                    return 'if_then_else'
-
-def visit_node(graph, node, labels, parent = None):
-    children = [visit_node(graph, child, labels, node)
-                for child in graph[node]
-                if child != parent]
-    return [labels[node], children]
-
-def compress(individual):
-    nodes, edges, labels = gp.graph(individual)
-    from gp_utils import recompute_tree_graph
-    graph = recompute_tree_graph(nodes, edges)
-    root = visit_node(graph, 0, labels)
-    optimized = optimize(root)
-    return wrap_children(optimized)
-
-def wrap_children(optimized):
-    node, children = optimized
-    if len(children) == 0:
-        return node
-    s = f'{str(node)}('
-    for child in children:
-        s += wrap_children(child)
-        s += ','
-    s = s[:-1]
-    s += ')'
-    return s
-
-def optimize(node):
-    node_type, children = node
-    # optimize all children
-    for i in range(len(children)):
-        children[i] = optimize(children[i])
-    if node_type == "if_then_else":
-        cond_type = children[0][0]
-        if cond_type == True:
-            return children[1]
-        if cond_type == False:
-            return children[2]
-    # can't optimize this node
-    # (and children are already optimized)
-    return node
 
 
 

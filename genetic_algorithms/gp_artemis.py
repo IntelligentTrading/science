@@ -1,23 +1,40 @@
-from artemis.experiments import experiment_root
-from gp_data import Data
-from genetic_program import GeneticProgram, FitnessFunction
-from leaf_functions import TAProviderCollection
 import logging
-from grammar import Grammar
 import json
 import itertools
 import numpy as np
-from chart_plotter import *
 import pandas as pd
 
-@experiment_root
-def run_evolution(experiment_id, data, function_provider, grammar_version, fitness_function, mating_prob,
-                  mutation_prob, population_size, num_generations):
-    grammar = Grammar.construct(grammar_version, function_provider, ephemeral_suffix=experiment_id)
-    genetic_program = GeneticProgram(data_collection=data, function_provider=function_provider,
-                                     grammar=grammar, fitness_function=fitness_function)
-    hof, best = genetic_program.evolve(mating_prob, mutation_prob, population_size, num_generations, verbose=False)
-    return hof, best
+from artemis.experiments import experiment_root
+from artemis.experiments.experiments import clear_all_experiments, _GLOBAL_EXPERIMENT_LIBRARY
+from collections import OrderedDict
+from gp_data import Data
+from genetic_program import GeneticProgram, FitnessFunction
+from leaf_functions import TAProviderCollection
+from grammar import Grammar
+from chart_plotter import *
+from order_generator import OrderGenerator
+from config import INF_CASH, INF_CRYPTO, POOL_SIZE
+from comparative_evaluation import ComparativeEvaluation, ComparativeReportBuilder
+#from data_sources import get_currencies_trading_against_counter
+from backtesting_runs import build_itf_baseline_strategies
+from data_sources import NoPriceDataException
+from utils import time_performance
+from functools import partial
+#from pathos.multiprocessing import ProcessingPool as Pool
+from utils import parallel_run
+from gp_utils import Period
+
+
+SAVE_HOF_AND_BEST = True
+HOF_AND_BEST_FILENAME = 'rockstars.txt'
+LOAD_ROCKSTARS = True
+
+from utils import LogDuplicateFilter
+dup_filter = LogDuplicateFilter()
+logging.getLogger().addFilter(dup_filter)
+
+
+
 
 
 class ExperimentManager:
@@ -25,12 +42,30 @@ class ExperimentManager:
     START_CASH = 1000
     START_CRYPTO = 0
 
+    @experiment_root
+    def run_evolution(experiment_id, data, function_provider, grammar_version, fitness_function, mating_prob,
+                      mutation_prob, population_size, num_generations, premade_individuals, order_generator, tree_depth,
+                      reseed_params):
+        grammar = Grammar.construct(grammar_version, function_provider, ephemeral_suffix=experiment_id)
+        genetic_program = GeneticProgram(data_collection=data, function_provider=function_provider,
+                                         grammar=grammar, fitness_function=fitness_function,
+                                         premade_individuals=premade_individuals, order_generator=order_generator,
+                                         tree_depth=tree_depth, reseed_params=reseed_params)
+        hof, best = genetic_program.evolve(mating_prob, mutation_prob, population_size, num_generations, verbose=False)
+        return hof, best
+
+
     def __init__(self, experiment_container, read_from_file=True):
         if read_from_file:
             with open(experiment_container) as f:
                 self.experiment_json = json.load(f)
         else:
-            self.experiment_json = experiment_container
+            self.experiment_json = json.loads(experiment_container)
+
+        if self.experiment_json['order_generator'] == OrderGenerator.POSITION_BASED:
+            self.START_CASH = INF_CASH
+            self.START_CRYPTO = INF_CRYPTO
+
         # initialize data
         self.training_data = [Data(start_cash=self.START_CASH, start_crypto=self.START_CRYPTO,
                                   **dataset) for dataset in self.experiment_json["training_data"]]
@@ -50,6 +85,13 @@ class ExperimentManager:
                                      self.experiment_json["population_sizes"],
                                      self.experiment_json["fitness_functions"])
         for mating_prob, mutation_prob, population_size, fitness_function in variants:
+            if LOAD_ROCKSTARS:
+                grammar_version = self.experiment_json["grammar_version"]
+                rockstars = self._load_rockstars(grammar_version, fitness_function, to_load=['hof'], limit_top=20)
+                logging.info(f'Loaded {len(rockstars)} rockstars for {grammar_version}, {fitness_function}.')
+            else:
+                rockstars = []
+
             self.experiment_db.add(
                 data=self.training_data,
                 function_provider=self.function_provider,
@@ -58,22 +100,60 @@ class ExperimentManager:
                 mating_prob=mating_prob,
                 mutation_prob=mutation_prob,
                 population_size=population_size,
-                num_generations=self.experiment_json["num_generations"])
+                num_generations=self.experiment_json["num_generations"],
+                premade_individuals=self.experiment_json["premade_individuals"]+rockstars,
+                order_generator=self.experiment_json["order_generator"],
+                tree_depth=self.experiment_json["tree_depth"],
+                reseed_params=self.experiment_json["reseed_initial_population"]
+            )
+
 
     def _register_variants(self, rebuild_grammar=True):
+        clear_all_experiments()
+
         if rebuild_grammar:
             for experiment_name, experiment in self.experiment_db.get_all():
                 Grammar.construct(experiment['grammar_version'],
                                   experiment['function_provider'],
                                   experiment['experiment_id'])
 
+        self.run_evolution.variants = OrderedDict() # for some reason, Artemis doesn't clear this
+
         for experiment_name, experiment in self.experiment_db.get_all():
-            run_evolution.add_variant(variant_name=experiment_name, **experiment)
-        self.variants = run_evolution.get_variants()
+            self.run_evolution.add_variant(variant_name=experiment_name, **experiment)
+        self.variants = self.run_evolution.get_variants()
 
     def get_variants(self):
-        return run_evolution.get_variants()
+        return self.run_evolution.get_variants()
 
+    @staticmethod
+    def run_variant(variant, keep_record, display_results, rerun_existing, saved_figure_ext):
+        if len(variant.get_records(only_completed=True)) > 0 and not rerun_existing:
+            logging.info(f">>> Variant {variant.name} already has completed records, skipping...")
+            return
+
+        return variant.run(keep_record=keep_record, display_results=display_results, saved_figure_ext=saved_figure_ext)
+
+    @time_performance
+    def run_parallel_experiments(self, num_processes=8, rerun_existing=False, display_results=True):
+        #from pathos.multiprocessing import ProcessingPool as Pool
+
+        partial_run_func = partial(ExperimentManager.run_variant, keep_record=True, display_results=display_results,
+                           rerun_existing=rerun_existing, saved_figure_ext='.fig.png')
+
+        records = parallel_run(partial_run_func, self.variants)
+        #with Pool(num_processes) as pool:
+        #    records = pool.map(partial_run_func, self.variants)
+        #    pool.close()
+        #    pool.join()
+        #    pool.terminate()
+
+        for record in records:
+            if record is not None: # empty records if experiments already exist
+                self._save_rockstars(record)
+
+
+    @time_performance
     def run_experiments(self, rerun_existing=False, display_results=True):
         for i, variant in enumerate(self.variants):
             if len(variant.get_records(only_completed=True)) > 0 and not rerun_existing:
@@ -81,7 +161,23 @@ class ExperimentManager:
                 continue
 
             logging.info(f"Running variant {i}")
-            variant.run(keep_record=True, display_results=display_results, saved_figure_ext='.fig.png')
+            record = variant.run(keep_record=True, display_results=display_results, saved_figure_ext='.fig.png')
+            self._save_rockstars(record)
+
+    def _save_rockstars(self, record):
+        if SAVE_HOF_AND_BEST:
+            hof, best = record.get_result()
+            fitness_function = record.get_args()['fitness_function']
+            grammar_version = record.get_args()['grammar_version']
+            with open(HOF_AND_BEST_FILENAME, 'a') as f:
+                f.write(
+                    f'hof:{record.get_experiment_id()}:{grammar_version}:{fitness_function._name}:'
+                    f'{"&".join([str(i) + "/" + str(i.fitness.values[0]) for i in hof])}\n'
+                )
+                f.write(
+                    f'gen_best:{record.get_experiment_id()}:{grammar_version}:{fitness_function._name}:'
+                    f'{"&".join([str(i) + "/" + str(i.fitness.values[0]) for i in best])}\n'
+                )
 
     def explore_records(self, use_validation_data=True):
         if use_validation_data:
@@ -147,12 +243,14 @@ class ExperimentManager:
         :return:
         """
         df = pd.DataFrame(columns=["experiment_name", "doge", "fitness_function", "fitness_value",
-                                   "mean_profit", "std_profit", "max_profit", "min_profit", "variant",
+                                   "mean_profit", "std_profit", "max_profit", "min_profit", "all_profits",
+                                   "benchmark_profits", "differences", "variant",
                                    "evaluations", "individual"])
-        best_individuals = []
         for variant in self.get_variants():
             best_individual, evaluations = self.get_best_performing_across_datasets(variant, datasets)
             profits = [evaluation.profit_percent for evaluation in evaluations]
+            benchmark_profits = [evaluation.benchmark_backtest.profit_percent for evaluation in evaluations]
+            differences = [x1-x2 for (x1, x2) in zip(profits, benchmark_profits)]
             df = df.append({"experiment_name": str(variant.name),
                        "doge": str(best_individual),
                        "fitness_function": self.get_db_record(variant)["fitness_function"]._name,
@@ -162,6 +260,8 @@ class ExperimentManager:
                        "max_profit": np.max(profits),
                        "min_profit": np.min(profits),
                        "all_profits": ", ".join(map(str,profits)),
+                       "benchmark_profits": ", ".join(map(str, benchmark_profits)),
+                       "differences": ", ".join(map(str, differences)),
                        "variant" : variant,
                        "evaluations": evaluations,
                        "individual": best_individual}, ignore_index=True)
@@ -169,6 +269,126 @@ class ExperimentManager:
         df = df.sort_values(by=sort_by, ascending=False)
         return df
 
+
+    def produce_report_by_periods(self, top_n, out_filename, periods=None, resample_periods=[60], counter_currencies=None,
+                       sources=[0], tickers=None, start_cash=1000, start_crypto=0):
+
+        if tickers is None:
+            tickers = ComparativeEvaluation.build_tickers(counter_currencies, sources)
+
+        if periods is None:
+            periods = {
+                Period('2018/03/01 00:00:00 UTC', '2018/03/31 23:59:59 UTC', 'Mar 2018'),
+                Period('2018/04/01 00:00:00 UTC', '2018/04/30 23:59:59 UTC', 'Apr 2018'),
+                Period('2018/05/01 00:00:00 UTC', '2018/05/31 23:59:59 UTC', 'May 2018'),
+                Period('2018/06/01 00:00:00 UTC', '2018/06/30 23:59:59 UTC', 'Jun 2018'),
+                Period('2018/07/01 00:00:00 UTC', '2018/07/31 23:59:59 UTC', 'Jul 2018'),
+                Period('2018/08/01 00:00:00 UTC', '2018/08/31 23:59:59 UTC', 'Aug 2018'),
+                Period('2018/01/01 00:00:00 UTC', '2018/03/31 23:59:59 UTC', 'Q1 2018'),
+                Period('2018/04/01 00:00:00 UTC', '2018/06/30 23:59:59 UTC', 'Q2 2018'),
+                Period('2018/06/01 00:00:00 UTC', '2018/08/31 23:59:59 UTC', '678 2018'),
+            }
+
+        writer = pd.ExcelWriter(out_filename)
+
+        for period in periods:
+            self.produce_report(top_n, out_filename, period.start_time, period.end_time, resample_periods,
+                           counter_currencies,
+                           sources, tickers, start_cash, start_crypto, writer, sheet_prefix=f"({period.name}) ")
+
+        writer.save()
+        writer.close()
+
+
+    @time_performance
+    def produce_report(self, top_n, out_filename, start_time, end_time, resample_periods=[60], counter_currencies=None,
+                       sources=[0], tickers=None, start_cash=1000, start_crypto=0, writer=None, sheet_prefix=None):
+
+
+        ann_rsi_strategies, basic_strategies, vbi_strategies = build_itf_baseline_strategies()
+        strategies = ann_rsi_strategies + basic_strategies + vbi_strategies
+
+        logging.info('Evaluating GP strategies...')
+
+        genetic_backtests, genetic_baselines = self._get_genetic_backtests(top_n, start_time, end_time,
+                                                                           resample_periods, counter_currencies,
+                                                                           sources, tickers, start_cash, start_crypto)
+
+        logging.info("Evaluating baseline strategies...")
+
+        comp = ComparativeEvaluation(strategies, start_cash=start_cash, start_crypto=start_crypto,
+                                     start_time=start_time, end_time=end_time, resample_periods=resample_periods,
+                                     counter_currencies=counter_currencies, sources=sources, debug=False, tickers=tickers)
+
+        report = ComparativeReportBuilder(comp.backtests + genetic_backtests, comp.baselines + genetic_baselines)
+        if writer is None:
+            report.all_coins_report(out_filename, group_strategy_variants=False)
+        else:
+            report.all_coins_report(writer=writer, sheet_prefix=sheet_prefix,
+                                               group_strategy_variants=False)
+
+    def _get_genetic_backtests(self, top_n, start_time, end_time, resample_periods, counter_currencies, sources,
+                               tickers, start_cash, start_crypto):
+
+        performance_df = self.get_best_performing_across_variants_and_datasets(self.training_data)
+        genetic_strategies = []
+
+        # we will evaluate the performance of top n individuals
+        for i in range(top_n):
+            individual = performance_df.iloc[i].individual
+            genetic_strategies.append(individual)
+
+        genetic_backtests = []
+        genetic_baselines = []
+        # prepare tickers
+        if tickers is None:
+            tickers = ComparativeEvaluation.build_tickers(counter_currencies, sources)
+        data_collection = []
+        for (ticker, resample_period) in itertools.product(tickers, resample_periods):
+            try:
+                data = Data(
+                    start_time=start_time,
+                    end_time=end_time,
+                    transaction_currency=ticker.transaction_currency,
+                    counter_currency=ticker.counter_currency,
+                    resample_period=resample_period,
+                    source=ticker.source,
+                    start_cash=start_cash,
+                    start_crypto=start_crypto
+                )
+                data_collection.append(data)
+            except Exception as e:  # in case of missing data
+                logging.error(
+                    f'Unable to load data for {ticker.transaction_currency}-{ticker.counter_currency}, skipping...')
+                logging.error(str(e))
+        # build a new TAProvider based on the loaded data
+        ta_provider = TAProviderCollection(data_collection)
+        param_list = []
+        # do genetic program backtesting on the new data
+        for data in data_collection:
+            for i in range(top_n):
+                row = performance_df.iloc[i]
+
+                param_list.append({'individual': row.individual,
+                                   'db_record': self.get_db_record(row.variant),
+                                   'data': data,
+                                   'function_provider': ta_provider}
+
+                                  )
+        """
+                with Pool(POOL_SIZE) as pool:
+                    backtests = pool.map(self._build_evaluation_object_parallel, param_list)
+                    pool.close()
+                    pool.join()
+                    logging.info("Parallel processing finished.")
+                """
+        backtests = map(self._build_evaluation_object_parallel, param_list)
+        for evaluation in backtests:
+            if evaluation is None:
+                continue
+            genetic_backtests.append(evaluation)
+            genetic_baselines.append(evaluation.benchmark_backtest)
+        return genetic_backtests, genetic_baselines
 
     def get_performance_df_for_dataset_and_variant(self, variant, data):
         """
@@ -236,58 +456,232 @@ class ExperimentManager:
 
             performance_info = performance_info.sort_values(by=['profit_percent'], ascending=False)
             if verbose:
-                self.performance_df_row_info(performance_info.iloc[0])
+                self.performance_df_row_info(performance_info.iloc[0], data)
             joined_dfs.append(performance_info)
         return joined_dfs
 
-    def performance_df_row_info(self, performance_df_row):
+    def performance_df_row_info(self, performance_df_row, data=None):
         print(f'Experiment id: {performance_df_row.experiment_id}\n')
         individual = performance_df_row.individual
         evaluation = performance_df_row.evaluation
-        self._print_individual_info(individual, evaluation)
+        self._print_individual_info(individual, evaluation, data)
         return individual
 
-    def _print_individual_info(self, individual, evaluation):
+    def _print_individual_info(self, individual, evaluation, data=None):
         evaluation.plot_price_and_orders()
+        if not data is None:
+            data.plot(evaluation.orders, str(individual))
         print(f'String representation:\n{str(individual)}\n')
-        draw_tree(individual)
-        try:
-            networkx_graph(individual)
-        except:
-            logging.warning("Failed to plot networkx graph (not installed?), skipping...")
+        if in_notebook():
+            g = self.get_graph(individual)
+            from IPython.display import display
+            display(g)
+        #g.view()
+        # draw_tree(individual)
+        # try:
+        #    networkx_graph(individual)
+        # except:
+        #    logging.warning("Failed to plot networkx graph (not installed?), skipping...")
         print(f'Backtesting report:\n {evaluation.get_report()}\n')
         print(f'Benchmark backtesting report:\n {evaluation.benchmark_backtest.get_report()}\n')
 
     def browse_variants(self):
-        run_evolution.browse()
+        self.run_evolution.browse()
 
     def get_db_record(self, variant):
         return self.experiment_db[variant.name[len("run_evolution."):]]
 
-    def _build_genetic_program(self, variant, data):
+    def _build_genetic_program(self, variant, data, function_provider=None):
+        if function_provider is None:
+            function_provider = self.function_provider
         db_record = self.get_db_record(variant)
+
+        return self.build_genetic_program(data, function_provider, db_record)
+
+    @staticmethod
+    def build_genetic_program(data, function_provider, db_record):
         grammar = Grammar.construct(
             grammar_name=db_record['grammar_version'],
-            function_provider=self.function_provider,
+            function_provider=function_provider,
             ephemeral_suffix=db_record['experiment_id']
         )
         genetic_program = GeneticProgram(
             data_collection=data,
-            function_provider=self.function_provider,
+            function_provider=function_provider,
             grammar=grammar,
-            fitness_function=db_record['fitness_function']
+            fitness_function=db_record['fitness_function'],
+            tree_depth=db_record['tree_depth'],
+            order_generator=db_record['order_generator']
+
         )
         return genetic_program
 
-    def _build_evaluation_object(self, individual, variant, data):
-        genetic_program = self._build_genetic_program(variant, data)
+
+    def _build_evaluation_object(self, individual, variant, data, function_provider=None):
+
+        genetic_program = self._build_genetic_program(variant, data, function_provider)
+        if function_provider is not None: # rebuild individual with the new data
+            individual = genetic_program.individual_from_string(str(individual))
         return genetic_program.build_evaluation_object(individual, data)
+
+    @staticmethod
+    def _build_evaluation_object_parallel(params):
+        try:
+            genetic_program = ExperimentManager.build_genetic_program(params['data'], params['function_provider'], params['db_record'])
+            individual = genetic_program.individual_from_string(str(params['individual']))
+            return genetic_program.build_evaluation_object(individual, params['data'])
+        except NoPriceDataException:
+            return None
 
     def _get_fitness(self, individual, variant, data):
         genetic_program = self._build_genetic_program(variant, data)
         return genetic_program.compute_fitness_over_datasets(individual)[0]
 
+    def plot_data(self):
+        self.training_data[0].plot()
 
+    def _load_rockstars(self, grammar_version, fitness_function_name, to_load = ['hof', 'gen_best'], limit_top=None):
+        individuals = []
+        fitnesses = []
+
+        with open(HOF_AND_BEST_FILENAME, 'r') as f:
+            for line in f:
+                line = line.split(':')
+                if not line[0] in to_load or line[2] != grammar_version or line[3] != fitness_function_name:
+                    continue
+                entries = line[4].split('&')
+                for entry in entries:
+                    individual_str, fitness = entry.split('/')
+                    if individual_str in individuals:  # we don't want repeat individuals
+                        continue
+                    individuals.append(individual_str)
+                    fitnesses.append(fitness)
+
+        individuals = [x for _, x in sorted(zip(fitnesses, individuals))]
+        if limit_top is None:
+            return individuals
+        else:
+            return individuals[:min(len(individuals), limit_top)]
+
+    def get_graph(self, individual):
+        return get_dot_graph(individual)
+
+    def analyze_performance_in_period(self, period, training_tickers, top_n, out_filename, resample_periods=[60],
+                                      sources=[0], start_cash=1000, start_crypto=0, additional_fields={}, prefix=""):
+        start_time, end_time = period.start_time, period.end_time
+        results = {}
+        for source, resample_period in itertools.product(sources, resample_periods):
+            # check performance on all coins trading against USDT
+
+            self._fill_strategy_performance_dict(results, f"all_coins_trading_against_USDT", top_n, start_time,
+                                                 end_time, resample_period, source, start_cash, start_crypto,
+                                                 tickers=None, counter_currencies=['USDT'], prefix=prefix)
+            self._fill_strategy_performance_dict(results, f"all_coins_trading_against_BTC", top_n, start_time,
+                                                 end_time, resample_period, source, start_cash, start_crypto,
+                                                 tickers=None, counter_currencies=['BTC'], prefix=prefix)
+            self._fill_strategy_performance_dict(results, f"all_training_coins", top_n, start_time,
+                                                 end_time, resample_period, source, start_cash, start_crypto,
+                                                 tickers=training_tickers, counter_currencies=None, prefix=prefix)
+            self._fill_strategy_performance_dict(results, f"training_coins_trading_against_BTC", top_n, start_time,
+                                                 end_time, resample_period, source, start_cash, start_crypto,
+                                                 tickers=[ticker for ticker in training_tickers if
+                                                          ticker.counter_currency == 'BTC'],
+                                                 counter_currencies=None, prefix=prefix)
+            
+
+            self._fill_strategy_performance_dict(results, f"training_coins_trading_against_USDT", top_n, start_time,
+                                                 end_time, resample_period, source, start_cash, start_crypto,
+                                                 tickers=[ticker for ticker in training_tickers if
+                                                          ticker.counter_currency == 'USDT'],
+                                                 counter_currencies=None, prefix=prefix)
+
+
+        # unroll data into rows and add to a DataFrame
+        row_dicts = []
+        for key in results:
+            item = results[key]
+            item['source'] = key[0]
+            item['resample_period'] = key[1]
+            item['strategy'] = key[2]
+            row_dicts.append(item)
+            for field in additional_fields: # stuff like experiment name, etc, to add to dataframe
+                item[field] = additional_fields[field]
+
+        df = pd.DataFrame(row_dicts)
+        df = df[list(additional_fields.keys()) + ['source', 'resample_period', 'strategy',
+                                                  f'{prefix}all_coins_trading_against_BTC',
+                                                  f'{prefix}baseline_all_coins_trading_against_BTC',
+                                                  f'{prefix}all_coins_trading_against_USDT',
+                                                  f'{prefix}baseline_all_coins_trading_against_USDT',
+                                                  f'{prefix}all_training_coins',
+                                                  f'{prefix}baseline_all_training_coins',
+                                                  f'{prefix}training_coins_trading_against_BTC',
+                                                  f'{prefix}baseline_training_coins_trading_against_BTC',
+                                                  f'{prefix}training_coins_trading_against_USDT',
+                                                  f'{prefix}baseline_training_coins_trading_against_USDT']]
+
+
+        return df
+
+    def build_training_and_validation_dataframe(self, training_period, validation_period, training_tickers,
+                                                top_n, out_filename, resample_periods=[60], sources=[0],
+                                                start_cash=1000, start_crypto=0, additional_fields={}):
+        additional_fields = dict(additional_fields)
+        additional_fields['training_period'] = str(training_period)
+        additional_fields['validation_period'] = str(validation_period)
+        training_df = self.analyze_performance_in_period(training_period, training_tickers, top_n, out_filename,
+                                                         resample_periods,
+                                                         sources, start_cash, start_crypto,
+                                                         additional_fields=additional_fields, prefix="training_")
+        validation_df = self.analyze_performance_in_period(validation_period, training_tickers, top_n,
+                                                           out_filename, resample_periods,
+                                                           sources, start_cash, start_crypto,
+                                                           additional_fields=additional_fields, prefix="validation_")
+        #df = pd.concat([training_df, validation_df], axis=1)
+        df = pd.merge(training_df, validation_df, on=['training_period', 'validation_period',
+                                                               'source', 'resample_period', 'strategy'])
+
+
+        writer = pd.ExcelWriter('output2.xlsx')
+        df.to_excel(writer, 'Sheet1')
+        writer.save()
+        return df
+
+    def _fill_strategy_performance_dict(self, results_dict, field_name, top_n, start_time, end_time, resample_period, source,
+                                        start_cash, start_crypto, tickers, counter_currencies, prefix=''):
+        genetic_backtests, genetic_baselines = self._get_genetic_backtests(
+            top_n=top_n,
+            start_time=start_time,
+            end_time=end_time,
+            resample_periods=[resample_period],
+            counter_currencies=counter_currencies,
+            sources=[source],
+            tickers=tickers,
+            start_cash=start_cash,
+            start_crypto=start_crypto
+        )
+        backtest_results, baseline_results = self._get_evaluation_performance_arrays(genetic_backtests,
+                                                                                     genetic_baselines)
+        for strategy in backtest_results:
+            key = (source, resample_period, strategy)
+            if not key in results_dict:
+                results_dict[key] = {}
+            results_dict[key][f'{prefix}{field_name}'] = np.mean(backtest_results[strategy])
+            results_dict[key][f'{prefix}baseline_{field_name}'] = np.mean(baseline_results[strategy])
+
+
+    def _get_evaluation_performance_arrays(self, backtests, baselines):
+        backtest_results = {}
+        baseline_results = {}
+        for evaluation, baseline in zip(backtests, baselines):
+            if not evaluation._strategy.get_short_summary() in backtest_results:
+                backtest_results[evaluation._strategy.get_short_summary()] = [evaluation.profit_percent]
+                baseline_results[evaluation._strategy.get_short_summary()] = [baseline.profit_percent]
+            else:
+                backtest_results[evaluation._strategy.get_short_summary()].append(evaluation.profit_percent)
+                baseline_results[evaluation._strategy.get_short_summary()].append(baseline.profit_percent)
+
+        return backtest_results, baseline_results
 
 
 
@@ -300,7 +694,8 @@ class ExperimentDB:
         self._num_records = 0
 
     def add(self, data, function_provider, grammar_version, fitness_function,
-            mating_prob, mutation_prob, population_size, num_generations):
+            mating_prob, mutation_prob, population_size, num_generations, premade_individuals,
+            order_generator, tree_depth, reseed_params):
         entry = {}
         entry['data'] = data
         entry['function_provider'] = function_provider
@@ -310,6 +705,10 @@ class ExperimentDB:
         entry['mutation_prob'] = mutation_prob
         entry['population_size'] = population_size
         entry['num_generations'] = num_generations
+        entry['premade_individuals'] = premade_individuals
+        entry['order_generator'] = order_generator
+        entry['tree_depth'] = tree_depth
+        entry['reseed_params'] = reseed_params
         entry['experiment_id'] = self._num_records
         name = self.build_experiment_id(**entry)
         self._experiments[name] = entry
@@ -320,20 +719,22 @@ class ExperimentDB:
             yield k, v
 
     def build_experiment_id(self, **kwargs):
-        return f"data_{'-'.join(map(str,kwargs['data']))};" \
-               f"grammar_{kwargs['grammar_version']};" \
-               f"fitness_{kwargs['fitness_function']};" \
+        return f"d_{'-'.join(map(str,kwargs['data']))};" \
+               f"{kwargs['grammar_version']};" \
+               f"{kwargs['fitness_function']};" \
                f"x_{kwargs['mating_prob']};" \
                f"m_{kwargs['mutation_prob']};" \
                f"n_{kwargs['population_size']};" \
-               f"gen_{kwargs['num_generations']}"
+               f"gen_{kwargs['num_generations']};" \
+               f"td_{kwargs['tree_depth']};" \
+               f"{'p' if kwargs['order_generator'] == 'position_based' else 'a'};" \
+               f"{'rs' if kwargs['reseed_params']['enabled'] == True else 'nrs'}"
+
     #          f"provider_{kwargs['function_provider']};" \
 
     def __getitem__(self, key):
         return self._experiments[key]
 
-    # def build_experiment_id(**kwargs):
-    #    return ';'.join(['{}_{}'.format(k, v) for k, v in kwargs.iteritems()])
 
 
 ####################################
@@ -348,15 +749,91 @@ class ExperimentDB:
 #
 ####################################
 
+
+from utils import in_notebook
+
+if not in_notebook() and False:
+    #e = ExperimentManager("gv5_experiments_positions.json")
+    e = ExperimentManager("gv5_experiments.json")
+
 if __name__ == "__main__":
-    e = ExperimentManager("sample_experiment.json")
+
+
+    import datetime
+    start_time = datetime.datetime(2018, 4, 9, 14, 0, tzinfo=datetime.timezone.utc).timestamp()
+    end_time = datetime.datetime(2018, 6, 1, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
+
     #e.run_experiments()
+    #e.produce_report(5, 'gp_backtesting_BTC_train.xlsx', start_time, end_time, 'BTC')
+
+    #start_time = datetime.datetime(2018, 6, 1, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
+    #end_time = datetime.datetime(2018, 8, 1, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
+    #e.produce_report(5, 'gp_backtesting_USDT_6_res60_2.xlsx', start_time, end_time, 'USDT')
+
+    from comparative_evaluation import Ticker
+    tickers = [Ticker(0, 'BTC','USDT')] #, Ticker(0, 'ETH', 'BTC')]
+
+
+    training_tickers = [Ticker(0, 'BTC', 'USDT'),
+                        Ticker(0, 'ETH', 'USDT'),
+                        Ticker(0, 'LTC', 'BTC'),
+                        Ticker(0, 'ZEC', 'BTC'),
+                        Ticker(0, 'ETC', 'BTC')]
+
+    training_period = Period('2018/04/09 14:00:00 UTC', '2018/06/01 00:00:00 UTC', 'Apr 2018')
+    validation_period = Period('2018/06/01 00:00:00 UTC', '2018/08/01 00:00:00 UTC', 'Jun 2018')
+
+    e.build_training_and_validation_dataframe(training_period, validation_period, training_tickers, 5, "test.xlsx")
+
+    #e.analyze_performance_in_period(validation_period, training_tickers, 5, "test.xlsx")
+    exit(0)
+
+
+    e.produce_report_by_periods(top_n=5, out_filename="validation/period_test_gv5_validation_all_training.xlsx",
+                                tickers=training_tickers,
+                                periods=validation_period)
+    e.produce_report_by_periods(top_n=5, out_filename="validation/period_test_gv5_validation_training_usdt.xlsx",
+                                tickers=[ticker for ticker in training_tickers if ticker.counter_currency == 'USDT'],
+                                periods=validation_period)
+    e.produce_report_by_periods(top_n=5, out_filename="validation/period_test_gv5_validation_training_btc.xlsx",
+                                tickers=[ticker for ticker in training_tickers if ticker.counter_currency == 'BTC'],
+                                periods=validation_period)
+
+    e.produce_report_by_periods(top_n=5, out_filename="validation/period_test_gv5_validation_usdt.xlsx",
+                                counter_currencies=['USDT'], periods=validation_period)
+    e.produce_report_by_periods(top_n=5, out_filename="validation/period_test_gv5_validation_btc.xlsx",
+                                counter_currencies=['BTC'],
+                                periods=validation_period)
+    e.produce_report_by_periods(top_n=5, out_filename="validationperiod_test_gv5_validation_btc_usdt.xlsx",
+                                tickers=tickers, periods=validation_period)
+
+    exit(0)
+
+    #e.run_experiments()
+    #import tracemalloc
+
+    #tracemalloc.start()
+
+    #e.run_parallel_experiments()
+    #snapshot = tracemalloc.take_snapshot()
+    #top_stats = snapshot.statistics('lineno')
+
+    #print("[ Top 10 ]")
+    #for stat in top_stats[:10]:
+    #    print(stat)
+    exit(0)
+
+    #performance_dfs = e.get_joined_performance_dfs_over_all_variants()
+    #e.performance_df_row_info(performance_dfs[0].iloc[0])
+
     #e.explore_records()
     #e.best_individuals_across_variants_and_datasets = e.get_best_performing_across_variants_and_datasets(e.training_data)
     #dfs = e.get_joined_performance_dfs_over_all_variants()
     df = e.get_best_performing_across_variants_and_datasets(e.training_data)
-    from genetic_program import compress
-    compress(df.iloc[0].individual)
+    from gp_utils import compress
+
+    print(compress(df.iloc[0].individual))
+    print(str(df.iloc[0].individual))
     #e.browse_variants()
 
 

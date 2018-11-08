@@ -8,8 +8,10 @@ mysql_database_config = {
   'raise_on_warnings': True,
 }
 '''
+import redis
 
-postgres_connection_string = "host='localhost' dbname='itf_08_05' user='postgres' password='itfscience'"
+postgres_connection_string = "host='localhost' dbname='itf_11_07' user='postgres' password='itfscience'"
+
 
 backtesting_cols_to_names = {
     "strategy": "Strategy",
@@ -42,3 +44,16 @@ transaction_cost_percents = {
 
 # top 20 altcoins on Coinmarketcap (USDT not included)
 COINMARKETCAP_TOP_20_ALTS = "ETH,XRP,BCH,EOS,XLM,LTC,ADA,MIOTA,XMR,TRX,DASH,ETC,NEO,BNB,VET,XEM,XTZ,ZEC,OMG,LSK".split(",")
+
+INF_CASH = 100000000000
+INF_CRYPTO = 100000000000
+
+ENABLE_BACKTEST_CACHE = False
+CACHE_MODE_REDIS, CACHE_MODE_DICTIONARY = ("redis", "dictionary")
+CACHE_MODE = CACHE_MODE_DICTIONARY
+if ENABLE_BACKTEST_CACHE and CACHE_MODE == CACHE_MODE_REDIS:
+    redis_instance = redis.Redis(host='localhost', port=6379, db=0)
+else:
+    redis_instance = None
+
+POOL_SIZE = 12

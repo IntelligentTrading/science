@@ -6,8 +6,16 @@ from config import backtesting_report_columns, backtesting_report_column_names, 
 from signals import ALL_SIGNALS
 from strategies import BuyAndHoldTimebasedStrategy, SignalSignatureStrategy, SimpleRSIStrategy
 from enum import Enum
-
+from order_generator import OrderGenerator
+from config import POOL_SIZE
+from utils import time_performance
+from collections import namedtuple
 import pandas.io.formats.excel
+from utils import parallel_run
+
+Ticker = namedtuple("Ticker", "source transaction_currency counter_currency")
+
+
 
 pandas.io.formats.excel.header_style = None
 
@@ -112,8 +120,9 @@ class ComparativeEvaluation:
     Uses SignalDrivenBacktester.
     """
 
-    def __init__(self, strategy_set, counter_currencies, resample_periods, sources,
-                 start_cash, start_crypto, start_time, end_time, output_file=None, time_delay=0, debug=False):
+    def __init__(self, strategy_set, start_cash, start_crypto, start_time, end_time, resample_periods,
+                 counter_currencies=None, sources=None, tickers=None, output_file=None, time_delay=0, debug=False,
+                 order_generator=OrderGenerator.ALTERNATING, parallelize=True):
 
         self.strategy_set = sorted(strategy_set)
         self.counter_currencies = counter_currencies
@@ -127,6 +136,13 @@ class ComparativeEvaluation:
         self.buy_first_and_hold = False
         self.output_file = output_file
         self.time_delay = time_delay
+        self.order_generator = order_generator
+        self._parallelize = parallelize
+
+        if tickers is None:
+            self.tickers = self.build_tickers(counter_currencies, sources)
+        else:
+            self.tickers = tickers
 
         self._run_backtests(debug)
         self._report = ComparativeReportBuilder(self.backtests, self.baselines)
@@ -139,52 +155,85 @@ class ComparativeEvaluation:
         if output_file is not None:
             self._report.write_summary(output_file)
 
+    @staticmethod
+    def build_tickers( counter_currencies, sources):
+        currency_tuples = []
+        for source, counter_currency in itertools.product(sources, counter_currencies):
+            currency_tuples += [Ticker(source, transaction_currency, counter_currency)
+                                for transaction_currency in get_currencies_trading_against_counter(counter_currency, source)]
+        return currency_tuples
+
+
+    @time_performance
     def _run_backtests(self, debug):
         self.backtests = []
         self.baselines = []
-        transaction_currencies_cache = {}
+        param_list = []
 
-        for strategy, counter_currency, resample_period, source in \
-                itertools.product(self.strategy_set, self.counter_currencies, self.resample_periods, self.sources):
+        for strategy, resample_period, ticker in \
+                itertools.product(self.strategy_set, self.resample_periods, self.tickers):
 
-            # performance optimization, ensure we get each list of transaction_currencies only once
-            # per counter and source
-            if (counter_currency, source) not in transaction_currencies_cache:
-                transaction_currencies_cache[(counter_currency, source)] \
-                    = get_currencies_trading_against_counter(counter_currency, source)
-            transaction_currencies = transaction_currencies_cache[(counter_currency, source)]
+            params = {}
+            params['strategy'] = strategy
+            params['start_time'] = self.start_time
+            params['end_time'] = self.end_time
+            params['transaction_currency'] = ticker.transaction_currency
+            params['counter_currency'] = ticker.counter_currency
+            params['resample_period'] = resample_period
+            params['start_cash'] = self.start_cash
+            params['start_crypto'] = self.start_crypto
+            params['evaluate_profit_on_last_order'] = self.evaluate_profit_on_last_order
+            params['verbose'] = False
+            params['source'] = ticker.source
+            params['order_generator'] = self.order_generator
 
-            for transaction_currency in transaction_currencies:
-                try:
-                    backtest, baseline = self._evaluate(strategy, transaction_currency, counter_currency, resample_period, source)
-                    self.backtests.append(backtest)
-                    self.baselines.append(baseline)
-                    if debug:
-                        break
-                except NoPriceDataException:
+            param_list.append(params)
+
+        if self._parallelize:
+            # from pathos.multiprocessing import ProcessingPool as Pool
+            # with Pool(POOL_SIZE) as pool:
+            #    backtests = pool.map(self._evaluate, param_list)
+            #    pool.close()
+            #    pool.join()
+            backtests = parallel_run(self._evaluate, param_list)
+            logging.info("Parallel processing finished.")
+        else:
+            backtests = map(self._evaluate, param_list)
+
+        for backtest in backtests:
+            if backtest is None:
+                continue
+            if backtest.profit_percent is None or backtest.benchmark_backtest.profit_percent is None:
                     continue
+            self.backtests.append(backtest)
+            self.baselines.append(backtest.benchmark_backtest)
+            if debug:
+                break
+
+        logging.info("Finished backtesting, building report...")
 
 
-    def _evaluate(self, strategy, transaction_currency, counter_currency, resample_period, source):
-        logging.info("Evaluating strategy...")
+    def _evaluate(self, params):
+        logging.info(f"Evaluating strategy {params['strategy'].get_short_summary()}, "
+                     f"{params['transaction_currency']}-{params['counter_currency']}, "
+                     f"start_time {self.start_time}, end_time {self.end_time}...")
+        strategy = params['strategy']
+        strategy.clear_state()
+        del params['strategy']
+        try:
+            baseline = BuyAndHoldTimebasedStrategy(self.start_time, self.end_time, params['transaction_currency'],
+                                                   params['counter_currency'], params['source'])
 
-        params = {}
-        params['start_time'] = self.start_time
-        params['end_time'] = self.end_time
-        params['transaction_currency'] = transaction_currency
-        params['counter_currency'] = counter_currency
-        params['resample_period'] = resample_period
-        params['start_cash'] = self.start_cash
-        params['start_crypto'] = self.start_crypto
-        params['evaluate_profit_on_last_order'] = self.evaluate_profit_on_last_order
-        params['verbose'] = False
-        params['source'] = source
+            baseline_evaluation = SignalDrivenBacktester(strategy=baseline, **params)
+            return SignalDrivenBacktester(strategy=strategy,
+                                          benchmark_backtest=baseline_evaluation, **params)
 
-        baseline = BuyAndHoldTimebasedStrategy(self.start_time, self.end_time, transaction_currency, counter_currency)
-        baseline_evaluation = SignalDrivenBacktester(strategy=baseline, **params)
-        evaluation = SignalDrivenBacktester(strategy=strategy, **params)
-
-        return evaluation, baseline_evaluation
+        except NoPriceDataException as e:
+            logging.info('Error while fetching price, skipping...')
+            return None
+        except Exception as e:
+            logging.info(f'Error during strategy evaluation: {str(e)}')
+            return None
 
     @property
     def report(self):
@@ -206,6 +255,7 @@ class ComparativeReportBuilder:
         self.baselines = baselines
         self._build_dataframe()
 
+    @time_performance
     def _build_dataframe(self):
         evaluation_dicts = [self._create_row_dict(backtest, baseline) for backtest, baseline in zip(self.backtests, self.baselines)]
         output = pd.DataFrame(evaluation_dicts)
@@ -224,7 +274,8 @@ class ComparativeReportBuilder:
         # save full results
         self.results_df = output
 
-
+    #from utils import time_performance
+    #@time_performance
     def _create_row_dict(self, evaluation, baseline):
         evaluation_dict = evaluation.to_dictionary()
         baseline_dict = baseline.to_dictionary()
@@ -237,14 +288,17 @@ class ComparativeReportBuilder:
 
 
     def get_best_performing_backtest(self):
-        return self.results_df[self.results_df.num_trades > 0].iloc[0]["evaluation_object"]
+        sorted_df = self.results_df.sort_values(by=['profit_percent'], ascending=False)
+        return sorted_df[self.results_df.num_trades > 0].iloc[0]["evaluation_object"]
 
 
     def write_summary(self, output_file):
         writer = pd.ExcelWriter(output_file)
         # filter so that only report columns remain
+        #self.results_df['profit_percent'][self.results_df['profit_percent'] == 'N/A'] = np.nan
         self.results_df[backtesting_report_columns]. \
             sort_values(by=['profit_percent'], ascending=False).to_excel(writer, 'Results')
+
         writer.save()
 
 
@@ -303,10 +357,10 @@ class ComparativeReportBuilder:
 
         g = by_coin_df.groupby(level=0, group_keys=False)
         by_coin_sorted_df = g.apply(lambda x: x.sort_values([('profit_percent', 'mean')], ascending=False))
-        by_coin_sorted_df[["profit_percent", "buy_and_hold_profit_percent", "num_trades"]].to_excel(writer, f'{sheet_prefix} sorted by coin',
+        by_coin_sorted_df[["profit_percent", "buy_and_hold_profit_percent", "num_trades"]].to_excel(writer, f'{sheet_prefix} by coin',
                                                                                                     header=False, startrow=4)
         # apply sheet formatting
-        sheet = writer.sheets[f'{sheet_prefix} sorted by coin']
+        sheet = writer.sheets[f'{sheet_prefix} by coin']
         self._reformat_sheet_grouped_by_coin(formats, sheet)
 
 

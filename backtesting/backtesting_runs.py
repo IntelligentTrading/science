@@ -1,56 +1,36 @@
 from comparative_evaluation import *
-from strategies import RandomTradingStrategy
+from strategies import RandomTradingStrategy, ANNAnomalyStrategy
 import numpy as np
 import datetime
 from backtesting_helpers import find_num_cumulative_outperforms
 from data_sources import get_currencies_trading_against_counter
+from utils import time_performance
+
+@time_performance
+def best_performing_signals_of_the_period(start_time=None, end_time=None, additional_strategies=[],
+                                          best_performing_filename=None, full_report_filename=None,
+                                          group_strategy_variants=False):
+    if start_time is None or end_time is None:
+        start_time = datetime.datetime(2018, 10, 1, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
+        end_time = datetime.datetime(2018, 11, 1, 23, 59, tzinfo=datetime.timezone.utc).timestamp()
+
+    if best_performing_filename is None:
+        best_performing_filename = f"best_performing_{datetime.datetime.utcfromtimestamp(end_time).strftime('%Y-%m-%d')}.xlsx"
+
+    if full_report_filename is None:
+        full_report_filename = f"full_report_{datetime.datetime.utcfromtimestamp(end_time).strftime('%Y-%m-%d')}.xlsx"
+
+    ann_rsi_strategies, basic_strategies, vbi_strategies, ann_anomaly_strategies = build_itf_baseline_strategies()
+    strategies = basic_strategies + vbi_strategies + ann_rsi_strategies + ann_anomaly_strategies + additional_strategies
+
+    comparison = ComparativeEvaluation(strategy_set=strategies, start_cash=1, start_crypto=0, start_time=start_time,
+                                       end_time=end_time, resample_periods=[60, 240, 1440], counter_currencies=["BTC"],
+                                       sources=[0, 1, 2], output_file=best_performing_filename, debug=False, parallelize=False)
+
+    comparison.report.all_coins_report(full_report_filename, group_strategy_variants=group_strategy_variants)
 
 
-def best_performing_signals_of_the_week():
-    start_time = datetime.datetime(2018, 7, 1, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
-    end_time = datetime.datetime(2018, 7, 31, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
-
-    basic_strategies = StrategyEvaluationSetBuilder.build_from_signal_set(
-        buy_signals=['rsi_buy_3', 'rsi_buy_2', 'rsi_cumulat_buy_2', 'rsi_cumulat_buy_3', 'ichi_kumo_up', 'ann_simple_bull'],
-        sell_signals=['rsi_sell_3', 'rsi_sell_2', 'rsi_cumulat_sell_2', 'rsi_cumulat_sell_3', 'ichi_kumo_down', 'ann_simple_bear'],
-        num_buy=2,
-        num_sell=2,
-        signal_combination_mode=SignalCombinationMode.SAME_TYPE)
-
-    vbi_strategies = StrategyEvaluationSetBuilder.build_from_signal_set(
-        buy_signals=['vbi_buy'],
-        sell_signals=['rsi_sell_1', 'rsi_sell_2', 'rsi_sell_3'],
-        num_buy=1,
-        num_sell=1,
-        signal_combination_mode=SignalCombinationMode.ANY
-    )
-
-    ann_rsi_strategies = StrategyEvaluationSetBuilder.build_from_signal_set(
-        buy_signals=['rsi_buy_1', 'rsi_buy_2', 'rsi_buy_3'],
-        sell_signals=["ann_simple_bear"],
-        num_buy=1,
-        num_sell=1,
-        signal_combination_mode=SignalCombinationMode.ANY
-    )
-    strategies = basic_strategies + vbi_strategies + ann_rsi_strategies
-
-    comparison = ComparativeEvaluation(
-        strategy_set=strategies,
-        counter_currencies=["BTC"],
-        resample_periods=[60,240,1440],
-        sources=[0,1,2],
-        start_cash=1,
-        start_crypto=0,
-        start_time=start_time,
-        end_time=end_time,
-        output_file=f"best_performing_{datetime.datetime.utcfromtimestamp(end_time).strftime('%Y-%m-%d')}.xlsx",
-        debug=True
-    )
-
-    comparison.report.all_coins_report(f"full_report_{datetime.datetime.utcfromtimestamp(end_time).strftime('%Y-%m-%d')}.xlsx", group_strategy_variants=False)
-
-
-def in_depth_signal_comparison(out_path):
+def build_itf_baseline_strategies():
     basic_strategies = StrategyEvaluationSetBuilder.build_from_signal_set(
         buy_signals=['rsi_buy_3', 'rsi_buy_2', 'rsi_cumulat_buy_2', 'rsi_cumulat_buy_3', 'ichi_kumo_up',
                      'ann_simple_bull'],
@@ -59,6 +39,39 @@ def in_depth_signal_comparison(out_path):
         num_buy=2,
         num_sell=2,
         signal_combination_mode=SignalCombinationMode.SAME_TYPE)
+    vbi_strategies = StrategyEvaluationSetBuilder.build_from_signal_set(
+        buy_signals=['vbi_buy'],
+        sell_signals=['rsi_sell_1', 'rsi_sell_2', 'rsi_sell_3'],
+        num_buy=1,
+        num_sell=1,
+        signal_combination_mode=SignalCombinationMode.ANY
+    )
+    ann_rsi_strategies = StrategyEvaluationSetBuilder.build_from_signal_set(
+        buy_signals=['rsi_buy_1', 'rsi_buy_2', 'rsi_buy_3'],
+        sell_signals=["ann_simple_bear"],
+        num_buy=1,
+        num_sell=1,
+        signal_combination_mode=SignalCombinationMode.ANY
+    )
+
+    # ANN anomaly strategies
+    comparative_signals = ['RSI', 'RSI_Cumulative', 'ANN_Simple']
+    candle_periods = [0, 1, 3, 5]
+    ann_anomaly_strategies = [ANNAnomalyStrategy(confirmation_signal, max_delta_period)
+                              for confirmation_signal, max_delta_period in itertools.product(comparative_signals, candle_periods)]
+
+    return ann_rsi_strategies, basic_strategies, vbi_strategies, ann_anomaly_strategies
+
+
+def in_depth_signal_comparison(out_path):
+    basic_strategies = StrategyEvaluationSetBuilder.build_from_signal_set(
+        buy_signals=['rsi_buy_3', 'rsi_buy_2', 'rsi_cumulat_buy_2', 'rsi_cumulat_buy_3', 'ichi_kumo_up',],
+#                     'ann_simple_bull'],
+        sell_signals=['rsi_sell_3', 'rsi_sell_2', 'rsi_cumulat_sell_2', 'rsi_cumulat_sell_3', 'ichi_kumo_down',],
+#                      'ann_simple_bear'],
+        num_buy=2,
+        num_sell=2,
+        signal_combination_mode=SignalCombinationMode.SAME_TYPE)
 
     vbi_strategies = StrategyEvaluationSetBuilder.build_from_signal_set(
         buy_signals=['vbi_buy'],
@@ -75,7 +88,7 @@ def in_depth_signal_comparison(out_path):
         num_sell=1,
         signal_combination_mode=SignalCombinationMode.ANY
     )
-    strategies = basic_strategies + vbi_strategies + ann_rsi_strategies
+    strategies = basic_strategies + vbi_strategies # + ann_rsi_strategies
 
     periods = {
         'Mar 2018': ('2018/03/01 00:00:00 UTC', '2018/03/31 23:59:59 UTC'),
@@ -83,9 +96,10 @@ def in_depth_signal_comparison(out_path):
         'May 2018': ('2018/05/01 00:00:00 UTC', '2018/05/31 23:59:59 UTC'),
         'Jun 2018': ('2018/06/01 00:00:00 UTC', '2018/06/30 23:59:59 UTC'),
         'Jul 2018': ('2018/07/01 00:00:00 UTC', '2018/07/31 23:59:59 UTC'),
+        'Aug 2018': ('2018/08/01 00:00:00 UTC', '2018/08/31 23:59:59 UTC'),
         'Q1 2018': ('2018/01/01 00:00:00 UTC', '2018/03/31 23:59:59 UTC'),
         'Q2 2018': ('2018/04/01 00:00:00 UTC', '2018/06/30 23:59:59 UTC'),
-
+        '678 2018': ('2018/06/01 00:00:00 UTC', '2018/08/31 23:59:59 UTC'),
     }
 
     writer = pd.ExcelWriter(out_path)
@@ -95,54 +109,38 @@ def in_depth_signal_comparison(out_path):
         start_time = parser.parse(periods[period][0]).timestamp()
         end_time = parser.parse(periods[period][1]).timestamp()
 
-        comparison = ComparativeEvaluation(
-            strategy_set=strategies,
-            counter_currencies=["BTC"],
-            resample_periods=[60,240,1440],
-            sources=[0,1,2],
-            start_cash=1,
-            start_crypto=0,
-            start_time=start_time,
-            end_time=end_time,
-            output_file=f"debug_best_performing_{datetime.datetime.utcfromtimestamp(end_time).strftime('%Y-%m-%d')}.xlsx",
-            debug=True
-        )
+        comparison = ComparativeEvaluation(strategy_set=strategies, start_cash=1, start_crypto=0, start_time=start_time,
+                                           end_time=end_time, resample_periods=[60, 240, 1440],
+                                           counter_currencies=["BTC"], sources=[0, 1, 2],
+                                           output_file=f"debug_best_performing_{datetime.datetime.utcfromtimestamp(end_time).strftime('%Y-%m-%d')}.xlsx",
+                                           debug=False)
 
         comparison.report.all_coins_report(writer=writer, sheet_prefix=f'({period}) ', group_strategy_variants=False)
-
 
     writer.save()
     writer.close()
 
 
 def rsi_vs_rsi_cumulative(start_time, end_time, time_delay=0):
+    source = 0
     counter_currency = "BTC"
-    transaction_currencies = get_currencies_for_signal(counter_currency, "RSI_Cumulative")
-    currency_pairs = []
+    transaction_currencies = get_currencies_for_signal(counter_currency, "RSI_Cumulative", source=0)
     resample_periods = [60, 240, 1440]
-    for transaction_currency in transaction_currencies:
-        currency_pairs.append((transaction_currency, counter_currency))
+    tickers = [Ticker(source, transaction_currency, counter_currency) for transaction_currency in transaction_currencies]
 
-    strategies_rsi = StrategyEvaluationSetBuilder.build_from_rsi_thresholds("RSI", [75], [25])
-    strategies_rsi_cumulative = StrategyEvaluationSetBuilder.build_from_rsi_thresholds("RSI_Cumulative", [75], [25])
+    strategies_rsi = StrategyEvaluationSetBuilder.build_from_signal_set(
+        ['rsi_buy_2'], ['rsi_sell_2'], 1, 1, SignalCombinationMode.SAME_TYPE)
+    strategies_rsi_cumulative = StrategyEvaluationSetBuilder.build_from_signal_set(
+        ['rsi_cumulat_buy_2'], ['rsi_cumulat_sell_2'], 1, 1, SignalCombinationMode.SAME_TYPE)
     strategies_rsi.extend(strategies_rsi_cumulative)
 
-    ComparativeEvaluation(
-        strategy_set=strategies_rsi,
-        currency_pairs=currency_pairs,
-        resample_periods=resample_periods,
-        sources=[0],
-        start_cash=1,
-        start_crypto=0,
-        start_time=start_time,
-        end_time=end_time,
-        output_file="RSI_cumulative_delayed.xlsx",
-        time_delay=time_delay
-    )
+    ComparativeEvaluation(strategy_set=strategies_rsi, start_cash=1, start_crypto=0, start_time=start_time,
+                          end_time=end_time, resample_periods=resample_periods, tickers=tickers,
+                          output_file="RSI_cumulative_delayed.xlsx", time_delay=time_delay, parallelize=False)
+
     find_num_cumulative_outperforms(
-        currency_pairs=currency_pairs,
+        tickers=tickers,
         resample_periods=resample_periods,
-        source=0,
         start_cash=1,
         start_crypto=0,
         start_time=start_time,
@@ -312,14 +310,16 @@ if __name__ == "__main__":
     # delayed_trading_stats()
 
     # Best performing signals
-    # best_performing_signals_of_the_week()
+    best_performing_signals_of_the_period()
 
-    in_depth_signal_comparison('comp.xlsx')
+    #in_depth_signal_comparison('comp_no_ann.xlsx')
 
     # RSI vs RSI cumulative
     # start_time = 1518523200  # first instance of RSI_Cumulative signal
     # end_time = 1526637600
-    # rsi_vs_rsi_cumulative(start_time, end_time, 60*5)
+    # start_time =  datetime.datetime(2018, 5, 1, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
+    # end_time = datetime.datetime(2018, 7, 31, 23, 59, tzinfo=datetime.timezone.utc).timestamp()
+    # rsi_vs_rsi_cumulative(start_time, end_time, 0)
 
     # Other runs
     # evaluate_rsi_any_currency("BTC", start, end, 1000, 0, 70, 30)

@@ -24,7 +24,7 @@ class Signal:
         self.signal_signature = get_signal_type(SignalType(signal=signal_type, trend=int(float(trend)), strength=int(strength_value)))
 
     def __str__(self):
-        return ("{} strength={} trend={} horizon={} timestamp={} rsi_value={}".format(self.signal_signature, self.strength_value,
+        return ("{} {}-{} strength={} trend={} horizon={} timestamp={} rsi_value={}".format(self.signal_signature, self.transaction_currency, self.counter_currency, self.strength_value,
                                                              self.trend, self.horizon, datetime_from_timestamp(self.timestamp), self.rsi_value))
 
     def __eq__(self, other):
@@ -119,6 +119,8 @@ ALL_SIGNALS = {
     'vbi_buy': SignalType('VBI', 1, 3),
 
     'generic_up': SignalType('Generic', 1, 3),
-    'generic_down': SignalType('Generic', -1, 3)
+    'generic_down': SignalType('Generic', -1, 3),
+
+    'ann_anomaly': SignalType('ANN_AnomalyPrc', 0, 3)
 
 }

@@ -36,14 +36,6 @@ class BacktestingChart:
                                          #   if self.benchmark is not None else None)
         f.savefig(out_filename)
 
-    def plot_orders(self, ax, orders):
-        for order in orders:
-            if order.order_type == OrderType.BUY:
-                color = "g"
-            else:
-                color = "r"
-            timestamp = pd.to_datetime(order.timestamp, unit="s")
-            ax.axvline(timestamp, color=color, lw=1, zorder=-1)
 
     def draw_price_and_cumulative_returns(self):
         import matplotlib.pyplot as plt
@@ -68,44 +60,64 @@ class BacktestingChart:
         prices = self.trading_df['close_price']
         orders = self.backtest.get_orders()
 
-        years = mdates.YearLocator()   # every year
-        months = mdates.MonthLocator()  # every month
-        weeks = mdates.WeekdayLocator()
-        days = mdates.DayLocator() # every day
-        daysFmt = mdates.DateFormatter('%m/%d')
-        monthsFmt = mdates.DateFormatter('%m')
-
-        fig, ax = plt.subplots(figsize=(20, 8))
-        ax.plot(timestamps, prices)
-
-        #circle1 = plt.Circle((timestamps[100], prices[100]), 0.02, color='r')
-        #ax.add_artist(circle1)
-
-        if orders != None:
-            self.plot_orders(ax, orders)
-
-        # format the ticks
-        ax.xaxis.set_major_locator(years)
-        ax.xaxis.set_minor_locator(days)
-        ax.xaxis.set_minor_formatter(daysFmt)
-        plt.setp(ax.xaxis.get_minorticklabels(), rotation=90)
-
-        datemin = np.datetime64(timestamps[0])
-        datemax = np.datetime64(timestamps[-1])
-        ax.set_xlim(datemin, datemax)
+        data = {"prices": prices}
+        time_series_chart(timestamps=timestamps, series_dict_primary=data,
+                          title=f"{self.backtest._transaction_currency} - {self.backtest._counter_currency}", orders=orders)
 
 
-        # format the coords message box
-        ax.format_xdata = daysFmt
-        ax.format_ydata = price
-        ax.grid(False)
+def time_series_chart(timestamps, series_dict_primary, series_dict_secondary=None, title=None, orders=None):
+    if not isinstance(timestamps[0], np.datetime64):
+        timestamps = pd.to_datetime(timestamps, unit='s', utc=True)
+    years = mdates.YearLocator()  # every year
+    months = mdates.MonthLocator()  # every month
+    weeks = mdates.WeekdayLocator()
+    days = mdates.DayLocator()  # every day
+    daysFmt = mdates.DateFormatter('%m/%d')
+    monthsFmt = mdates.DateFormatter('%m')
 
-        plt.ylabel("Price", fontsize=14)
+    fig, ax = plt.subplots(figsize=(20, 8))
+    for label in series_dict_primary:
+        ax.plot(timestamps, series_dict_primary[label], label=label)
+
+    if series_dict_secondary is not None:
+        ax2 = ax.twinx()
+        for label in series_dict_secondary:
+            ax2.plot(timestamps, series_dict_secondary[label], label=label)
+        ax2.legend(loc='best')
 
 
 
-        # rotates and right aligns the x labels, and moves the bottom of the
-        # axes up to make room for them
-        fig.autofmt_xdate()
+    if orders != None:
+        plot_orders(ax, orders)
 
-        plt.show()
+    # add legend
+    ax.legend(loc='best')
+
+    # format the ticks
+    ax.xaxis.set_major_locator(years)
+    ax.xaxis.set_minor_locator(days)
+    ax.xaxis.set_minor_formatter(daysFmt)
+    plt.setp(ax.xaxis.get_minorticklabels(), rotation=90)
+
+    datemin = np.datetime64(timestamps[0])
+    datemax = np.datetime64(timestamps[-1])
+    ax.set_xlim(datemin, datemax)
+
+    # format the coords message box
+    ax.format_xdata = daysFmt
+    ax.format_ydata = price
+    ax.grid(False)
+
+    plt.ylabel("Price" if title is None else title, fontsize=14)
+
+    plt.show()
+
+
+def plot_orders(ax, orders):
+    for order in orders:
+        if order.order_type == OrderType.BUY:
+            color = "g"
+        else:
+            color = "r"
+        timestamp = pd.to_datetime(order.timestamp, unit="s")
+        ax.axvline(timestamp, color=color, lw=1, zorder=-1)
