@@ -218,6 +218,7 @@ class ComparativeEvaluation:
                      f"{params['transaction_currency']}-{params['counter_currency']}, "
                      f"start_time {self.start_time}, end_time {self.end_time}...")
         strategy = params['strategy']
+        strategy.clear_state()
         del params['strategy']
         try:
             baseline = BuyAndHoldTimebasedStrategy(self.start_time, self.end_time, params['transaction_currency'],

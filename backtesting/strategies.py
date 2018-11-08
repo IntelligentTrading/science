@@ -89,6 +89,9 @@ class Strategy(ABC):
         return [signal for signal in signals
                 if strategy.belongs_to_this_strategy(signal) and strategy.indicates_sell(signal)]
 
+    def clear_state(self):
+        pass
+
     def __eq__(self, other):
         return self.get_short_summary() == other.get_short_summary()
 
@@ -227,6 +230,46 @@ class SimpleTrendBasedStrategy(SignalStrategy):
 
     def belongs_to_this_strategy(self, signal):
         return signal.signal_type == self.signal_type
+
+
+class ANNAnomalyStrategy(SignalStrategy):
+
+    def __init__(self, confirmation_signal='RSI', max_delta_periods=1):
+        self._last_signal = None
+        self.max_delta_periods = max_delta_periods
+        self.confirmation_signal = confirmation_signal
+
+    def indicates_buy(self, signal):
+        decision = self._confirm_signal(signal) and int(self._last_signal.trend) == 1
+        return decision
+
+    def indicates_sell(self, signal):
+        decision = self._confirm_signal(signal) and int(self._last_signal.trend) == -1
+        return decision
+
+    def _confirm_signal(self, signal):
+        if signal.signal_type == self.confirmation_signal:
+            self._last_signal = signal
+        elif signal.signal_type == 'ANN_AnomalyPrc' \
+                and self._last_signal is not None \
+                and (signal.timestamp - self._last_signal.timestamp) <= signal.resample_period * 60 * self.max_delta_periods \
+                and signal.resample_period == self._last_signal.resample_period:
+            logging.info(
+                f'Confirmed: {signal} {self._last_signal}, delta_time = {signal.timestamp - self._last_signal.timestamp}')
+            assert signal.transaction_currency == self._last_signal.transaction_currency
+            return True
+        return False
+
+    def clear_state(self):
+        self._last_signal = None
+
+    def belongs_to_this_strategy(self, signal):
+        return signal.signal_type == self.confirmation_signal or signal.signal_type == 'ANN_AnomalyPrc'
+
+    def get_short_summary(self):
+        return f'ANN anomaly + {self.confirmation_signal} confirmation (past candles: {self.max_delta_periods})'
+
+
 
 # TODO
 class BuyOnFirstSignalAndHoldStrategy(SignalStrategy):

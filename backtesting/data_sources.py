@@ -79,8 +79,34 @@ def get_resampled_prices_in_range(start_time, end_time, transaction_currency, co
         price_data.loc[:, 'low_price'] /= 1E8
     return price_data
 
+
+def get_nearest_resampled_price(timestamp, transaction_currency, counter_currency, resample_period, source, normalize):
+    query = """SELECT timestamp, close_price, high_price, low_price, close_volume
+                                     FROM indicator_priceresampl 
+                                     WHERE transaction_currency = %s 
+                                     AND counter_currency = %s 
+                                     AND source = %s 
+                                     AND timestamp >= %s
+                                     AND resample_period = %s
+                                     AND close_price is not null
+                                     ORDER BY timestamp ASC LIMIT 1"""
+    counter_currency_id = CounterCurrency[counter_currency].value
+    connection = dbc.get_connection()
+    price_data = pd.read_sql(query, con=connection, params=(transaction_currency,
+                                                            counter_currency_id,
+                                                            source,
+                                                            timestamp,
+                                                            resample_period), index_col="timestamp")
+    if normalize:
+        price_data.loc[:, 'close_price'] /= 1E8
+        price_data.loc[:, 'high_price'] /= 1E8
+        price_data.loc[:, 'low_price'] /= 1E8
+    return price_data
+
+
 def get_filtered_signals(signal_type=None, transaction_currency=None, start_time=None, end_time=None, horizon=Horizon.any,
-                         counter_currency=None, strength=Strength.any, source=None, resample_period=60, return_df = False):
+                         counter_currency=None, strength=Strength.any, source=None, resample_period=60, return_df = False,
+                         normalize=True):
     query = """ SELECT signal_signal.signal, trend, horizon, strength_value, strength_max, price, price_change, 
                 timestamp, rsi_value, transaction_currency, counter_currency, source, resample_period FROM signal_signal 
                  """
@@ -124,7 +150,8 @@ def get_filtered_signals(signal_type=None, transaction_currency=None, start_time
         signals_df = pd.read_sql(query, con=connection, params=params, index_col="timestamp")
         signals_df['counter_currency'] = [CounterCurrency(counter_currency).name
                                           for counter_currency in signals_df.counter_currency]
-        signals_df['price'] = signals_df['price']/1E8
+        if normalize:
+            signals_df['price'] = signals_df['price']/1E8
         return signals_df
 
     # otherwise, we return a list of Signal objectss
@@ -137,7 +164,7 @@ def get_filtered_signals(signal_type=None, transaction_currency=None, start_time
         if len(trend) > 5:   # hacky solution for one instance of bad data
             continue
         signals.append(Signal(signal_type, trend, horizon, strength_value, strength_max,
-                              price/1E8,  price_change, timestamp, rsi_value, transaction_currency,
+                              price/1E8 if normalize else price,  price_change, timestamp, rsi_value, transaction_currency,
                               CounterCurrency(counter_currency).name, source, resample_period))
     return signals
 
@@ -361,3 +388,23 @@ def get_timestamp_n_ticks_earlier(timestamp, n, transaction_currency, counter_cu
     data = cursor.fetchall()
     assert len(data) == n
     return data[-1][0]
+
+
+def count_signals_ocurring_at_the_same_time(type1, type2, start_time, end_time):
+    query = """select count(*) from 
+                    (select * from signal_signal 
+                        where signal = %s 
+                        and timestamp >= %s and timestamp <= %s) t1 
+                    inner join 
+                    (select * from signal_signal 
+                        where signal = %s 
+                        and timestamp >= %s and timestamp <= %s) t2 
+                    on  t1.timestamp = t2.timestamp 
+                        and t1.transaction_currency = t2.transaction_currency 
+                        and t1.counter_currency = t2.counter_currency 
+                        and t1.source = t2.source 
+                        and t1.resample_period = t2.resample_period"""
+    cursor = dbc.execute(query, params=(type1, start_time, end_time, type2, start_time, end_time,))
+    data = cursor.fetchall()
+    return data[-1][0]
+

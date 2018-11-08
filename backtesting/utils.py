@@ -4,9 +4,15 @@ import time
 from config import POOL_SIZE
 from pathos.multiprocessing import Pool
 import tqdm
+from dateutil import parser
+
 
 def datetime_from_timestamp(timestamp):
     return datetime.datetime.utcfromtimestamp(timestamp).strftime('%Y/%m/%d %H:%M:%S UTC')
+
+
+def datetime_to_timestamp(datetime_str):
+    return parser.parse(datetime_str).timestamp()
 
 
 def get_distinct_signal_types(signals):

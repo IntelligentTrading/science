@@ -107,18 +107,18 @@ if __name__ == "__main__":
     kwargs['counter_currency'] = 'USDT'
     kwargs['start_time'] =  start_time
     kwargs['end_time'] = end_time
-    kwargs['start_cash'] = INF_CASH
-    kwargs['start_crypto'] = INF_CRYPTO
+    kwargs['start_cash'] = 100# INF_CASH
+    kwargs['start_crypto'] = 0 #INF_CRYPTO
     kwargs['source'] = 0
     kwargs['resample_period'] = 60
     kwargs['time_delay'] = 0
     kwargs['slippage'] = 0
 
 
-    position_based_order_test(**kwargs)
+    #position_based_order_test(**kwargs)
     #evaluate_rsi_any_currency(75, 25, **kwargs)
     #evaluate_rsi_signature(**kwargs)
-    #evaluate_rsi(75, 25, **kwargs)
+    evaluate_rsi(75, 25, **kwargs)
     #evaluate_trend_based("SMA", **kwargs)
     #find_num_cumulative_outperforms((("BTC", "USDT"), ("DOGE","BTC")), **kwargs)
 

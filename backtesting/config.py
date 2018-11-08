@@ -10,7 +10,7 @@ mysql_database_config = {
 '''
 import redis
 
-postgres_connection_string = "host='localhost' dbname='itf_10_14' user='postgres' password='itfscience'"
+postgres_connection_string = "host='localhost' dbname='itf_11_07' user='postgres' password='itfscience'"
 
 
 backtesting_cols_to_names = {
@@ -48,7 +48,7 @@ COINMARKETCAP_TOP_20_ALTS = "ETH,XRP,BCH,EOS,XLM,LTC,ADA,MIOTA,XMR,TRX,DASH,ETC,
 INF_CASH = 100000000000
 INF_CRYPTO = 100000000000
 
-ENABLE_BACKTEST_CACHE = True
+ENABLE_BACKTEST_CACHE = False
 CACHE_MODE_REDIS, CACHE_MODE_DICTIONARY = ("redis", "dictionary")
 CACHE_MODE = CACHE_MODE_DICTIONARY
 if ENABLE_BACKTEST_CACHE and CACHE_MODE == CACHE_MODE_REDIS:

@@ -1,5 +1,5 @@
 from comparative_evaluation import *
-from strategies import RandomTradingStrategy
+from strategies import RandomTradingStrategy, ANNAnomalyStrategy
 import numpy as np
 import datetime
 from backtesting_helpers import find_num_cumulative_outperforms
@@ -11,8 +11,8 @@ def best_performing_signals_of_the_period(start_time=None, end_time=None, additi
                                           best_performing_filename=None, full_report_filename=None,
                                           group_strategy_variants=False):
     if start_time is None or end_time is None:
-        start_time = datetime.datetime(2018, 9, 24, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
-        end_time = datetime.datetime(2018, 9, 28, 23, 59, tzinfo=datetime.timezone.utc).timestamp()
+        start_time = datetime.datetime(2018, 10, 1, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
+        end_time = datetime.datetime(2018, 11, 1, 23, 59, tzinfo=datetime.timezone.utc).timestamp()
 
     if best_performing_filename is None:
         best_performing_filename = f"best_performing_{datetime.datetime.utcfromtimestamp(end_time).strftime('%Y-%m-%d')}.xlsx"
@@ -20,12 +20,12 @@ def best_performing_signals_of_the_period(start_time=None, end_time=None, additi
     if full_report_filename is None:
         full_report_filename = f"full_report_{datetime.datetime.utcfromtimestamp(end_time).strftime('%Y-%m-%d')}.xlsx"
 
-    ann_rsi_strategies, basic_strategies, vbi_strategies = build_itf_baseline_strategies()
-    strategies = basic_strategies + vbi_strategies + ann_rsi_strategies + additional_strategies
+    ann_rsi_strategies, basic_strategies, vbi_strategies, ann_anomaly_strategies = build_itf_baseline_strategies()
+    strategies = basic_strategies + vbi_strategies + ann_rsi_strategies + ann_anomaly_strategies + additional_strategies
 
     comparison = ComparativeEvaluation(strategy_set=strategies, start_cash=1, start_crypto=0, start_time=start_time,
                                        end_time=end_time, resample_periods=[60, 240, 1440], counter_currencies=["BTC"],
-                                       sources=[0, 1, 2], output_file=best_performing_filename, debug=False)
+                                       sources=[0, 1, 2], output_file=best_performing_filename, debug=False, parallelize=False)
 
     comparison.report.all_coins_report(full_report_filename, group_strategy_variants=group_strategy_variants)
 
@@ -53,7 +53,14 @@ def build_itf_baseline_strategies():
         num_sell=1,
         signal_combination_mode=SignalCombinationMode.ANY
     )
-    return ann_rsi_strategies, basic_strategies, vbi_strategies
+
+    # ANN anomaly strategies
+    comparative_signals = ['RSI', 'RSI_Cumulative', 'ANN_Simple']
+    candle_periods = [0, 1, 3, 5]
+    ann_anomaly_strategies = [ANNAnomalyStrategy(confirmation_signal, max_delta_period)
+                              for confirmation_signal, max_delta_period in itertools.product(comparative_signals, candle_periods)]
+
+    return ann_rsi_strategies, basic_strategies, vbi_strategies, ann_anomaly_strategies
 
 
 def in_depth_signal_comparison(out_path):
@@ -303,16 +310,16 @@ if __name__ == "__main__":
     # delayed_trading_stats()
 
     # Best performing signals
-    # best_performing_signals_of_the_period()
+    best_performing_signals_of_the_period()
 
     #in_depth_signal_comparison('comp_no_ann.xlsx')
 
     # RSI vs RSI cumulative
-    #start_time = 1518523200  # first instance of RSI_Cumulative signal
-    #end_time = 1526637600
-    start_time =  datetime.datetime(2018, 5, 1, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
-    end_time = datetime.datetime(2018, 7, 31, 23, 59, tzinfo=datetime.timezone.utc).timestamp()
-    rsi_vs_rsi_cumulative(start_time, end_time, 0)
+    # start_time = 1518523200  # first instance of RSI_Cumulative signal
+    # end_time = 1526637600
+    # start_time =  datetime.datetime(2018, 5, 1, 0, 0, tzinfo=datetime.timezone.utc).timestamp()
+    # end_time = datetime.datetime(2018, 7, 31, 23, 59, tzinfo=datetime.timezone.utc).timestamp()
+    # rsi_vs_rsi_cumulative(start_time, end_time, 0)
 
     # Other runs
     # evaluate_rsi_any_currency("BTC", start, end, 1000, 0, 70, 30)

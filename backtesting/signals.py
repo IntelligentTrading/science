@@ -24,7 +24,7 @@ class Signal:
         self.signal_signature = get_signal_type(SignalType(signal=signal_type, trend=int(float(trend)), strength=int(strength_value)))
 
     def __str__(self):
-        return ("{} strength={} trend={} horizon={} timestamp={} rsi_value={}".format(self.signal_signature, self.strength_value,
+        return ("{} {}-{} strength={} trend={} horizon={} timestamp={} rsi_value={}".format(self.signal_signature, self.transaction_currency, self.counter_currency, self.strength_value,
                                                              self.trend, self.horizon, datetime_from_timestamp(self.timestamp), self.rsi_value))
 
     def __eq__(self, other):
