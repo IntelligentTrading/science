@@ -105,7 +105,7 @@ def get_nearest_resampled_price(timestamp, transaction_currency, counter_currenc
 
 
 def get_filtered_signals(signal_type=None, transaction_currency=None, start_time=None, end_time=None, horizon=Horizon.any,
-                         counter_currency=None, strength=Strength.any, source=None, resample_period=60, return_df = False,
+                         counter_currency=None, strength=Strength.any, source=None, resample_period=None, return_df = False,
                          normalize=True):
     query = """ SELECT signal_signal.signal, trend, horizon, strength_value, strength_max, price, price_change, 
                 timestamp, rsi_value, transaction_currency, counter_currency, source, resample_period FROM signal_signal 

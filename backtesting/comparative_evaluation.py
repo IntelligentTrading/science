@@ -329,7 +329,7 @@ class ComparativeReportBuilder:
 
         # group by strategy, evaluate
         by_strategy_df = filtered_df[["source", "strategy", "resample_period", "profit_percent",
-                                      "buy_and_hold_profit_percent", "num_trades"]]\
+                                      "buy_and_hold_profit_percent", "num_trades", "sharpe_ratio"]]\
             .groupby(["source", "strategy", "resample_period"], sort=False).describe(percentiles=[])
 
         # add outperformance stat
@@ -339,7 +339,7 @@ class ComparativeReportBuilder:
         by_strategy_df["outperforms"] = outperforms
 
         # reorder columns and write
-        by_strategy_df[["profit_percent", "buy_and_hold_profit_percent", "num_trades", "outperforms"]]\
+        by_strategy_df[["profit_percent", "buy_and_hold_profit_percent", "num_trades", "outperforms", "sharpe_ratio"]]\
             .to_excel(writer, f'{sheet_prefix} by strategy', header=False, startrow=4)
 
         # apply sheet formatting
@@ -348,7 +348,7 @@ class ComparativeReportBuilder:
 
         # group by coin, evaluate
         by_coin_df = filtered_df[["source", "transaction_currency", "profit_percent",
-                                  "buy_and_hold_profit_percent", "num_trades"]]\
+                                  "buy_and_hold_profit_percent", "num_trades", ]]\
             .groupby(["source", "transaction_currency"]).describe(percentiles=[])
 
         # reorder columns and write
@@ -357,7 +357,7 @@ class ComparativeReportBuilder:
 
         g = by_coin_df.groupby(level=0, group_keys=False)
         by_coin_sorted_df = g.apply(lambda x: x.sort_values([('profit_percent', 'mean')], ascending=False))
-        by_coin_sorted_df[["profit_percent", "buy_and_hold_profit_percent", "num_trades"]].to_excel(writer, f'{sheet_prefix} by coin',
+        by_coin_sorted_df[["profit_percent", "buy_and_hold_profit_percent", "num_trades", ]].to_excel(writer, f'{sheet_prefix} by coin',
                                                                                                     header=False, startrow=4)
         # apply sheet formatting
         sheet = writer.sheets[f'{sheet_prefix} by coin']
@@ -373,8 +373,12 @@ class ComparativeReportBuilder:
         sheet.merge_range('J3:O3', 'Buy and hold profit percent', formats['header_format'])
         sheet.merge_range('P3:U3', 'Number of trades', formats['header_format'])
         sheet.write('V3', 'Outperforms', formats['header_format'])
+        sheet.merge_range('W3:AB3', 'Sharpe ratio', formats['header_format'])
         sheet.write_row('D4', ['number of tests (coin, strategy)',
                                'mean', 'std', 'min', 'median', 'max'] * 3, formats['aux_header_format'])
+        sheet.write_row('W4', ['number of tests (coin, strategy)',
+                               'mean', 'std', 'min', 'median', 'max'], formats['aux_header_format'])
+
         sheet.write_row('A5', ['exchange',
                                'strategy', 'resample period (minutes)'], formats['header_format'])
         # set up column formatting

@@ -27,6 +27,7 @@ backtesting_cols_to_names = {
     "num_buys": "Number of buys",
     "num_sells": "Nuber of sells",
     "mean_buy_sell_pair_return": "Mean buy-sell pair return",
+    "sharpe_ratio": "Sharpe ratio",
     "start_time": "Start time",
     "end_time": "End time",
     "resample_period": "Resample period"
