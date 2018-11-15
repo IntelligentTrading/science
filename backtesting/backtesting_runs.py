@@ -55,7 +55,7 @@ def build_itf_baseline_strategies():
     )
 
     # ANN anomaly strategies
-    comparative_signals = ['RSI', 'RSI_Cumulative', 'ANN_Simple']
+    comparative_signals = ['RSI', 'RSI_Cumulative', 'ANN_Simple', 'VBI', 'kumo_breakout']
     candle_periods = [0, 1, 3, 5]
     ann_anomaly_strategies = [ANNAnomalyStrategy(confirmation_signal, max_delta_period)
                               for confirmation_signal, max_delta_period in itertools.product(comparative_signals, candle_periods)]
