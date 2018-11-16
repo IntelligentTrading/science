@@ -230,6 +230,14 @@ class BenchmarkLengthControlFitnessV3(FitnessFunction):
         return (evaluation.profit_percent - evaluation.benchmark_backtest.profit_percent) * \
                (1+0.1*(max_len - len(individual)) / float(max_len)),
 
+class GainsBenchmarkDiffFitness(FitnessFunction):
+    _name = "ff_gainsbenchmarkdiff"
+
+    def compute(self, individual, evaluation, genetic_program):
+        return 0 if evaluation.num_buy_sell_pairs == 0 \
+                 else evaluation.percent_profitable_trades * (
+                    evaluation.profit_percent - evaluation.benchmark_backtest.profit_percent),
+
 
 class GeneticProgram:
     def __init__(self, data_collection, **kwargs):

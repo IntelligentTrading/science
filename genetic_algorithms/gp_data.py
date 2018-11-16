@@ -47,15 +47,15 @@ class Data:
 
 
         # do some sanity checks with data
-        if not self.price_data.empty and self.price_data.iloc[0].name > self.start_time + 60*60*2:
+        if not self.price_data.empty and self.price_data.iloc[0].name > self.start_time + 60*60*8:
             raise Exception(f"The retrieved price data for {transaction_currency}-{counter_currency} starts "
                             f"{(self.price_data.iloc[0].name - self.start_time)/60:.2f} minutes after "
                             f"the set start time!")
 
-        if not self.price_data.empty and self.end_time - self.price_data.iloc[-1].name > 60*60*2:
+        if not self.price_data.empty and self.end_time - self.price_data.iloc[-1].name > 60*60*8:
             raise Exception(f"The retrieved price data for {transaction_currency}-{counter_currency} ends "
                             f"{(self.end_time - self.price_data.iloc[-1].name)/60:.2f} minutes before "
-                            f"the set end time!")
+                            f"the set end time! (end time = {self.end_time}, data end time = {self.price_data.iloc[-1].name}")
 
         prices = np.array(self.price_data.close_price, dtype=float)
         high_prices = np.array(self.price_data.high_price, dtype=float)

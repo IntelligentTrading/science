@@ -40,7 +40,7 @@ class SlidingWindowValidator:
             start_time=training_period.start_time_str, end_time=training_period.end_time_str)
         e = ExperimentManager(experiment_container=experiment_json, read_from_file=False)
         e.run_parallel_experiments()
-        df = e.build_training_and_validation_dataframe(training_period, validation_period, training_tickers, 5,
+        df = e.build_training_and_validation_dataframe(training_period, validation_period, training_tickers, 1,
                                                        "test.xlsx",
                                                        additional_fields={"grammar": "gv5"})
         return df
@@ -49,9 +49,9 @@ class SlidingWindowValidator:
 
 if __name__ == '__main__':
     training_period = Period('2018/04/01 00:00:00 UTC', '2018/05/01 00:00:00 UTC')
-    validation_period = Period('2018/04/08 00:00:00 UTC', '2018/05/15 00:00:00 UTC')
-    end_time = '2018/06/01 14:00:00 UTC'
+    validation_period = Period('2018/05/01 00:00:00 UTC', '2018/06/01 00:00:00 UTC')
+    end_time = '2018/10/21 00:00:00 UTC'
     step = 60*60*24*7
 
     val = SlidingWindowValidator('gv5_experiments_sliding_template.json')
-    val.run(training_period, validation_period, step, end_time, 'sliding_window_experiments.xlsx')
+    val.run(training_period, validation_period, step, end_time, 'sliding_window_experiments_update_3.xlsx')

@@ -211,13 +211,14 @@ class ExperimentManager:
 
 
     def print_best_individual_statistics(self, variant, datasets):
-        best_individual, evaluations = self.get_best_performing_across_datasets(variant, datasets)
+        best_individuals = self.get_best_performing_individuals_and_dataset_performance(variant, datasets)
+        best_individual, evaluations = best_individuals[0]
         print(f"Best performing individual across datasets in variant {variant}:\n")
         for evaluation in evaluations:
             self._print_individual_info(best_individual, evaluation)
 
 
-    def get_best_performing_across_datasets(self, variant, datasets):
+    def get_best_performing_individuals_and_dataset_performance(self, variant, datasets, top_n=1):
         """
         Finds the best performing individual in an experiment variant, across all datasets.
         :param variant: experiment variant
@@ -230,14 +231,17 @@ class ExperimentManager:
             logging.warning(f">>> No records found for variant {variant.name}, skipping...")
             return
         hof, best = latest.get_result()
-        best_individual = hof[0]
-        evaluations = []
-        for data in datasets:
-            evaluation = self._build_evaluation_object(best_individual, variant, data)
-            evaluations.append(evaluation)
-        return best_individual, evaluations
+        result = []
+        for i in range(top_n):
+            best_individual = hof[i]
+            evaluations = []
+            for data in datasets:
+                evaluation = self._build_evaluation_object(best_individual, variant, data)
+                evaluations.append(evaluation)
+            result.append((best_individual, evaluations))
+        return result
 
-    def get_best_performing_across_variants_and_datasets(self, datasets, sort_by=["mean_profit"]):
+    def get_best_performing_across_variants_and_datasets(self, datasets, sort_by=["mean_profit"], top_n_per_variant=5):
         """
         Returns a list of best performing individuals, one per experiment variant.
         :return:
@@ -247,24 +251,26 @@ class ExperimentManager:
                                    "benchmark_profits", "differences", "variant",
                                    "evaluations", "individual"])
         for variant in self.get_variants():
-            best_individual, evaluations = self.get_best_performing_across_datasets(variant, datasets)
-            profits = [evaluation.profit_percent for evaluation in evaluations]
-            benchmark_profits = [evaluation.benchmark_backtest.profit_percent for evaluation in evaluations]
-            differences = [x1-x2 for (x1, x2) in zip(profits, benchmark_profits)]
-            df = df.append({"experiment_name": str(variant.name),
-                       "doge": str(best_individual),
-                       "fitness_function": self.get_db_record(variant)["fitness_function"]._name,
-                       "fitness_value" : self._get_fitness(best_individual, variant, datasets),
-                       "mean_profit": np.mean(profits),
-                       "std_profit": np.std(profits),
-                       "max_profit": np.max(profits),
-                       "min_profit": np.min(profits),
-                       "all_profits": ", ".join(map(str,profits)),
-                       "benchmark_profits": ", ".join(map(str, benchmark_profits)),
-                       "differences": ", ".join(map(str, differences)),
-                       "variant" : variant,
-                       "evaluations": evaluations,
-                       "individual": best_individual}, ignore_index=True)
+            best_individuals = self.get_best_performing_individuals_and_dataset_performance(variant, datasets,
+                                                                                            top_n=top_n_per_variant)
+            for best_individual, evaluations in best_individuals:
+                profits = [evaluation.profit_percent for evaluation in evaluations]
+                benchmark_profits = [evaluation.benchmark_backtest.profit_percent for evaluation in evaluations]
+                differences = [x1-x2 for (x1, x2) in zip(profits, benchmark_profits)]
+                df = df.append({"experiment_name": str(variant.name),
+                           "doge": str(best_individual),
+                           "fitness_function": self.get_db_record(variant)["fitness_function"]._name,
+                           "fitness_value" : self._get_fitness(best_individual, variant, datasets),
+                           "mean_profit": np.mean(profits),
+                           "std_profit": np.std(profits),
+                           "max_profit": np.max(profits),
+                           "min_profit": np.min(profits),
+                           "all_profits": ", ".join(map(str,profits)),
+                           "benchmark_profits": ", ".join(map(str, benchmark_profits)),
+                           "differences": ", ".join(map(str, differences)),
+                           "variant" : variant,
+                           "evaluations": evaluations,
+                           "individual": best_individual}, ignore_index=True)
 
         df = df.sort_values(by=sort_by, ascending=False)
         return df
@@ -328,15 +334,30 @@ class ExperimentManager:
                                                group_strategy_variants=False)
 
     def _get_genetic_backtests(self, top_n, start_time, end_time, resample_periods, counter_currencies, sources,
-                               tickers, start_cash, start_crypto):
+                               tickers, start_cash, start_crypto, filter_field_name=None, filter_field_value=None):
 
         performance_df = self.get_best_performing_across_variants_and_datasets(self.training_data)
+
+        # if some filtering is set up, filter the obtained result accordingly
+        if filter_field_name is not None:
+            performance_df = performance_df[performance_df[filter_field_name] == filter_field_value]
+
         genetic_strategies = []
+        genetic_strategy_variants = []
 
         # we will evaluate the performance of top n individuals
         for i in range(top_n):
             individual = performance_df.iloc[i].individual
+            variant = performance_df.iloc[i].variant
             genetic_strategies.append(individual)
+            genetic_strategy_variants.append(variant)
+
+        return self._run_genetic_backtests(genetic_strategies, genetic_strategy_variants, tickers, sources,
+                                           resample_periods, start_cash, start_crypto, start_time, end_time,
+                                           counter_currencies)
+
+    def _run_genetic_backtests(self, genetic_strategies, genetic_strategy_variants, tickers, sources, resample_periods,
+                               start_cash, start_crypto, start_time, end_time, counter_currencies):
 
         genetic_backtests = []
         genetic_baselines = []
@@ -366,22 +387,20 @@ class ExperimentManager:
         param_list = []
         # do genetic program backtesting on the new data
         for data in data_collection:
-            for i in range(top_n):
-                row = performance_df.iloc[i]
-
-                param_list.append({'individual': row.individual,
-                                   'db_record': self.get_db_record(row.variant),
+            for individual, variant in zip(genetic_strategies, genetic_strategy_variants):
+                param_list.append({'individual': individual,
+                                   'db_record': self.get_db_record(variant),
                                    'data': data,
                                    'function_provider': ta_provider}
 
                                   )
         """
-                with Pool(POOL_SIZE) as pool:
-                    backtests = pool.map(self._build_evaluation_object_parallel, param_list)
-                    pool.close()
-                    pool.join()
-                    logging.info("Parallel processing finished.")
-                """
+                        with Pool(POOL_SIZE) as pool:
+                            backtests = pool.map(self._build_evaluation_object_parallel, param_list)
+                            pool.close()
+                            pool.join()
+                            logging.info("Parallel processing finished.")
+                        """
         backtests = map(self._build_evaluation_object_parallel, param_list)
         for evaluation in backtests:
             if evaluation is None:
@@ -570,30 +589,30 @@ class ExperimentManager:
                                       sources=[0], start_cash=1000, start_crypto=0, additional_fields={}, prefix=""):
         start_time, end_time = period.start_time, period.end_time
         results = {}
-        for source, resample_period in itertools.product(sources, resample_periods):
+        for source, resample_period, fitness_function_name in itertools.product(sources, resample_periods, self.experiment_db.registered_fitness_functions()):
             # check performance on all coins trading against USDT
 
             self._fill_strategy_performance_dict(results, f"all_coins_trading_against_USDT", top_n, start_time,
                                                  end_time, resample_period, source, start_cash, start_crypto,
-                                                 tickers=None, counter_currencies=['USDT'], prefix=prefix)
+                                                 tickers=None, counter_currencies=['USDT'], fitness_function_name=fitness_function_name, prefix=prefix)
             self._fill_strategy_performance_dict(results, f"all_coins_trading_against_BTC", top_n, start_time,
                                                  end_time, resample_period, source, start_cash, start_crypto,
-                                                 tickers=None, counter_currencies=['BTC'], prefix=prefix)
+                                                 tickers=None, counter_currencies=['BTC'], fitness_function_name=fitness_function_name, prefix=prefix)
             self._fill_strategy_performance_dict(results, f"all_training_coins", top_n, start_time,
                                                  end_time, resample_period, source, start_cash, start_crypto,
-                                                 tickers=training_tickers, counter_currencies=None, prefix=prefix)
+                                                 tickers=training_tickers, counter_currencies=None, fitness_function_name=fitness_function_name, prefix=prefix)
             self._fill_strategy_performance_dict(results, f"training_coins_trading_against_BTC", top_n, start_time,
                                                  end_time, resample_period, source, start_cash, start_crypto,
                                                  tickers=[ticker for ticker in training_tickers if
                                                           ticker.counter_currency == 'BTC'],
-                                                 counter_currencies=None, prefix=prefix)
+                                                 counter_currencies=None, fitness_function_name=fitness_function_name, prefix=prefix)
             
 
             self._fill_strategy_performance_dict(results, f"training_coins_trading_against_USDT", top_n, start_time,
                                                  end_time, resample_period, source, start_cash, start_crypto,
                                                  tickers=[ticker for ticker in training_tickers if
                                                           ticker.counter_currency == 'USDT'],
-                                                 counter_currencies=None, prefix=prefix)
+                                                 counter_currencies=None, fitness_function_name=fitness_function_name, prefix=prefix)
 
 
         # unroll data into rows and add to a DataFrame
@@ -603,12 +622,13 @@ class ExperimentManager:
             item['source'] = key[0]
             item['resample_period'] = key[1]
             item['strategy'] = key[2]
+            item['fitness_function'] = key[3]
             row_dicts.append(item)
             for field in additional_fields: # stuff like experiment name, etc, to add to dataframe
                 item[field] = additional_fields[field]
 
         df = pd.DataFrame(row_dicts)
-        df = df[list(additional_fields.keys()) + ['source', 'resample_period', 'strategy',
+        df = df[list(additional_fields.keys()) + ['source', 'resample_period', 'strategy', 'fitness_function',
                                                   f'{prefix}all_coins_trading_against_BTC',
                                                   f'{prefix}baseline_all_coins_trading_against_BTC',
                                                   f'{prefix}all_coins_trading_against_USDT',
@@ -639,7 +659,7 @@ class ExperimentManager:
                                                            additional_fields=additional_fields, prefix="validation_")
         #df = pd.concat([training_df, validation_df], axis=1)
         df = pd.merge(training_df, validation_df, on=['training_period', 'validation_period',
-                                                               'source', 'resample_period', 'strategy'])
+                                                               'source', 'resample_period', 'strategy', 'fitness_function', 'grammar'])
 
 
         writer = pd.ExcelWriter('output2.xlsx')
@@ -648,7 +668,8 @@ class ExperimentManager:
         return df
 
     def _fill_strategy_performance_dict(self, results_dict, field_name, top_n, start_time, end_time, resample_period, source,
-                                        start_cash, start_crypto, tickers, counter_currencies, prefix=''):
+                                        start_cash, start_crypto, tickers, counter_currencies, fitness_function_name, prefix=''):
+
         genetic_backtests, genetic_baselines = self._get_genetic_backtests(
             top_n=top_n,
             start_time=start_time,
@@ -658,12 +679,14 @@ class ExperimentManager:
             sources=[source],
             tickers=tickers,
             start_cash=start_cash,
-            start_crypto=start_crypto
+            start_crypto=start_crypto,
+            filter_field_name='fitness_function',
+            filter_field_value=fitness_function_name
         )
         backtest_results, baseline_results = self._get_evaluation_performance_arrays(genetic_backtests,
                                                                                      genetic_baselines)
         for strategy in backtest_results:
-            key = (source, resample_period, strategy)
+            key = (source, resample_period, strategy, fitness_function_name)
             if not key in results_dict:
                 results_dict[key] = {}
             results_dict[key][f'{prefix}{field_name}'] = np.mean(backtest_results[strategy])
@@ -692,6 +715,7 @@ class ExperimentDB:
     def __init__(self):
         self._experiments = {}
         self._num_records = 0
+        self._fitness_functions = set()
 
     def add(self, data, function_provider, grammar_version, fitness_function,
             mating_prob, mutation_prob, population_size, num_generations, premade_individuals,
@@ -713,6 +737,7 @@ class ExperimentDB:
         name = self.build_experiment_id(**entry)
         self._experiments[name] = entry
         self._num_records += 1
+        self._fitness_functions.add(fitness_function.name)
 
     def get_all(self):
         for k, v in self._experiments.items():
@@ -731,6 +756,9 @@ class ExperimentDB:
                f"{'rs' if kwargs['reseed_params']['enabled'] == True else 'nrs'}"
 
     #          f"provider_{kwargs['function_provider']};" \
+
+    def registered_fitness_functions(self):
+        return self._fitness_functions
 
     def __getitem__(self, key):
         return self._experiments[key]
@@ -752,7 +780,7 @@ class ExperimentDB:
 
 from utils import in_notebook
 
-if not in_notebook() and False:
+if not in_notebook():
     #e = ExperimentManager("gv5_experiments_positions.json")
     e = ExperimentManager("gv5_experiments.json")
 
