@@ -12,6 +12,7 @@ from utils import time_performance
 from collections import namedtuple
 import pandas.io.formats.excel
 from utils import parallel_run
+import xlsxwriter
 
 Ticker = namedtuple("Ticker", "source transaction_currency counter_currency")
 
@@ -245,7 +246,7 @@ class ComparativeReportBuilder:
     Based on a set of backtests and corresponding baseline backtests, builds a comparative report of their performance.
     """
 
-    def __init__(self, backtests, baselines):
+    def __init__(self, backtests, baselines, additional_columns = []):
         """
         Initializes and builds the report dataframe.
         :param backtests: A collection of backtest objects.
@@ -253,6 +254,7 @@ class ComparativeReportBuilder:
         """
         self.backtests = backtests
         self.baselines = baselines
+        self.additional_columns = additional_columns
         self._build_dataframe()
 
     @time_performance
@@ -323,13 +325,13 @@ class ComparativeReportBuilder:
         return mean, std, min, max
 
 
-    def _describe_and_write(self, filtered_df, writer, sheet_prefix, formats):
+    def _describe_and_write(self, filtered_df, writer, sheet_prefix, formats, additional_columns=[]):
         if filtered_df.empty:
             return
 
         # group by strategy, evaluate
         by_strategy_df = filtered_df[["source", "strategy", "resample_period", "profit_percent",
-                                      "buy_and_hold_profit_percent", "num_trades", "sharpe_ratio"]]\
+                                      "buy_and_hold_profit_percent", "num_trades", "sharpe_ratio"] + additional_columns]\
             .groupby(["source", "strategy", "resample_period"], sort=False).describe(percentiles=[])
 
         # add outperformance stat
@@ -339,12 +341,12 @@ class ComparativeReportBuilder:
         by_strategy_df["outperforms"] = outperforms
 
         # reorder columns and write
-        by_strategy_df[["profit_percent", "buy_and_hold_profit_percent", "num_trades", "outperforms", "sharpe_ratio"]]\
+        by_strategy_df[["profit_percent", "buy_and_hold_profit_percent", "num_trades", "outperforms", "sharpe_ratio"] + additional_columns]\
             .to_excel(writer, f'{sheet_prefix} by strategy', header=False, startrow=4)
 
         # apply sheet formatting
         sheet = writer.sheets[f'{sheet_prefix} by strategy']
-        self._reformat_sheet_grouped_by_strategy(formats, outperforms, sheet)
+        self._reformat_sheet_grouped_by_strategy(formats, outperforms, sheet, additional_columns)
 
         # group by coin, evaluate
         by_coin_df = filtered_df[["source", "transaction_currency", "profit_percent",
@@ -364,7 +366,7 @@ class ComparativeReportBuilder:
         self._reformat_sheet_grouped_by_coin(formats, sheet)
 
 
-    def _reformat_sheet_grouped_by_strategy(self, formats, outperforms, sheet):
+    def _reformat_sheet_grouped_by_strategy(self, formats, outperforms, sheet, additional_columns = []):
         # add outperformance percent at the top
         sheet.write('V4', np.mean(outperforms), formats['large_bold_red'])
 
@@ -374,10 +376,23 @@ class ComparativeReportBuilder:
         sheet.merge_range('P3:U3', 'Number of trades', formats['header_format'])
         sheet.write('V3', 'Outperforms', formats['header_format'])
         sheet.merge_range('W3:AB3', 'Sharpe ratio', formats['header_format'])
+
+        start = 28
+        for col in additional_columns:
+            end = start+3
+            start_col = xlsxwriter.utility.xl_col_to_name(start)
+            end_col = xlsxwriter.utility.xl_col_to_name(end)
+            sheet.merge_range(f'{start_col}3:{end_col}3', col, formats['header_format'])
+            start = end+1
+
         sheet.write_row('D4', ['number of tests (coin, strategy)',
                                'mean', 'std', 'min', 'median', 'max'] * 3, formats['aux_header_format'])
         sheet.write_row('W4', ['number of tests (coin, strategy)',
                                'mean', 'std', 'min', 'median', 'max'], formats['aux_header_format'])
+
+        sheet.write_row('AC4', ['number of tests (coin, strategy)',
+                               'mean', 'std', 'min', 'median', 'max'] * len(additional_columns), formats['aux_header_format'])
+
 
         sheet.write_row('A5', ['exchange',
                                'strategy', 'resample period (minutes)'], formats['header_format'])
@@ -491,7 +506,7 @@ class ComparativeReportBuilder:
 
 
     def all_coins_report(self, report_path=None, currency_pairs_to_keep=None, group_strategy_variants=True, writer=None,
-                         sheet_prefix=''):
+                         sheet_prefix='', additional_columns = ['num_buys']):
         df = self.results_df.copy(deep=True)
 
         # remove strategies without any trades - very important for averaging!
@@ -519,10 +534,10 @@ class ComparativeReportBuilder:
         if currency_pairs_to_keep is not None:
             df = self._filter_df_based_on_currency_pairs(currency_pairs_to_keep)
 
-        self._describe_and_write(df, writer, f"{sheet_prefix}All", formats)
+        self._describe_and_write(df, writer, f"{sheet_prefix}All", formats, additional_columns)
         top_20_alts = zip(COINMARKETCAP_TOP_20_ALTS, ["BTC"] * len(COINMARKETCAP_TOP_20_ALTS))
         top20 = self._filter_df_based_on_currency_pairs(df, top_20_alts)
-        self._describe_and_write(top20, writer, f"{sheet_prefix}Top 20", formats)
+        self._describe_and_write(top20, writer, f"{sheet_prefix}Top 20", formats, additional_columns)
 
         df[backtesting_report_columns].to_excel(writer, f"{sheet_prefix}Original data", index=False, header=False, startrow=1)
         self._reformat_original_data(writer.sheets[f"{sheet_prefix}Original data"], formats)
