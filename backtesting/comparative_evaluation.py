@@ -379,7 +379,7 @@ class ComparativeReportBuilder:
 
         start = 28
         for col in additional_columns:
-            end = start+3
+            end = start+5
             start_col = xlsxwriter.utility.xl_col_to_name(start)
             end_col = xlsxwriter.utility.xl_col_to_name(end)
             sheet.merge_range(f'{start_col}3:{end_col}3', col, formats['header_format'])
@@ -506,7 +506,7 @@ class ComparativeReportBuilder:
 
 
     def all_coins_report(self, report_path=None, currency_pairs_to_keep=None, group_strategy_variants=True, writer=None,
-                         sheet_prefix='', additional_columns = ['num_buys']):
+                         sheet_prefix='', additional_columns=['num_gains', 'num_losses']):
         df = self.results_df.copy(deep=True)
 
         # remove strategies without any trades - very important for averaging!

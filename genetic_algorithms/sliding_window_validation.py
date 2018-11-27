@@ -13,7 +13,7 @@ class SlidingWindowValidator:
         with open(experiment_json_template_path, 'r') as f:
             self.experiment_json_template = f.read()
 
-    def run(self, training_period, validation_period, step, end_time_str, out_filename='sliding_window.xlsx'):
+    def run(self, training_period, validation_period, step, end_time_str, out_filename='sliding_window'):
         end_time = parser.parse(end_time_str).timestamp()
         dataframes = []
 
@@ -24,13 +24,16 @@ class SlidingWindowValidator:
             dataframes.append(df)
 
         df = pd.concat(dataframes)
-        writer = pd.ExcelWriter(out_filename)
-        df.to_excel(writer, 'Sheet1')
-        writer.save()
-        writer.close()
+        if out_filename is not None:
+            writer = pd.ExcelWriter(out_filename + '.xlsx')
+            df.to_excel(writer, 'Results')
+            writer.save()
+            writer.close()
+            df.to_pickle(out_filename + '_df.pkl')
+        return df
 
 
-    def _run_experiments_and_get_results(self, training_period, validation_period):
+    def _run_experiments_and_get_results(self, training_period, validation_period, top_n=5):
         training_tickers = [Ticker(0, 'BTC', 'USDT'),
                             Ticker(0, 'ETH', 'USDT'),
                             Ticker(0, 'LTC', 'BTC'),
@@ -40,11 +43,10 @@ class SlidingWindowValidator:
             start_time=training_period.start_time_str, end_time=training_period.end_time_str)
         e = ExperimentManager(experiment_container=experiment_json, read_from_file=False)
         e.run_parallel_experiments()
-        df = e.build_training_and_validation_dataframe(training_period, validation_period, training_tickers, 1,
+        df = e.build_training_and_validation_dataframe(training_period, validation_period, training_tickers, top_n,
                                                        "test.xlsx",
                                                        additional_fields={"grammar": "gv5"})
         return df
-
 
 
 if __name__ == '__main__':
@@ -54,4 +56,4 @@ if __name__ == '__main__':
     step = 60*60*24*7
 
     val = SlidingWindowValidator('gv5_experiments_sliding_template.json')
-    val.run(training_period, validation_period, step, end_time, 'sliding_window_experiments_update_3.xlsx')
+    val.run(training_period, validation_period, step, end_time, 'sliding_window_experiments_update_5')

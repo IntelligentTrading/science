@@ -318,11 +318,11 @@ class Evaluation(ABC):
 
     @property
     def percent_profitable_trades(self):
-        return self.num_profitable_trades / self.num_buy_sell_pairs if self.num_buy_sell_pairs !=0 else np.nan
+        return self.num_profitable_trades / self.num_buy_sell_pairs if self.num_buy_sell_pairs != 0 else np.nan
 
     @property
     def percent_unprofitable_trades(self):
-        self.num_unprofitable_trades / self.num_buy_sell_pairs if self.num_buy_sell_pairs !=0 else np.nan
+        self.num_unprofitable_trades / self.num_buy_sell_pairs if self.num_buy_sell_pairs != 0 else np.nan
 
     @property
     def benchmark_backtest(self):
