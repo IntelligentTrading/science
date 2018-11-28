@@ -316,7 +316,7 @@ class ExperimentManager:
 
         logging.info('Evaluating GP strategies...')
 
-        genetic_backtests, genetic_baselines = self._get_genetic_backtests(top_n, start_time, end_time,
+        genetic_backtests, genetic_baselines, _ = self._get_genetic_backtests(top_n, start_time, end_time,
                                                                            resample_periods, counter_currencies,
                                                                            sources, tickers, start_cash, start_crypto)
 
@@ -352,9 +352,10 @@ class ExperimentManager:
             genetic_strategies.append(individual)
             genetic_strategy_variants.append(variant)
 
-        return self._run_genetic_backtests(genetic_strategies, genetic_strategy_variants, tickers, sources,
+        genetic_backtests, genetic_baselines = self._run_genetic_backtests(genetic_strategies, genetic_strategy_variants, tickers, sources,
                                            resample_periods, start_cash, start_crypto, start_time, end_time,
                                            counter_currencies)
+        return genetic_backtests, genetic_baselines, genetic_strategy_variants
 
     def _run_genetic_backtests(self, genetic_strategies, genetic_strategy_variants, tickers, sources, resample_periods,
                                start_cash, start_crypto, start_time, end_time, counter_currencies):
@@ -585,12 +586,11 @@ class ExperimentManager:
     def get_graph(self, individual):
         return get_dot_graph(individual)
 
-    def analyze_performance_in_period(self, period, training_tickers, top_n, out_filename, resample_periods=[60],
+    def analyze_performance_in_period(self, period, training_tickers, top_n, out_filename=None, resample_periods=[60],
                                       sources=[0], start_cash=1000, start_crypto=0, additional_fields={}, prefix=""):
         start_time, end_time = period.start_time, period.end_time
         results = {}
         for source, resample_period, fitness_function_name in itertools.product(sources, resample_periods, self.experiment_db.registered_fitness_functions()):
-            # check performance on all coins trading against USDT
 
             self._fill_strategy_performance_dict(results, f"all_coins_trading_against_USDT", top_n, start_time,
                                                  end_time, resample_period, source, start_cash, start_crypto,
@@ -623,12 +623,14 @@ class ExperimentManager:
             item['resample_period'] = key[1]
             item['strategy'] = key[2]
             item['fitness_function'] = key[3]
+            item['db_record'] = key[4]
             row_dicts.append(item)
             for field in additional_fields: # stuff like experiment name, etc, to add to dataframe
                 item[field] = additional_fields[field]
 
         df = pd.DataFrame(row_dicts)
-        df = df[list(additional_fields.keys()) + ['source', 'resample_period', 'strategy', 'fitness_function',
+        df = df[list(additional_fields.keys()) + ['source', 'resample_period', 'strategy',
+                                                  'fitness_function', 'db_record',
                                                   f'{prefix}all_coins_trading_against_BTC',
                                                   f'{prefix}baseline_all_coins_trading_against_BTC',
                                                   f'{prefix}all_coins_trading_against_USDT',
@@ -640,37 +642,34 @@ class ExperimentManager:
                                                   f'{prefix}training_coins_trading_against_USDT',
                                                   f'{prefix}baseline_training_coins_trading_against_USDT']]
 
-
         return df
 
-    def build_training_and_validation_dataframe(self, training_period, validation_period, training_tickers,
-                                                top_n, out_filename, resample_periods=[60], sources=[0],
-                                                start_cash=1000, start_crypto=0, additional_fields={}):
+    def build_training_and_validation_dataframe(self, training_period, validation_period, training_tickers, top_n,
+                                                resample_periods=[60], sources=[0], start_cash=1000, start_crypto=0,
+                                                additional_fields={}, out_filename=None):
         additional_fields = dict(additional_fields)
         additional_fields['training_period'] = str(training_period)
         additional_fields['validation_period'] = str(validation_period)
-        training_df = self.analyze_performance_in_period(training_period, training_tickers, top_n, out_filename,
-                                                         resample_periods,
-                                                         sources, start_cash, start_crypto,
+        training_df = self.analyze_performance_in_period(training_period, training_tickers, top_n, None,
+                                                         resample_periods, sources, start_cash, start_crypto,
                                                          additional_fields=additional_fields, prefix="training_")
-        validation_df = self.analyze_performance_in_period(validation_period, training_tickers, top_n,
-                                                           out_filename, resample_periods,
-                                                           sources, start_cash, start_crypto,
+        validation_df = self.analyze_performance_in_period(validation_period, training_tickers, top_n, None,
+                                                           resample_periods, sources, start_cash, start_crypto,
                                                            additional_fields=additional_fields, prefix="validation_")
         #df = pd.concat([training_df, validation_df], axis=1)
         df = pd.merge(training_df, validation_df, on=['training_period', 'validation_period',
                                                                'source', 'resample_period', 'strategy', 'fitness_function', 'grammar'])
 
-
-        writer = pd.ExcelWriter('output2.xlsx')
-        df.to_excel(writer, 'Sheet1')
-        writer.save()
+        if out_filename is not None:
+            writer = pd.ExcelWriter(out_filename)
+            df.to_excel(writer, 'Sheet1')
+            writer.save()
         return df
 
     def _fill_strategy_performance_dict(self, results_dict, field_name, top_n, start_time, end_time, resample_period, source,
                                         start_cash, start_crypto, tickers, counter_currencies, fitness_function_name, prefix=''):
 
-        genetic_backtests, genetic_baselines = self._get_genetic_backtests(
+        genetic_backtests, genetic_baselines, genetic_strategy_variants = self._get_genetic_backtests(
             top_n=top_n,
             start_time=start_time,
             end_time=end_time,
@@ -685,8 +684,8 @@ class ExperimentManager:
         )
         backtest_results, baseline_results = self._get_evaluation_performance_arrays(genetic_backtests,
                                                                                      genetic_baselines)
-        for strategy in backtest_results:
-            key = (source, resample_period, strategy, fitness_function_name)
+        for i, strategy in enumerate(backtest_results):
+            key = (source, resample_period, strategy, fitness_function_name, str(self.get_db_record(genetic_strategy_variants[i])))
             if not key in results_dict:
                 results_dict[key] = {}
             results_dict[key][f'{prefix}{field_name}'] = np.mean(backtest_results[strategy])
@@ -694,8 +693,8 @@ class ExperimentManager:
 
 
     def _get_evaluation_performance_arrays(self, backtests, baselines):
-        backtest_results = {}
-        baseline_results = {}
+        backtest_results = OrderedDict()
+        baseline_results = OrderedDict()
         for evaluation, baseline in zip(backtests, baselines):
             if not evaluation._strategy.get_short_summary() in backtest_results:
                 backtest_results[evaluation._strategy.get_short_summary()] = [evaluation.profit_percent]
@@ -705,7 +704,6 @@ class ExperimentManager:
                 baseline_results[evaluation._strategy.get_short_summary()].append(baseline.profit_percent)
 
         return backtest_results, baseline_results
-
 
 
 
@@ -811,7 +809,7 @@ if __name__ == "__main__":
     training_period = Period('2018/04/09 14:00:00 UTC', '2018/06/01 00:00:00 UTC', 'Apr 2018')
     validation_period = Period('2018/06/01 00:00:00 UTC', '2018/08/01 00:00:00 UTC', 'Jun 2018')
 
-    e.build_training_and_validation_dataframe(training_period, validation_period, training_tickers, 5, "test.xlsx")
+    e.build_training_and_validation_dataframe(training_period, validation_period, training_tickers, 5)
 
     #e.analyze_performance_in_period(validation_period, training_tickers, 5, "test.xlsx")
     exit(0)
