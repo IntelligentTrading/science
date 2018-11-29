@@ -3,7 +3,6 @@ from comparative_evaluation import Ticker
 import pandas as pd
 from dateutil import parser
 import os
-import pickle
 import logging
 
 from gp_utils import Period
@@ -72,8 +71,12 @@ class SlidingWindowValidator:
         experiment_json = self.experiment_json_template.format(
             start_time=training_start, end_time=training_end)
         e = ExperimentManager(experiment_container=experiment_json, read_from_file=False)
+        experiment_id = 'run_evolution.d_BTC-USDT-1522540800-1525132800;gv5;ff_benchmarkdiff;x_0.9;m_0.7;n_500;gen_10;td_5;a;nrs'
 
-        e.build_genetic_program(data=None, function_provider=e.function_provider, db_record=db_record)
+        gp = e.build_genetic_program(data=None, function_provider=e.function_provider, db_record=e.get_db_record_from_experiment_id(experiment_id))
+        individual = gp.individual_from_string(row.strategy[len('Strategy: evolved using genetic programming\nRule set: '):])
+        from chart_plotter import save_dot_graph
+        save_dot_graph(individual, 'test.png')
 
 
 
@@ -84,4 +87,5 @@ if __name__ == '__main__':
     step = 60*60*24*7
 
     val = SlidingWindowValidator('gv5_experiments_sliding_template.json')
-    val.run(training_period, validation_period, step, end_time, 'sliding_window_experiments_update_5')
+    df = val.run(training_period, validation_period, step, end_time, 'sliding_window_experiments_update_5')
+    val.recreate_individuals(df)

@@ -500,9 +500,9 @@ def dot_graph(individual):
 
     return dot_str
 
-def save_dot_graph(individual, out_filename):
+def save_dot_graph(individual, out_filename, format='dot'):
     g = Source(dot_graph(individual))
-    g.render(out_filename)
+    g.render(out_filename, format=format)
 
 
 def get_dot_graph(individual):

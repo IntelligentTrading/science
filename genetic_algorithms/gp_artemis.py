@@ -511,6 +511,9 @@ class ExperimentManager:
     def get_db_record(self, variant):
         return self.experiment_db[variant.name[len("run_evolution."):]]
 
+    def get_db_record_from_experiment_id(self, experiment_id):
+        return self.experiment_db[experiment_id[len("run_evolution."):]]
+
     def _build_genetic_program(self, variant, data, function_provider=None):
         if function_provider is None:
             function_provider = self.function_provider
@@ -760,6 +763,7 @@ class ExperimentDB:
 
     def __getitem__(self, key):
         return self._experiments[key]
+
 
 
 
