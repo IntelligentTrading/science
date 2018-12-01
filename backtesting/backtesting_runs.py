@@ -3,7 +3,6 @@ from strategies import RandomTradingStrategy, ANNAnomalyStrategy
 import numpy as np
 import datetime
 from backtesting_helpers import find_num_cumulative_outperforms
-from data_sources import get_currencies_trading_against_counter
 from utils import time_performance
 
 @time_performance

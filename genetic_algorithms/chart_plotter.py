@@ -424,6 +424,7 @@ def condition_to_string(node, children_dict, labels):
 
 
 def build_node_style(label):
+    label = str(label)
     if label.lower() == "sell":
         return "shape=ellipse, fillcolor=firebrick2, fixedsize=true, width=1, color=white"
     elif label.lower() == "buy":
@@ -458,7 +459,7 @@ def to_dot(node, children_dict, labels):
 
 
 def prettify_label(label):
-    label = label.split()
+    label = str(label).split()
     out = ""
     for part in label:
         part = part.replace("_lt_", " < ")

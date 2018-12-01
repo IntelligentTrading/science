@@ -1,7 +1,7 @@
 import pandas as pd
 
 from pyalgotrade.barfeed import csvfeed
-from backtesting.data_sources import dbc
+from backtesting.data_sources import postgres_db
 
 
 class ITFDatabaseFeed(csvfeed.GenericBarFeed):
@@ -10,7 +10,7 @@ class ITFDatabaseFeed(csvfeed.GenericBarFeed):
         super(ITFDatabaseFeed, self).__init__(frequency, timezone, maxLen)
 
     def read_data(self, instrument):
-        connection = dbc.get_connection()
+        connection = postgres_db.get_connection()
         query = "SELECT timestamp, " \
                 "to_timestamp(TRUNC(CAST(timestamp AS bigint))) AT TIME ZONE 'UTC' as date, " \
                 "open_price/1E8 as open_price, " \

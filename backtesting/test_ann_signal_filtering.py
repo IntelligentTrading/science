@@ -17,7 +17,7 @@ GROUP BY signal_signal.resample_period, c.total order by resample_period
 
 all_results = pd.DataFrame(columns=("percent_difference", "resample_period", "num_filtered_signals_percent", "num_filtered_signals", "total_signals"))
 for percent in range(1,50):
-    df = pd.read_sql(query.format(float(percent)/100), dbc.conn)
+    df = pd.read_sql(query.format(float(percent)/100), postgres_db.conn)
     df["percent_difference"] = pd.Series([percent]*3)
     all_results = all_results.append(df)
 

@@ -1,22 +1,24 @@
 import pandas as pd
-from data_sources import get_filtered_signals, get_resampled_prices_in_range
+from data_sources import postgres_db
 from signals import Signal
 from tick_provider import TickProvider
 
 
 class TickProviderITFDB(TickProvider):
 
-    def __init__(self, transaction_currency, counter_currency, start_time, end_time, source=0, resample_period=60):
+    def __init__(self, transaction_currency, counter_currency, start_time, end_time, source=0,
+                 resample_period=60, database=postgres_db):
 
         super().__init__()
-        signals_df = get_filtered_signals(start_time=start_time,
-                                          end_time=end_time,
-                                          counter_currency=counter_currency,
-                                          transaction_currency=transaction_currency,
-                                          resample_period=resample_period,
-                                          source=source,
-                                          return_df=True)
-        self.prices_df = get_resampled_prices_in_range(start_time, end_time, transaction_currency, counter_currency, resample_period)
+        self.database = database
+        signals_df = self.database.get_filtered_signals(start_time=start_time,
+                                                      end_time=end_time,
+                                                      counter_currency=counter_currency,
+                                                      transaction_currency=transaction_currency,
+                                                      resample_period=resample_period,
+                                                      source=source,
+                                                      return_df=True)
+        self.prices_df = self.database.get_resampled_prices_in_range(start_time, end_time, transaction_currency, counter_currency, resample_period)
 
         # move timestamp to column
         self.prices_df.reset_index(level=0, inplace=True)

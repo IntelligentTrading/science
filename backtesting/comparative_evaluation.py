@@ -1,6 +1,6 @@
 import itertools
 import numpy as np
-from data_sources import *
+from data_sources import postgres_db
 from backtester_signals import SignalDrivenBacktester
 from config import backtesting_report_columns, backtesting_report_column_names, COINMARKETCAP_TOP_20_ALTS
 from signals import ALL_SIGNALS
@@ -161,7 +161,7 @@ class ComparativeEvaluation:
         currency_tuples = []
         for source, counter_currency in itertools.product(sources, counter_currencies):
             currency_tuples += [Ticker(source, transaction_currency, counter_currency)
-                                for transaction_currency in get_currencies_trading_against_counter(counter_currency, source)]
+                                for transaction_currency in postgres_db.get_currencies_trading_against_counter(counter_currency, source)]
         return currency_tuples
 
 

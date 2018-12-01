@@ -106,7 +106,7 @@ class SignalStrategy(Strategy):
 
     def evaluate(self, transaction_currency, counter_currency, start_cash, start_crypto, start_time, end_time,
                  source, resample_period, evaluate_profit_on_last_order=False, verbose=True, time_delay=0,
-                 order_generator=None):
+                 order_generator=None, database=postgres_db):
         """
         Builds a signal-based backtester using this strategy.
         See full documentation in SignalDrivenBacktester.
@@ -125,7 +125,8 @@ class SignalStrategy(Strategy):
             evaluate_profit_on_last_order=evaluate_profit_on_last_order,
             verbose=verbose,
             time_delay=time_delay,
-            order_generator=order_generator
+            order_generator=order_generator,
+            database=database
         )
 
 
@@ -420,8 +421,8 @@ class RandomTradingStrategy(SimpleTrendBasedStrategy):
 
     def build_signals(self):
         num_signals = random.randint(1, self.max_num_signals)
-        prices = get_prices_in_range(self.start_time, self.end_time, self.transaction_currency, self.counter_currency,
-                                     self.source)
+        prices = postgres_db.get_prices_in_range(self.start_time, self.end_time, self.transaction_currency, self.counter_currency,
+                                                 self.source)
         selected_prices = prices.sample(num_signals)
         selected_prices = selected_prices.sort_index()
         signals = []

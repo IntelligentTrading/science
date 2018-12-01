@@ -1,9 +1,9 @@
 import numpy as np
 import inspect
 from collections import namedtuple
+from abc import ABC, abstractmethod
 
-
-class FunctionProvider:
+class FunctionProvider(ABC):
 
     def if_then_else(self, input, output1, output2):
         try:
@@ -32,167 +32,184 @@ DataKey = namedtuple('DataKey', 'source resample_period transaction_currency cou
 
 class TAProvider(FunctionProvider):
 
+    @abstractmethod
+    def get_indicator(self, indicator_name, input):
+        pass
+
+    @abstractmethod
+    def get_indicator_at_previous_timestamp(self, indicator_name, input):
+        pass
+
+    def _get_timestamp(self, input):
+        return input[0]
+
+    def rsi(self, input):
+        # query Redis for RSI value at _get_timestamp(input)
+        return self.get_indicator('rsi', input)
+
+    def rsi_lt_20(self, input):
+        return self.rsi(input) < 20
+
+    def rsi_lt_25(self, input):
+        return self.rsi(input) < 25
+
+    def rsi_lt_30(self, input):
+        return self.rsi(input) < 30
+
+    def rsi_gt_70(self, input):
+        return self.rsi(input) > 70
+
+    def rsi_gt_75(self, input):
+        return self.rsi(input) > 75
+
+    def rsi_gt_80(self, input):
+        return self.rsi(input) > 80
+
+    def macd_bullish(self, input):
+        return self._crosses_from_below('macd', 'macd_signal', input)
+
+    def macd_bearish(self, input):
+        return self._crosses_from_above('macd', 'macd_signal', input)
+
+    def ema_bullish_cross(self, input):
+        return self._crosses_from_above('ema55', 'ema21', input)
+
+    def ema_bearish_cross(self, input):
+        return self._crosses_from_below('ema55', 'ema21', input)
+
+    def bbands_bearish_cross(self, input):
+        return self._crosses_from_below('close_price', 'bb_up', input)
+
+    def bbands_bullish_cross(self, input):
+        return self._crosses_from_above('close_price', 'bb_low', input)
+
+    def bbands_squeeze_bullish(self, input):
+        return self.get_indicator('bb_width', input) <= self.get_indicator('min_bbw_180', input)\
+               and self._crosses_from_below('close_price', 'bb_up', input)
+
+    def bbands_squeeze_bearish(self, input):
+        return self.get_indicator('bb_width', input) <= self.get_indicator('min_bbw_180', input)\
+               and self._crosses_from_above('close_price', 'bb_low', input)
+
+    def bbands_price_gt_up(self, input):
+        return self.get_indicator('close_price', input) > self.get_indicator('bb_up', input)
+
+    def bbands_price_lt_low(self, input):
+        return self.get_indicator('close_price', input) < self.get_indicator('bb_low', input)
+
+    def slowd_gt_80(self, input):
+        return self.get_indicator('slowd', input) > 80
+
+    def slowd_lt_20(self, input):
+        return self.get_indicator('slowd', input) < 20
+
+    def candlestick_momentum_buy(self, input):
+        return self.get_indicator('close_price', input) > \
+               0.5 * self.get_indicator_at_previous_timestamp('close_price', input)
+
+    def candlestick_momentum_sell(self, input):
+        return self.get_indicator('close_price', input) <\
+               0.5 * self.get_indicator_at_previous_timestamp('close_price', input)
+
+    def _crosses_from_below(self, indicator, other, input):
+        current_indicator = self.get_indicator(indicator, input)
+        current_other = self.get_indicator(other, input)
+        previous_indicator = self.get_indicator_at_previous_timestamp(indicator, input)
+        previous_other = self.get_indicator_at_previous_timestamp(other, input)
+
+        return current_indicator > current_other and previous_indicator <= previous_other
+
+    def _crosses_from_above(self, indicator, other, input):
+        current_indicator = self.get_indicator(indicator, input)
+        current_other = self.get_indicator(other, input)
+        previous_indicator = self.get_indicator_at_previous_timestamp(indicator, input)
+        previous_other = self.get_indicator_at_previous_timestamp(other, input)
+
+        return current_indicator < current_other and previous_indicator >= previous_other
+
+    def adx(self, input):
+        return self.get_indicator('adx', input)
+
+    def sma20(self, input):
+        return self.get_indicator('sma20', input)
+
+    def ema20(self, input):
+        return self.get_indicator('ema20', input)
+
+    def sma50(self, input):
+        return self.get_indicator('sma50', input)
+
+    def ema50(self, input):
+        return self.get_indicator('ema50', input)
+
+    def sma200(self, input):
+        return self.get_indicator('sma200', input)
+
+    def ema200(self, input):
+        return self.get_indicator('ema200', input)
+
+    def price(self, input):
+        return self.get_indicator('close_price', input)
+
+    def volume(self, input):
+        return self.get_indicator('volume', input)
+
+    def sma50_volume(self, input):
+        return self.get_indicator('sma50_volume', input)
+
+    def volume_cross_up(self, input):
+        return self._crosses_from_below('close_volume', 'sma50_volume', input)
+
+    def volume_cross_down(self, input):
+        return self._crosses_from_above('close_volume', 'sma50_volume', input)
+
+    def macd_stoch_sell(self, input):
+        return self.get_indicator('macd_hist', input) < 0 and \
+               self.get_indicator('slowd', input) > 71
+
+    def macd_stoch_buy(self, input):
+        return self.get_indicator('macd_hist', input) > 0 and \
+               self.get_indicator('slowd', input) < 29
+
+
+class CachedDataTAProvider(TAProvider):
+
     def __init__(self, data):
         self.data = data
 
     def __str__(self):
         return("TAprovider")
 
+    def get_indicator(self, indicator_name, input):
+        return self.data.__dict__[indicator_name][self._get_timestamp_index(input)]
+
+    def get_indicator_at_previous_timestamp(self, indicator_name, input):
+        index = self._get_timestamp_index(input)
+        return self.data.__dict__[indicator_name][index-1]
+
     def _get_timestamp_index(self, input):
         assert self.data.price_data.index.get_loc(input[0]) == np.where(self.data.price_data.index == input[0])[0][0]
         return self.data.price_data.index.get_loc(input[0])
 
-    def rsi(self, input):
-        return self.data.rsi_data[self._get_timestamp_index(input)]
 
-    def rsi_lt_20(self, input):
-        return self.data.rsi_data[self._get_timestamp_index(input)] < 20
+class ReddisDummyTAProvider(TAProvider):
 
-    def rsi_lt_25(self, input):
-        return self.data.rsi_data[self._get_timestamp_index(input)] < 25
+    def get_indicator(self, indicator_name, input):
+        timestamp = self._get_timestamp(input)
+        # query Redis to get indicator_name at timestamp
 
-    def rsi_lt_30(self, input):
-        return self.data.rsi_data[self._get_timestamp_index(input)] < 30
-
-    def rsi_gt_70(self, input):
-        return self.data.rsi_data[self._get_timestamp_index(input)] > 70
-
-    def rsi_gt_75(self, input):
-        return self.data.rsi_data[self._get_timestamp_index(input)] > 75
-
-    def rsi_gt_80(self, input):
-        return self.data.rsi_data[self._get_timestamp_index(input)] > 80
-
-    def macd_bullish(self, input):
-        return self._crosses_from_below(self.data.macd, self.data.macd_signal, input)
-        #index = self._get_timestamp_index(input)
-        #if index == 0:
-        #    return False
-        #return self.data.macd[index] > self.data.macd_signal[index] \
-        #       and self.data.macd[index-1] <= self.data.macd_signal[index-1]
-
-    def macd_bearish(self, input):
-        return self._crosses_from_above(self.data.macd, self.data.macd_signal, input)
-        # index = self._get_timestamp_index(input)
-        # if index == 0:
-        #     return False
-        # return self.data.macd[index] < self.data.macd_signal[index] \
-        #       and self.data.macd[index-1] >= self.data.macd_signal[index-1]
-
-    def ema_bullish_cross(self, input):
-        return self._crosses_from_above(self.data.ema55_data, self.data.ema21_data, input)
-
-    def ema_bearish_cross(self, input):
-        return self._crosses_from_below(self.data.ema55_data, self.data.ema21_data, input)
-
-    def bbands_bearish_cross(self, input):
-        return self._crosses_from_below(self.data.prices, self.data.bb_up, input)
-
-    def bbands_bullish_cross(self, input):
-        return self._crosses_from_above(self.data.prices, self.data.bb_low, input)
-
-    def bbands_squeeze_bullish(self, input):
-        index = self._get_timestamp_index(input)
-        return self.data.bb_width[index] <= self.data.min_bbw_180[index] \
-               and self._crosses_from_below(self.data.prices, self.data.bb_up, input)
-
-    def bbands_squeeze_bearish(self, input):
-        index = self._get_timestamp_index(input)
-        return self.data.bb_width[index] <= self.data.min_bbw_180[index] \
-               and self._crosses_from_above(self.data.prices, self.data.bb_low, input)
-
-    def bbands_price_gt_up(self, input):
-        index = self._get_timestamp_index(input)
-        return self.data.prices[index] > self.data.bb_up[index]
-
-    def bbands_price_lt_low(self, input):
-        index = self._get_timestamp_index(input)
-        return self.data.prices[index] < self.data.bb_low[index]
-
-    def slowd_gt_80(self, input):
-        return self.data.slowd[self._get_timestamp_index(input)] > 80
-
-    def slowd_lt_20(self, input):
-        return self.data.slowd[self._get_timestamp_index(input)] < 20
-
-    def candlestick_momentum_buy(self, input):
-        index = self._get_timestamp_index(input)
-        if index == 0:
-            return False
-        return self.data.prices[index] > 0.5 * self.data.prices[index-1]
-
-    def candlestick_momentum_sell(self, input):
-        index = self._get_timestamp_index(input)
-        if index == 0:
-            return False
-        return self.data.prices[index] < 0.5 * self.data.prices[index-1]
-
-    def _crosses_from_below(self, data, other, input):
-        index = self._get_timestamp_index(input)
-        if index == 0:
-            return False
-        return data[index] > other[index] and data[index-1] <= other[index-1]
-
-    def _crosses_from_above(self, data, other, input):
-        index = self._get_timestamp_index(input)
-        if index == 0:
-            return False
-        return data[index] < other[index] and data[index-1] >= other[index-1]
-
-    def adx(self, input):
-        return self.data.adx[self._get_timestamp_index(input)]
-
-    def sma20(self, input):
-        return self.data.sma20_data[self._get_timestamp_index(input)]
-
-    def ema20(self, input):
-        return self.data.ema20_data[self._get_timestamp_index(input)]
-
-    def sma50(self, input):
-        return self.data.sma50_data[self._get_timestamp_index(input)]
-
-    def ema50(self, input):
-        return self.data.ema50_data[self._get_timestamp_index(input)]
-
-    def sma200(self, input):
-        return self.data.sma200_data[self._get_timestamp_index(input)]
-
-    def ema200(self, input):
-        return self.data.ema200_data[self._get_timestamp_index(input)]
-
-    def price(self, input):
-        timestamp = input[0]
-        return self.data.price_data.loc[timestamp, "close_price"]
-
-    def volume(self, input):
-        return self.data.close_volume_data[self._get_timestamp_index(input)]
-
-    def sma50_volume(self, input):
-        return self.data.sma50_volume_data[self._get_timestamp_index(input)]
-
-    def volume_cross_up(self, input):
-        return self._crosses_from_below(self.data.close_volume_data, self.data.sma50_volume_data, input)
-
-    def volume_cross_down(self, input):
-        return self._crosses_from_above(self.data.close_volume_data, self.data.sma50_volume_data, input)
-
-    def macd_stoch_sell(self, input):
-        index = self._get_timestamp_index(input)
-        return self.data.macd_hist[index] < 0 and self.data.slowd[index] > 71
-
-    def macd_stoch_buy(self, input):
-        index = self._get_timestamp_index(input)
-        return self.data.macd_hist[index] > 0 and self.data.slowd[index] < 29
-
+    def get_indicator_at_previous_timestamp(self, indicator_name, input):
+        timestamp = self._get_timestamp(input)
+        # query Redis to get indicator_name at timestamp-1
 
 
 class TAProviderCollection(FunctionProvider):
 
     def __init__(self, data_collection):
         self.providers = {DataKey(data.source, data.resample_period, data.transaction_currency, data.counter_currency,
-                                  data.start_time, data.end_time): TAProvider(data) for data in data_collection}
+                                  data.start_time, data.end_time): CachedDataTAProvider(data) for data in data_collection}
         # create methods
-        members = inspect.getmembers(TAProvider, predicate=inspect.isfunction)
+        members = inspect.getmembers(CachedDataTAProvider, predicate=inspect.isfunction)
         base_members = inspect.getmembers(FunctionProvider)
         for member in members:
             if member in base_members:
@@ -225,5 +242,8 @@ def {function_name}(self, input):
     def __str__(self):
         return ','.join([f'{key.transaction_currency}-{key.counter_currency}-{key.start_time}-{key.end_time}'
                          for key in self.providers.keys()])
+
+
+
 
 

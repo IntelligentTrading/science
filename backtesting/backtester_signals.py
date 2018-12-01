@@ -1,6 +1,5 @@
 from evaluation import Evaluation
 from orders import OrderType
-from data_sources import get_filtered_signals
 
 class SignalDrivenBacktester(Evaluation):
 
@@ -21,10 +20,11 @@ class SignalDrivenBacktester(Evaluation):
         :param slippage: Parameter specifying the slippage percentage, applied in the direction of the trade.
         :param signals: A predefined list of signals passed into the strategy. If not supplied, the signals will be
                         pulled from the database.
+        :param database: database connection (default: postgres_db)
         """
         super().__init__(**kwargs)
         if signals is None:
-            self.signals = get_filtered_signals(
+            self.signals = self.database.get_filtered_signals(
                 start_time=self._start_time,
                 end_time=self._end_time,
                 counter_currency=self._counter_currency,

@@ -1,4 +1,4 @@
-from data_sources import get_filtered_signals, get_nearest_resampled_price, count_signals_ocurring_at_the_same_time
+from data_sources import postgres_db
 from utils import datetime_from_timestamp
 import numpy as np
 import pandas as pd
@@ -9,8 +9,8 @@ from collections import OrderedDict
 def analyze_ann_signals(signal_type, start_time, end_time, source, ann_lookahead_window, hit_threshold,
                         normalize=False):
     # get signals
-    signals = get_filtered_signals(signal_type=signal_type, start_time=start_time, end_time=end_time, source=source,
-                                   normalize=normalize)
+    signals = postgres_db.get_filtered_signals(signal_type=signal_type, start_time=start_time, end_time=end_time, source=source,
+                                               normalize=normalize)
 
     correct_up = 0
     correct_down = 0
@@ -21,9 +21,9 @@ def analyze_ann_signals(signal_type, start_time, end_time, source, ann_lookahead
     print(f'Retrieved {len(signals)} signals')
     for signal in signals:
         target_time = signal.timestamp + ann_lookahead_window * signal.resample_period * 60
-        price_data = get_nearest_resampled_price(target_time,
-                                                 signal.transaction_currency, signal.counter_currency,
-                                                 signal.resample_period, signal.source, normalize=normalize)
+        price_data = postgres_db.get_nearest_resampled_price(target_time,
+                                                             signal.transaction_currency, signal.counter_currency,
+                                                             signal.resample_period, signal.source, normalize=normalize)
 
         if price_data.empty:
             continue
@@ -63,7 +63,7 @@ def count_co_occurring_signals(start_time, end_time, out_filename):
     for row_signal in signal_types:
         data[row_signal] = {}
         for col_signal in signal_types:
-            data[row_signal][col_signal] = count_signals_ocurring_at_the_same_time(row_signal, col_signal, start_time, end_time)
+            data[row_signal][col_signal] = postgres_db.count_signals_ocurring_at_the_same_time(row_signal, col_signal, start_time, end_time)
     df = pd.DataFrame(data)
     df = df.reindex(signal_types)  # so the index is not sorted alphabetically
     writer = pd.ExcelWriter(out_filename)

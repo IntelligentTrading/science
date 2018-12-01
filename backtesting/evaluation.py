@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import copy
 
-from data_sources import get_price, convert_value_to_USDT, NoPriceDataException, Horizon
+from data_sources import postgres_db, NoPriceDataException, Horizon
 from orders import OrderType
 from utils import get_distinct_signal_types, datetime_from_timestamp
 from config import transaction_cost_percents
@@ -20,11 +20,11 @@ pd.options.mode.chained_assignment = None
 
 class Evaluation(ABC):
 
-
     def __init__(self, strategy, transaction_currency, counter_currency,
                  start_cash, start_crypto, start_time, end_time, source=0,
                  resample_period=60, evaluate_profit_on_last_order=True, verbose=True,
-                 benchmark_backtest=None, time_delay=0, slippage=0, order_generator=OrderGenerator.ALTERNATING):
+                 benchmark_backtest=None, time_delay=0, slippage=0, order_generator=OrderGenerator.ALTERNATING,
+                 database=postgres_db):
 
         self._strategy = strategy
         self._transaction_currency = transaction_currency
@@ -42,6 +42,7 @@ class Evaluation(ABC):
         self._time_delay = time_delay
         self._slippage = slippage
         self._order_generator_type = order_generator
+        self.database = database
 
         if order_generator == OrderGenerator.POSITION_BASED and not \
             (start_cash == INF_CASH and start_crypto == INF_CRYPTO):
@@ -135,11 +136,11 @@ class Evaluation(ABC):
 
     def _init_start_value_USDT(self):
         try:
-            self._start_value_USDT = convert_value_to_USDT(self._start_cash, self._start_time,
-                                                     self._counter_currency, self._source)
+            self._start_value_USDT = self.database.convert_value_to_USDT(self._start_cash, self._start_time,
+                                                                       self._counter_currency, self._source)
             if self._start_crypto > 0 and self._transaction_currency is not None:
-                self._start_value_USDT += convert_value_to_USDT(self._start_crypto, self._start_time,
-                                                          self._transaction_currency, self._source)
+                self._start_value_USDT += self.database.convert_value_to_USDT(self._start_crypto, self._start_time,
+                                                                            self._transaction_currency, self._source)
         except NoPriceDataException:
             self._start_value_USDT = None
 
@@ -168,7 +169,7 @@ class Evaluation(ABC):
     def _init_start_value(self):
         try:
             self._start_value = self._start_cash + \
-                   (self._start_crypto * get_price(
+                   (self._start_crypto * self.database.get_price(
                        self._transaction_currency,
                        self._start_time,
                        self._source,
@@ -194,18 +195,6 @@ class Evaluation(ABC):
 
     @property
     def end_price(self):
-        """"
-        global counter_enter, counter_exception
-        counter_enter += 1
-        if not self.orders_df.empty and (self._evaluate_profit_on_last_order or self.orders_df.tail(1)['order'].item() == "SELL"):
-            return self.orders_df.tail(1)['close_price'].item()
-        else:
-            try:
-                return get_price(self._transaction_currency, self._end_time, self._source, self._counter_currency)
-            except:
-                counter_exception += 1
-                return None
-        """
         return self._end_price
 
     @property
@@ -426,10 +415,10 @@ class Evaluation(ABC):
 
     def _fill_end_usdt_value(self):
         try:
-            self._end_value_USDT = convert_value_to_USDT(self.end_cash, self._end_time, self._counter_currency,
-                                                         self._source) + \
-                                   convert_value_to_USDT(self.end_crypto, self._end_time, self._end_crypto_currency,
-                                                         self._source)
+            self._end_value_USDT = self.database.convert_value_to_USDT(self.end_cash, self._end_time, self._counter_currency,
+                                                                     self._source) + \
+                                   self.database.convert_value_to_USDT(self.end_crypto, self._end_time, self._end_crypto_currency,
+                                                                     self._source)
         except NoPriceDataException:
             self._end_value_USDT = None
 
@@ -439,8 +428,8 @@ class Evaluation(ABC):
             self._end_price = self.orders_df.tail(1)['close_price'].item()
         else:
             try:
-                self._end_price = get_price(self._transaction_currency, self._end_time, self._source,
-                                            self._counter_currency)
+                self._end_price = self.database.get_price(self._transaction_currency, self._end_time, self._source,
+                                                        self._counter_currency)
             except:
                 self._end_price = None
 

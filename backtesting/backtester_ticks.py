@@ -5,6 +5,7 @@ from config import INF_CASH, INF_CRYPTO
 from strategies import BuyAndHoldTimebasedStrategy
 from order_generator import OrderGenerator
 from caching import memoize
+from data_sources import postgres_db
 
 
 @memoize
@@ -58,12 +59,12 @@ class TickDrivenBacktester(Evaluation, TickListener):
 
     @staticmethod
     def build_benchmark(transaction_currency, counter_currency, start_cash, start_crypto, start_time, end_time,
-                        source, tick_provider=None, time_delay=0, slippage=0):
+                        source, tick_provider=None, time_delay=0, slippage=0, database=postgres_db):
         if tick_provider is None:
             tick_provider = TickProviderITFDB(transaction_currency,
                                                     counter_currency,
                                                     start_time,
-                                                    end_time)
+                                                    end_time, database=database)
         benchmark_strategy = BuyAndHoldTimebasedStrategy(start_time, end_time, transaction_currency, counter_currency,
                                                          source=0)
         benchmark_order_generator = OrderGenerator.ALTERNATING
@@ -82,7 +83,8 @@ class TickDrivenBacktester(Evaluation, TickListener):
                 verbose=False,
                 time_delay=time_delay,
                 slippage=slippage,
-                order_generator=benchmark_order_generator
+                order_generator=benchmark_order_generator,
+                database=database
             )
         return benchmark
 

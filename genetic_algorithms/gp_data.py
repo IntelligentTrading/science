@@ -5,7 +5,7 @@ import logging
 from dateutil import parser
 from tick_provider import PriceDataframeTickProvider
 from backtester_ticks import TickDrivenBacktester
-from data_sources import get_resampled_prices_in_range, get_timestamp_n_ticks_earlier
+from data_sources import postgres_db
 from charting import time_series_chart
 
 
@@ -27,7 +27,7 @@ class Data:
         return time_input
 
     def __init__(self, start_time, end_time, transaction_currency, counter_currency, resample_period, start_cash,
-                 start_crypto, source):
+                 start_crypto, source, database=postgres_db):
         self.start_time = self._parse_time(start_time)
         self.end_time = self._parse_time(end_time)
         self.transaction_currency = transaction_currency
@@ -36,11 +36,12 @@ class Data:
         self.start_cash = start_cash
         self.start_crypto = start_crypto
         self.source = source
+        self.database = database
 
-        self.precalc_start_time = get_timestamp_n_ticks_earlier(self.start_time, TICKS_FOR_PRECOMPUTE, transaction_currency,
-                                                                counter_currency, source, resample_period)
+        self.precalc_start_time = self.database.get_timestamp_n_ticks_earlier(self.start_time, TICKS_FOR_PRECOMPUTE, transaction_currency,
+                                                                            counter_currency, source, resample_period)
 
-        self.price_data = get_resampled_prices_in_range\
+        self.price_data = self.database.get_resampled_prices_in_range\
             (self.precalc_start_time, self.end_time, transaction_currency, counter_currency, resample_period)
 
         self.price_data = self.price_data[~self.price_data.index.duplicated(keep='first')]
@@ -64,22 +65,22 @@ class Data:
 
         if np.isnan(volumes).all():
             logging.warning(f'Unable to load valid volume data for for {transaction_currency}-{counter_currency}.')
-            self.sma50_volume_data = volumes[TICKS_FOR_PRECOMPUTE:]
+            self.sma50_volume = volumes[TICKS_FOR_PRECOMPUTE:]
         else:
-            self.sma50_volume_data = talib.SMA(volumes, timeperiod=50)[TICKS_FOR_PRECOMPUTE:]
+            self.sma50_volume = talib.SMA(volumes, timeperiod=50)[TICKS_FOR_PRECOMPUTE:]
 
-        self.close_volume_data = volumes[TICKS_FOR_PRECOMPUTE:]
+        self.close_volume = volumes[TICKS_FOR_PRECOMPUTE:]
 
-        self.rsi_data = talib.RSI(prices, timeperiod=14)[TICKS_FOR_PRECOMPUTE:]
-        self.sma20_data = talib.SMA(prices, timeperiod=20)[TICKS_FOR_PRECOMPUTE:]
-        self.ema20_data = talib.EMA(prices, timeperiod=20)[TICKS_FOR_PRECOMPUTE:]
-        self.sma50_data = talib.SMA(prices, timeperiod=50)[TICKS_FOR_PRECOMPUTE:]
-        self.ema50_data = talib.EMA(prices, timeperiod=50)[TICKS_FOR_PRECOMPUTE:]
-        self.sma200_data = talib.SMA(prices, timeperiod=200)[TICKS_FOR_PRECOMPUTE:]
-        self.ema200_data = talib.EMA(prices, timeperiod=200)[TICKS_FOR_PRECOMPUTE:]
+        self.rsi = talib.RSI(prices, timeperiod=14)[TICKS_FOR_PRECOMPUTE:]
+        self.sma20 = talib.SMA(prices, timeperiod=20)[TICKS_FOR_PRECOMPUTE:]
+        self.ema20 = talib.EMA(prices, timeperiod=20)[TICKS_FOR_PRECOMPUTE:]
+        self.sma50 = talib.SMA(prices, timeperiod=50)[TICKS_FOR_PRECOMPUTE:]
+        self.ema50 = talib.EMA(prices, timeperiod=50)[TICKS_FOR_PRECOMPUTE:]
+        self.sma200 = talib.SMA(prices, timeperiod=200)[TICKS_FOR_PRECOMPUTE:]
+        self.ema200 = talib.EMA(prices, timeperiod=200)[TICKS_FOR_PRECOMPUTE:]
 
-        self.ema21_data = talib.EMA(prices, timeperiod=21)[TICKS_FOR_PRECOMPUTE:]
-        self.ema55_data = talib.EMA(prices, timeperiod=55)[TICKS_FOR_PRECOMPUTE:]
+        self.ema21 = talib.EMA(prices, timeperiod=21)[TICKS_FOR_PRECOMPUTE:]
+        self.ema55 = talib.EMA(prices, timeperiod=55)[TICKS_FOR_PRECOMPUTE:]
         self.bb_up, self.bb_mid, self.bb_low = talib.BBANDS(prices, timeperiod=20, nbdevup=2, nbdevdn=2, matype=0)
 
         self.bb_width = self.bb_up - self.bb_low
@@ -105,24 +106,21 @@ class Data:
                              np.array(self.price_data.low_price, dtype=float),
                              np.array(self.price_data.close_price, dtype=float))[TICKS_FOR_PRECOMPUTE:]
 
-
-
-
         self.price_data = self.price_data.iloc[TICKS_FOR_PRECOMPUTE:]
-        self.prices = self.price_data.as_matrix(columns=["close_price"])
+        self.close_price = self.price_data.as_matrix(columns=["close_price"])
         self.timestamps = pd.to_datetime(self.price_data.index.values, unit='s')
-        assert len(self.prices) == len(self.timestamps)
+        assert len(self.close_price) == len(self.timestamps)
 
 
     def to_dataframe(self):
         df = self.price_data.copy(deep=True)
-        df['RSI'] = pd.Series(self.rsi_data, index=df.index)
-        df['SMA20'] = pd.Series(self.sma20_data, index=df.index)
-        df['SMA50'] = pd.Series(self.sma50_data, index=df.index)
-        df['SMA200'] = pd.Series(self.sma200_data, index=df.index)
-        df['EMA20'] = pd.Series(self.ema20_data, index=df.index)
-        df['EMA50'] = pd.Series(self.ema50_data, index=df.index)
-        df['EMA200'] = pd.Series(self.ema200_data, index=df.index)
+        df['RSI'] = pd.Series(self.rsi, index=df.index)
+        df['SMA20'] = pd.Series(self.sma20, index=df.index)
+        df['SMA50'] = pd.Series(self.sma50, index=df.index)
+        df['SMA200'] = pd.Series(self.sma200, index=df.index)
+        df['EMA20'] = pd.Series(self.ema20, index=df.index)
+        df['EMA50'] = pd.Series(self.ema50, index=df.index)
+        df['EMA200'] = pd.Series(self.ema200, index=df.index)
         df['ADX'] = pd.Series(self.adx, index=df.index)
 
 
@@ -139,7 +137,8 @@ class Data:
             start_time=self.start_time,
             end_time=self.end_time,
             source=self.source,
-            tick_provider=PriceDataframeTickProvider(self.price_data)
+            tick_provider=PriceDataframeTickProvider(self.price_data),
+            database=self.database
         )
         return benchmark
 
@@ -153,15 +152,14 @@ class Data:
             filtered_dict[field] = fields[field]
         return filtered_dict
 
-
     def plot(self, orders=None, individual_str=None):
         timestamps = self.price_data.index
         data_primary_axis = {
             "Close price" : self.price_data.close_price,
-            "SMA50": self.sma50_data,
-            "EMA50": self.ema50_data,
-            "SMA200": self.sma200_data,
-            "EMA200": self.ema200_data,
+            "SMA50": self.sma50,
+            "EMA50": self.ema50,
+            "SMA200": self.sma200,
+            "EMA200": self.ema200,
 
         }
 
@@ -169,7 +167,7 @@ class Data:
             "ADX": self.adx,
             "MACD": self.macd,
             "MACD signal": self.macd_signal,
-            "RSI": self.rsi_data
+            "RSI": self.rsi
         }
 
         if individual_str is not None:

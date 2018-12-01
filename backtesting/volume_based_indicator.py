@@ -1,5 +1,5 @@
 import talib
-from data_sources import get_resampled_prices_in_range, get_volumes_in_range, get_filtered_signals
+from data_sources import postgres_db
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -55,8 +55,8 @@ def build_strategy_signals(price_volume_df, percent_change_price, percent_change
     else:
         strategy = sell_strategy
 
-    signals = get_filtered_signals(start_time=start_time, end_time=end_time, counter_currency=counter_currency,
-                                   transaction_currency=transaction_currency, source=source)
+    signals = postgres_db.get_filtered_signals(start_time=start_time, end_time=end_time, counter_currency=counter_currency,
+                                               transaction_currency=transaction_currency, source=source)
 
     rsi_sell_signals = SignalSignatureStrategy.get_sell_signals(strategy, signals)
 
@@ -198,13 +198,13 @@ def write_to_excel(df, path):
 def build_resampled_price_volume_df(start_time, end_time, transaction_currency, counter_currency, resample_period, source,
                                     AVERAGING_PERIOD = 50):
     # Load price and volume data and calculate average prices and volumes
-    prices_df = get_resampled_prices_in_range(start_time, end_time, transaction_currency, counter_currency,
-                                              resample_period, source,
-                                              normalize=True)
+    prices_df = postgres_db.get_resampled_prices_in_range(start_time, end_time, transaction_currency, counter_currency,
+                                                          resample_period, source,
+                                                          normalize=True)
     prices_df = prices_df.sort_index()
     prices_df = prices_df.dropna()
 
-    volumes_df = get_volumes_in_range(start_time, end_time, transaction_currency, counter_currency, source)
+    volumes_df = postgres_db.get_volumes_in_range(start_time, end_time, transaction_currency, counter_currency, source)
     volumes_df = volumes_df.dropna()
     # volumes_df.volume /= 1E4 #5 # scaling for visualization
 

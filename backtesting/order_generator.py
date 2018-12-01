@@ -1,6 +1,6 @@
 from orders import OrderType, Order
 from config import transaction_cost_percents
-from data_sources import fetch_delayed_price
+from data_sources import postgres_db
 from abc import ABC, abstractmethod
 
 
@@ -32,9 +32,9 @@ class OrderGenerator(ABC):
         return orders, order_signals
 
     def _get_price(self, decision):
-        return fetch_delayed_price(decision.timestamp, decision.transaction_currency,
-                                    decision.counter_currency, decision.source, self._time_delay,
-                                    decision.signal.price if not decision.signal is None else None)
+        return postgres_db.fetch_delayed_price(decision.timestamp, decision.transaction_currency,
+                                               decision.counter_currency, decision.source, self._time_delay,
+                                               decision.signal.price if not decision.signal is None else None)
 
     def buy_order(self, decision, value):
         return Order(

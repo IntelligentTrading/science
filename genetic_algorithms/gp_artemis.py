@@ -3,6 +3,7 @@ import json
 import itertools
 import numpy as np
 import pandas as pd
+from data_sources import postgres_db, redis_db
 
 from artemis.experiments import experiment_root
 from artemis.experiments.experiments import clear_all_experiments, _GLOBAL_EXPERIMENT_LIBRARY
@@ -34,9 +35,6 @@ dup_filter = LogDuplicateFilter()
 logging.getLogger().addFilter(dup_filter)
 
 
-
-
-
 class ExperimentManager:
 
     START_CASH = 1000
@@ -55,7 +53,8 @@ class ExperimentManager:
         return hof, best
 
 
-    def __init__(self, experiment_container, read_from_file=True):
+    def __init__(self, experiment_container, read_from_file=True, database=postgres_db):
+        self.database = database
         if read_from_file:
             with open(experiment_container) as f:
                 self.experiment_json = json.load(f)
@@ -67,15 +66,16 @@ class ExperimentManager:
             self.START_CRYPTO = INF_CRYPTO
 
         # initialize data
-        self.training_data = [Data(start_cash=self.START_CASH, start_crypto=self.START_CRYPTO,
+        self.training_data = [Data(start_cash=self.START_CASH, start_crypto=self.START_CRYPTO, database=self.database,
                                   **dataset) for dataset in self.experiment_json["training_data"]]
-        self.validation_data = [Data(start_cash=self.START_CASH, start_crypto=self.START_CRYPTO,
+        self.validation_data = [Data(start_cash=self.START_CASH, start_crypto=self.START_CRYPTO, database=self.database,
                                   **dataset) for dataset in self.experiment_json["validation_data"]]
         # create function provider objects based on data
         self.function_provider = TAProviderCollection(self.training_data + self.validation_data)
         # generate and register variants
         self._fill_experiment_db()
         self._register_variants()
+
 
     def _fill_experiment_db(self):
         self.experiment_db = ExperimentDB()
@@ -784,9 +784,11 @@ from utils import in_notebook
 
 if not in_notebook():
     #e = ExperimentManager("gv5_experiments_positions.json")
-    e = ExperimentManager("gv5_experiments.json")
+    e = ExperimentManager("gv5_experiments.json", database=redis_db)
 
 if __name__ == "__main__":
+    e.run_experiments()
+    exit(0)
 
 
     import datetime

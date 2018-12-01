@@ -417,7 +417,8 @@ class GeneticProgram:
                 time_delay=0,
                 slippage=0,
                 verbose=False,
-                order_generator=self.order_generator
+                order_generator=self.order_generator,
+                database=data.database
             )
         return evaluation
 
