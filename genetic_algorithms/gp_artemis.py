@@ -218,7 +218,7 @@ class ExperimentManager:
             self._print_individual_info(best_individual, evaluation)
 
 
-    def get_best_performing_individuals_and_dataset_performance(self, variant, datasets, top_n=1):
+    def get_best_performing_individuals_and_dataset_performance(self, variant, datasets, top_n=None):
         """
         Finds the best performing individual in an experiment variant, across all datasets.
         :param variant: experiment variant
@@ -232,6 +232,8 @@ class ExperimentManager:
             return
         hof, best = latest.get_result()
         result = []
+        if top_n is None:
+            top_n = len(hof) # just take all of them
         for i in range(top_n):
             best_individual = hof[i]
             evaluations = []
@@ -241,9 +243,10 @@ class ExperimentManager:
             result.append((best_individual, evaluations))
         return result
 
-    def get_best_performing_across_variants_and_datasets(self, datasets, sort_by=["mean_profit"], top_n_per_variant=5):
+    def get_best_performing_across_variants_and_datasets(self, datasets, sort_by=["mean_profit"], top_n_per_variant=5,
+                                                         remove_duplicates=True):
         """
-        Returns a list of best performing individuals, one per experiment variant.
+        Returns a list of best performing individuals, top_n_per_variant per experiment variant.
         :return:
         """
         df = pd.DataFrame(columns=["experiment_name", "doge", "fitness_function", "fitness_value",
@@ -251,9 +254,15 @@ class ExperimentManager:
                                    "benchmark_profits", "differences", "variant",
                                    "evaluations", "individual"])
         for variant in self.get_variants():
-            best_individuals = self.get_best_performing_individuals_and_dataset_performance(variant, datasets,
-                                                                                            top_n=top_n_per_variant)
-            for best_individual, evaluations in best_individuals:
+            best_individuals = self.get_best_performing_individuals_and_dataset_performance(variant, datasets)
+
+            for i, (best_individual, evaluations) in enumerate(best_individuals):
+                if remove_duplicates and str(best_individual) in df.doge.values:
+                    continue
+
+                if i > top_n_per_variant: # already got enough from this variant
+                    break
+
                 profits = [evaluation.profit_percent for evaluation in evaluations]
                 benchmark_profits = [evaluation.benchmark_backtest.profit_percent for evaluation in evaluations]
                 differences = [x1-x2 for (x1, x2) in zip(profits, benchmark_profits)]
@@ -708,6 +717,12 @@ class ExperimentManager:
 
         return backtest_results, baseline_results
 
+    @staticmethod
+    def resurrect_doge(experiment_json, experiment_id, individual_str, database):
+        e = ExperimentManager(experiment_container=experiment_json, read_from_file=False, database=database)
+        gp = e.build_genetic_program(data=None, function_provider=e.function_provider, db_record=e.get_db_record_from_experiment_id(experiment_id))
+        return gp.individual_from_string(individual_str), gp
+
 
 
 
@@ -763,7 +778,6 @@ class ExperimentDB:
 
     def __getitem__(self, key):
         return self._experiments[key]
-
 
 
 

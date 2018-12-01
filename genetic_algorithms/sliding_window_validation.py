@@ -57,24 +57,13 @@ class SlidingWindowValidator:
         return df
 
     def recreate_individuals(self, df):
-        training_tickers = [Ticker(0, 'BTC', 'USDT'),
-                            Ticker(0, 'ETH', 'USDT'),
-                            Ticker(0, 'LTC', 'BTC'),
-                            Ticker(0, 'ZEC', 'BTC'),
-                            Ticker(0, 'ETC', 'BTC')]
-
         row = df.iloc[0]
         training_start, training_end = row.training_period.split(' - ')
-        validation_start, validation_end = row.validation_period.split(' - ')
-
 
         experiment_json = self.experiment_json_template.format(
             start_time=training_start, end_time=training_end)
-        e = ExperimentManager(experiment_container=experiment_json, read_from_file=False)
-        experiment_id = 'run_evolution.d_BTC-USDT-1522540800-1525132800;gv5;ff_benchmarkdiff;x_0.9;m_0.7;n_500;gen_10;td_5;a;nrs'
-
-        gp = e.build_genetic_program(data=None, function_provider=e.function_provider, db_record=e.get_db_record_from_experiment_id(experiment_id))
-        individual = gp.individual_from_string(row.strategy[len('Strategy: evolved using genetic programming\nRule set: '):])
+        individual_str = row.strategy[len('Strategy: evolved using genetic programming\nRule set: '):]
+        individual = ExperimentManager.resurrect_doge(experiment_json, row.experiment_id, individual_str)
         from chart_plotter import save_dot_graph
         save_dot_graph(individual, 'test.png')
 
