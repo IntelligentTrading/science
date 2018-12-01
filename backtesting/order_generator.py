@@ -9,11 +9,12 @@ class OrderGenerator(ABC):
     ALTERNATING = 'alternating'
     POSITION_BASED = 'position_based'
 
-    def __init__(self, start_cash, start_crypto, time_delay, slippage):
+    def __init__(self, start_cash, start_crypto, time_delay, slippage, database=postgres_db):
         self._cash = start_cash
         self._crypto = start_crypto
         self._time_delay = time_delay
         self._slippage = slippage
+        self._database = database
 
     def _execute_order(self, order):
         delta_crypto, delta_cash = order.execute()
@@ -32,7 +33,7 @@ class OrderGenerator(ABC):
         return orders, order_signals
 
     def _get_price(self, decision):
-        return postgres_db.fetch_delayed_price(decision.timestamp, decision.transaction_currency,
+        return self._database.fetch_delayed_price(decision.timestamp, decision.transaction_currency,
                                                decision.counter_currency, decision.source, self._time_delay,
                                                decision.signal.price if not decision.signal is None else None)
 
@@ -85,7 +86,9 @@ class AlternatingOrderGenerator(OrderGenerator):
 
     def generate_order(self, decision):
         order = None
-        try:
+
+        #try:
+        if True:
             if decision.sell() and self._crypto > 0 and decision.transaction_currency == self._buy_currency:
                 order = self.sell_order(decision=decision, value=self._crypto)
                 self._execute_order(order)
@@ -97,8 +100,8 @@ class AlternatingOrderGenerator(OrderGenerator):
                 self._execute_order(order)
                 assert self._cash == 0
             return order
-        except AttributeError:
-            pass
+        #except AttributeError:
+        #    pass
 
 class PositionBasedOrderGenerator(OrderGenerator):
     '''

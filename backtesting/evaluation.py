@@ -57,7 +57,8 @@ class Evaluation(ABC):
             start_cash=start_cash,
             start_crypto=start_crypto,
             time_delay=time_delay,
-            slippage=slippage
+            slippage=slippage,
+            database=self.database
         )
 
         if benchmark_backtest is not None:

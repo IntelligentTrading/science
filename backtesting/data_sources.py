@@ -2,6 +2,7 @@ from enum import Enum
 
 from config import postgres_connection_string
 from signals import Signal
+from abc import ABC
 import pandas as pd
 import psycopg2
 import psycopg2.extras
@@ -32,8 +33,53 @@ class Strength(Enum):
 #(BTC, ETH, USDT, XMR) = list(range(4))
 
 
+class Database(ABC):
 
-class PostgresDatabaseConnection:
+    def log_price_error(self, msg, counter_currency):
+        """
+        If our counter currency is not BTC and we can't find prices, we're probably dealing with an altcoin
+        that trades only against BTC. In that case we output a debug-level msg. If price against BTC isn't
+        found, we output an error-level msg.
+        :param msg: message to output
+        :param counter_currency: counter currency for which we're finding the price
+        :return:
+        """
+        if counter_currency == "BTC":
+            logging.error(msg)
+        else:
+            logging.debug(msg)
+
+
+    def convert_value_to_USDT(self, value, timestamp, transaction_currency, source):
+        if value == 0:
+            return 0
+        if transaction_currency == "USDT": # already in USDT
+            return value
+        try:
+            value_USDT = value * self.get_price(transaction_currency, timestamp, source, "USDT") # if trading against USDT
+            # print("Found USDT price data for {}".format(transaction_currency))
+            return value_USDT
+        except:
+            # print("Couldn't find USDT price data for {}".format(transaction_currency))
+            value_BTC_in_USDT = self.get_price("BTC", timestamp, source, "USDT")
+            if transaction_currency == "BTC":
+                return value * value_BTC_in_USDT
+
+            value_transaction_currency_in_BTC = self.get_price(transaction_currency, timestamp, source, "BTC")
+            return value_BTC_in_USDT * value_transaction_currency_in_BTC * value
+
+
+    def fetch_delayed_price(self, timestamp, transaction_currency, counter_currency, source, time_delay, original_price=None):
+        if time_delay != 0 or original_price is None:
+            return self.get_price(transaction_currency, timestamp + time_delay, source, counter_currency)
+        else:
+            return original_price
+
+
+
+
+class PostgresDatabaseConnection(Database):
+
     def __init__(self):
         self.conn = psycopg2.connect(postgres_connection_string)
         self.cursor = self.conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
@@ -243,19 +289,7 @@ class PostgresDatabaseConnection:
         return price_data
 
 
-    def log_price_error(self, msg, counter_currency):
-        """
-        If our counter currency is not BTC and we can't find prices, we're probably dealing with an altcoin
-        that trades only against BTC. In that case we output a debug-level msg. If price against BTC isn't
-        found, we output an error-level msg.
-        :param msg: message to output
-        :param counter_currency: counter currency for which we're finding the price
-        :return:
-        """
-        if counter_currency == "BTC":
-            logging.error(msg)
-        else:
-            logging.debug(msg)
+
 
     def get_volumes_in_range(self, start_time, end_time, transaction_currency, counter_currency, source):
         volume_in_range_query_asc = """SELECT volume, timestamp 
@@ -272,24 +306,6 @@ class PostgresDatabaseConnection:
                                                                                     end_time),
                                  index_col="timestamp")
         return volume_data
-
-    def convert_value_to_USDT(self, value, timestamp, transaction_currency, source):
-        if value == 0:
-            return 0
-        if transaction_currency == "USDT": # already in USDT
-            return value
-        try:
-            value_USDT = value * self.get_price(transaction_currency, timestamp, source, "USDT") # if trading against USDT
-            # print("Found USDT price data for {}".format(transaction_currency))
-            return value_USDT
-        except:
-            # print("Couldn't find USDT price data for {}".format(transaction_currency))
-            value_BTC_in_USDT = self.get_price("BTC", timestamp, source, "USDT")
-            if transaction_currency == "BTC":
-                return value * value_BTC_in_USDT
-
-            value_transaction_currency_in_BTC = self.get_price(transaction_currency, timestamp, source, "BTC")
-            return value_BTC_in_USDT * value_transaction_currency_in_BTC * value
 
 
     def get_currencies_trading_against_counter(self, counter_currency, source):
@@ -316,13 +332,6 @@ class PostgresDatabaseConnection:
         for currency in data:
             currencies.append(currency[0])
         return currencies
-
-
-    def fetch_delayed_price(self, timestamp, transaction_currency, counter_currency, source, time_delay, original_price=None):
-        if time_delay != 0 or original_price is None:
-            return self.get_price(transaction_currency, timestamp + time_delay, source, counter_currency)
-        else:
-            return original_price
 
 
     def get_timestamp_n_ticks_earlier(self, timestamp, n, transaction_currency, counter_currency, source, resample_period):
@@ -357,7 +366,7 @@ class PostgresDatabaseConnection:
         return data[-1][0]
 
 
-class RedisDummyDB:
+class RedisDummyDB(Database):
     def __init__(self):
         self.conn = psycopg2.connect(postgres_connection_string)
         self.cursor = self.conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
@@ -422,71 +431,6 @@ class RedisDummyDB:
             price_data.loc[:, 'high_price'] /= 1E8
             price_data.loc[:, 'low_price'] /= 1E8
         return price_data
-
-
-    def get_filtered_signals(self, signal_type=None, transaction_currency=None, start_time=None, end_time=None, horizon=Horizon.any,
-                             counter_currency=None, strength=Strength.any, source=None, resample_period=None, return_df=False,
-                             normalize=True):
-        query = """ SELECT signal_signal.signal, trend, horizon, strength_value, strength_max, price, price_change, 
-                    timestamp, rsi_value, transaction_currency, counter_currency, source, resample_period FROM signal_signal 
-                     """
-        additions = []
-        params = []
-        if signal_type is not None:
-            additions.append("signal_signal.signal=%s")
-            params.append(signal_type)
-        if transaction_currency is not None:
-            additions.append("transaction_currency = %s")
-            params.append(transaction_currency)
-        if start_time is not None:
-            additions.append("timestamp >= %s")
-            params.append(start_time)
-        if end_time is not None:
-            additions.append("timestamp <= %s")
-            params.append(end_time)
-        if horizon.value is not None:
-            additions.append("horizon = %s")
-            params.append(horizon.value)
-        if counter_currency is not None:
-            additions.append("counter_currency = %s")
-            params.append(CounterCurrency[counter_currency].value)
-        if strength.value is not None:
-            additions.append("strength_value = %s")
-            params.append(strength.value)
-        if source is not None:
-            additions.append("source = %s")
-            params.append(source)
-        if resample_period is not None:
-            additions.append("resample_period = %s")
-            params.append(resample_period)
-
-
-        if len(additions) > 0:
-            query += "WHERE {}".format(" AND ".join(additions))
-            params = tuple(params)
-        query += ' ORDER BY timestamp'
-        if return_df:
-            connection = postgres_db.get_connection()
-            signals_df = pd.read_sql(query, con=connection, params=params, index_col="timestamp")
-            signals_df['counter_currency'] = [CounterCurrency(counter_currency).name
-                                              for counter_currency in signals_df.counter_currency]
-            if normalize:
-                signals_df['price'] = signals_df['price']/1E8
-            return signals_df
-
-        # otherwise, we return a list of Signal objectss
-        cursor = self.execute(query, params)
-
-        signals = []
-
-        for (signal_type, trend, horizon, strength_value, strength_max, price, price_change, timestamp, rsi_value,
-             transaction_currency, counter_currency, source, resample_period) in cursor:
-            if len(trend) > 5:   # hacky solution for one instance of bad data
-                continue
-            signals.append(Signal(signal_type, trend, horizon, strength_value, strength_max,
-                                  price/1E8 if normalize else price,  price_change, timestamp, rsi_value, transaction_currency,
-                                  CounterCurrency(counter_currency).name, source, resample_period))
-        return signals
 
 
     def get_price(self, currency, timestamp, source, counter_currency="BTC", normalize=True):
@@ -556,41 +500,6 @@ class RedisDummyDB:
             return history[0][0]
 
 
-
-    def log_price_error(self, msg, counter_currency):
-        """
-        If our counter currency is not BTC and we can't find prices, we're probably dealing with an altcoin
-        that trades only against BTC. In that case we output a debug-level msg. If price against BTC isn't
-        found, we output an error-level msg.
-        :param msg: message to output
-        :param counter_currency: counter currency for which we're finding the price
-        :return:
-        """
-        if counter_currency == "BTC":
-            logging.error(msg)
-        else:
-            logging.debug(msg)
-
-
-    def convert_value_to_USDT(self, value, timestamp, transaction_currency, source):
-        if value == 0:
-            return 0
-        if transaction_currency == "USDT": # already in USDT
-            return value
-        try:
-            value_USDT = value * self.get_price(transaction_currency, timestamp, source, "USDT") # if trading against USDT
-            # print("Found USDT price data for {}".format(transaction_currency))
-            return value_USDT
-        except:
-            # print("Couldn't find USDT price data for {}".format(transaction_currency))
-            value_BTC_in_USDT = self.get_price("BTC", timestamp, source, "USDT")
-            if transaction_currency == "BTC":
-                return value * value_BTC_in_USDT
-
-            value_transaction_currency_in_BTC = self.get_price(transaction_currency, timestamp, source, "BTC")
-            return value_BTC_in_USDT * value_transaction_currency_in_BTC * value
-
-
     def get_timestamp_n_ticks_earlier(self, timestamp, n, transaction_currency, counter_currency, source, resample_period):
         query = """SELECT DISTINCT timestamp 
                    FROM indicator_priceresampl 
@@ -604,5 +513,5 @@ class RedisDummyDB:
         return data[-1][0]
 
 
-postgres_db = None #PostgresDatabaseConnection()
+postgres_db = None#PostgresDatabaseConnection()
 redis_db = RedisDummyDB()
