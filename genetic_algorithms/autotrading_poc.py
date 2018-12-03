@@ -16,25 +16,48 @@ from genetic_program import GeneticTickerStrategy
 from tick_provider import PriceDataframeTickProvider
 from tick_listener import TickListener
 from utils import datetime_from_timestamp
+from gp_utils import Period
+from leaf_functions import ReddisDummyTAProvider
 
-def retrain_doges(max_doges_to_save=10):
-    # create an experiment manager
-    e = ExperimentManager('gv5_experiments.json', database=redis_db) # we will have one central json with all the parameters
+GP_TRAINING_CONFIG = 'doge_config.json'
 
-    # run experiments
-    e.run_experiments() # if we can run it in parallel, otherwise call e.run_experiments()
+class DogeTrainer:
 
-    # retrieve best performing doges
-    doge_df = e.get_best_performing_across_variants_and_datasets(datasets=e.training_data, sort_by=['mean_profit'], top_n_per_variant=1)
+    def __init__(self, database):
+        with open(GP_TRAINING_CONFIG, 'r') as f:
+            self.gp_training_config_json = f.read()
+        self.database = database
 
-    dummy_db = open('dogi.db', 'w')
-    # TODO: write these guys to the actual database
-    for i, row in enumerate(doge_df.itertuples()):
-        if i > max_doges_to_save:
-            break
-        # save experiment id and doge
-        dummy_db.write(f'{row.variant.name}\t{i}\t{str(row.doge)}\t{row.mean_profit}\n')
-    dummy_db.close()
+    def retrain_doges(self, start_timestamp, end_timestamp, max_doges_to_save=10):
+        config_json = self.fill_json_template(self.gp_training_config_json, start_timestamp, end_timestamp)
+
+        # create an experiment manager
+        e = ExperimentManager(experiment_container=config_json, read_from_file=False, database=self.database, hof_size=10) # we will have one central json with all the parameters
+
+        # run experiments
+        e.run_experiments(keep_record=True) # if we can run it in parallel, otherwise call e.run_experiments()
+
+        # retrieve best performing doges
+        doge_df = e.get_best_performing_across_variants_and_datasets(datasets=e.training_data,
+                                                                     sort_by=['mean_profit'],
+                                                                     top_n_per_variant=1)
+
+        dummy_db = open('dogi.db', 'w')
+        # TODO: write these guys to the actual database
+        for i, row in enumerate(doge_df.itertuples()):
+            if i > max_doges_to_save:
+                break
+            # save experiment id and doge
+            dummy_db.write(f'{start_timestamp}\t{end_timestamp}\t{row.variant.name}\t{i}\t{str(row.doge)}\t{row.mean_profit}\n')
+        dummy_db.close()
+
+    @staticmethod
+    def fill_json_template(gp_training_config_json, start_timestamp, end_timestamp):
+        return gp_training_config_json.format(
+            start_time=datetime_from_timestamp(start_timestamp),
+            end_time=datetime_from_timestamp(end_timestamp)
+        )
+
 
 
 class DogeTrader(TickListener):
@@ -43,25 +66,31 @@ class DogeTrader(TickListener):
         # load current batch of doges from the db
         # TODO: fill this from actual db
 
-        e = ExperimentManager('gv5_experiments.json', database=database)
+        with open(GP_TRAINING_CONFIG, 'r') as f:
+            self.gp_training_config_json = f.read()
+
         doge_strategies = []
         transaction_currency = 'BTC'
         counter_currency = 'USDT'
         resample_period = 60
         source = 0
 
-        with open('gv5_experiments.json', 'r') as json_file:
-            experiment_json = json_file.read()
+        function_provider = ReddisDummyTAProvider()
 
         with open('dogi.db') as dummy_db:
             for line in dummy_db:
-                experiment_id, i, individual_str, mean_profit = line.split('\t')
-                doge, gp = ExperimentManager.resurrect_doge(experiment_json, experiment_id, individual_str, database)
+                start_timestamp, end_timestamp, experiment_id, i, individual_str, mean_profit = line.split('\t')
+                experiment_json = DogeTrainer.fill_json_template(self.gp_training_config_json,
+                                                                 int(float(start_timestamp)), int(float(end_timestamp)))
+                doge, gp = ExperimentManager.resurrect_doge(experiment_json, experiment_id, individual_str, database, function_provider)
                 strategy = GeneticTickerStrategy(doge, transaction_currency, counter_currency, resample_period,
                                                  source, gp)
                 doge_strategies.append(strategy)
 
         self.doge_strategies = doge_strategies
+
+        # dummy tick provider for now, TODO: replace with actual one
+        e = ExperimentManager('gv5_experiments.json', database=database)
         tick_provider = PriceDataframeTickProvider(e.training_data[0].price_data)
         tick_provider.add_listener(self)
         tick_provider.run()
@@ -85,5 +114,7 @@ class DogeTrader(TickListener):
 
 
 if __name__ == '__main__':
-    retrain_doges()
+    training_period = Period('2018/04/01 00:00:00 UTC', '2018/04/08 00:00:00 UTC')
+    trainer = DogeTrainer(redis_db)
+    trainer.retrain_doges(training_period.start_time, training_period.end_time, 10)
     trader = DogeTrader(database=redis_db)

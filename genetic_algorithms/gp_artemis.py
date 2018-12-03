@@ -4,6 +4,7 @@ import itertools
 import numpy as np
 import pandas as pd
 from data_sources import postgres_db, redis_db
+from utils import datetime_to_timestamp
 
 from artemis.experiments import experiment_root
 from artemis.experiments.experiments import clear_all_experiments, _GLOBAL_EXPERIMENT_LIBRARY
@@ -43,18 +44,19 @@ class ExperimentManager:
     @experiment_root
     def run_evolution(experiment_id, data, function_provider, grammar_version, fitness_function, mating_prob,
                       mutation_prob, population_size, num_generations, premade_individuals, order_generator, tree_depth,
-                      reseed_params):
+                      reseed_params, hof_size):
         grammar = Grammar.construct(grammar_version, function_provider, ephemeral_suffix=experiment_id)
         genetic_program = GeneticProgram(data_collection=data, function_provider=function_provider,
                                          grammar=grammar, fitness_function=fitness_function,
                                          premade_individuals=premade_individuals, order_generator=order_generator,
-                                         tree_depth=tree_depth, reseed_params=reseed_params)
+                                         tree_depth=tree_depth, reseed_params=reseed_params, hof_size=hof_size)
         hof, best = genetic_program.evolve(mating_prob, mutation_prob, population_size, num_generations, verbose=False)
         return hof, best
 
 
-    def __init__(self, experiment_container, read_from_file=True, database=postgres_db):
+    def __init__(self, experiment_container, read_from_file=True, database=postgres_db, hof_size=10, function_provider=None):
         self.database = database
+        self.hof_size = hof_size
         if read_from_file:
             with open(experiment_container) as f:
                 self.experiment_json = json.load(f)
@@ -65,13 +67,26 @@ class ExperimentManager:
             self.START_CASH = INF_CASH
             self.START_CRYPTO = INF_CRYPTO
 
-        # initialize data
-        self.training_data = [Data(start_cash=self.START_CASH, start_crypto=self.START_CRYPTO, database=self.database,
-                                  **dataset) for dataset in self.experiment_json["training_data"]]
-        self.validation_data = [Data(start_cash=self.START_CASH, start_crypto=self.START_CRYPTO, database=self.database,
-                                  **dataset) for dataset in self.experiment_json["validation_data"]]
-        # create function provider objects based on data
-        self.function_provider = TAProviderCollection(self.training_data + self.validation_data)
+
+        # if function provider is set to none, using cached data
+        if function_provider is None:
+            # initialize data
+            self.training_data = [Data(start_cash=self.START_CASH, start_crypto=self.START_CRYPTO, database=self.database,
+                                      **dataset) for dataset in self.experiment_json["training_data"]]
+            self.validation_data = [Data(start_cash=self.START_CASH, start_crypto=self.START_CRYPTO, database=self.database,
+                                      **dataset) for dataset in self.experiment_json["validation_data"]]
+            # create function provider objects based on data
+            self.function_provider = TAProviderCollection(self.training_data + self.validation_data)
+
+        else:
+            self.training_data = [Data.to_string(dataset['transaction_currency'],
+                                                 dataset['counter_currency'],
+                                                 datetime_to_timestamp(dataset['start_time']),
+                                                 datetime_to_timestamp(dataset['end_time']))
+                                  for dataset in self.experiment_json["training_data"]]
+
+
+            self.function_provider = function_provider
         # generate and register variants
         self._fill_experiment_db()
         self._register_variants()
@@ -120,7 +135,7 @@ class ExperimentManager:
         self.run_evolution.variants = OrderedDict() # for some reason, Artemis doesn't clear this
 
         for experiment_name, experiment in self.experiment_db.get_all():
-            self.run_evolution.add_variant(variant_name=experiment_name, **experiment)
+            self.run_evolution.add_variant(variant_name=experiment_name, hof_size=self.hof_size, **experiment)
         self.variants = self.run_evolution.get_variants()
 
     def get_variants(self):
@@ -154,14 +169,14 @@ class ExperimentManager:
 
 
     @time_performance
-    def run_experiments(self, rerun_existing=False, display_results=True):
+    def run_experiments(self, rerun_existing=False, display_results=True, keep_record=True):
         for i, variant in enumerate(self.variants):
             if len(variant.get_records(only_completed=True)) > 0 and not rerun_existing:
                 logging.info(f">>> Variant {variant.name} already has completed records, skipping...")
                 continue
 
             logging.info(f"Running variant {i}")
-            record = variant.run(keep_record=True, display_results=display_results, saved_figure_ext='.fig.png')
+            record = variant.run(keep_record=keep_record, display_results=display_results, saved_figure_ext='.fig.png')
             self._save_rockstars(record)
 
     def _save_rockstars(self, record):
@@ -255,6 +270,9 @@ class ExperimentManager:
                                    "evaluations", "individual"])
         for variant in self.get_variants():
             best_individuals = self.get_best_performing_individuals_and_dataset_performance(variant, datasets)
+
+            if best_individuals is None:
+                break
 
             for i, (best_individual, evaluations) in enumerate(best_individuals):
                 if remove_duplicates and str(best_individual) in df.doge.values:
@@ -718,8 +736,8 @@ class ExperimentManager:
         return backtest_results, baseline_results
 
     @staticmethod
-    def resurrect_doge(experiment_json, experiment_id, individual_str, database):
-        e = ExperimentManager(experiment_container=experiment_json, read_from_file=False, database=database)
+    def resurrect_doge(experiment_json, experiment_id, individual_str, database, function_provider=None):
+        e = ExperimentManager(experiment_container=experiment_json, read_from_file=False, database=database, function_provider=function_provider)
         gp = e.build_genetic_program(data=None, function_provider=e.function_provider, db_record=e.get_db_record_from_experiment_id(experiment_id))
         return gp.individual_from_string(individual_str), gp
 

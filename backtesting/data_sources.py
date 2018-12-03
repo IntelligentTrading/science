@@ -367,10 +367,15 @@ class PostgresDatabaseConnection(Database):
 
 
 class RedisDummyDB(Database):
+
+    # TODO: replace all SQL queries with Redis queries
+
+    # TODO: adapt or remove
     def __init__(self):
         self.conn = psycopg2.connect(postgres_connection_string)
         self.cursor = self.conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
+    # TODO: remove these three methods, they're needed for Postgres
     def get_cursor(self):
         return self.cursor
 
@@ -382,8 +387,8 @@ class RedisDummyDB(Database):
         return self.cursor
 
 
-    def get_resampled_prices_in_range(self, start_time, end_time, transaction_currency, counter_currency, resample_period, source=0,
-                                      normalize=True):
+    def get_resampled_prices_in_range(self, start_time, end_time, transaction_currency,
+                                      counter_currency, resample_period, source=0, normalize=True):
         resampled_price_range_query = """SELECT timestamp, close_price, high_price, low_price, close_volume
                                          FROM indicator_priceresampl 
                                          WHERE transaction_currency = %s 
@@ -396,11 +401,11 @@ class RedisDummyDB(Database):
         counter_currency_id = CounterCurrency[counter_currency].value
         connection = self.get_connection()
         price_data = pd.read_sql(resampled_price_range_query, con=connection, params=(transaction_currency,
-                                                                                   counter_currency_id,
-                                                                                   source,
-                                                                                   start_time,
-                                                                                   end_time,
-                                                                                   resample_period),
+                                                                                      counter_currency_id,
+                                                                                      source,
+                                                                                      start_time,
+                                                                                      end_time,
+                                                                                      resample_period),
                                  index_col="timestamp")
         if normalize:
             price_data.loc[:, 'close_price'] /= 1E8
@@ -433,6 +438,7 @@ class RedisDummyDB(Database):
         return price_data
 
 
+    # these are non-resampled prices
     def get_price(self, currency, timestamp, source, counter_currency="BTC", normalize=True):
         price_query = """SELECT price FROM indicator_price 
                                     WHERE transaction_currency = %s
@@ -469,8 +475,8 @@ class RedisDummyDB(Database):
                                         AND source = %s AND timestamp >= %s 
                                         AND timestamp <= %s ORDER BY timestamp DESC"""
 
-
-    def get_price_nearest_to_timestamp(self, currency, timestamp, source, counter_currency, max_delta_seconds_past=60*60,
+    def get_price_nearest_to_timestamp(self, currency, timestamp, source, counter_currency,
+                                       max_delta_seconds_past=60*60,
                                        max_delta_seconds_future=60*5):
 
         counter_currency_id = CounterCurrency[counter_currency].value
@@ -512,6 +518,14 @@ class RedisDummyDB(Database):
         assert len(data) == n
         return data[-1][0]
 
+    def get_indicator(self, indicator_name, transaction_currency, counter_currency, resample_period, source):
+        # query Redis to get indicator value at timestamp
+        pass
 
-postgres_db = None#PostgresDatabaseConnection()
+    def get_indicator_at_previous_timestamp(self, indicator_name, transaction_currency, counter_currency, resample_period, source):
+        # query Redis to get indicator_name at timestamp-1
+        pass
+
+
+postgres_db = None #PostgresDatabaseConnection()
 redis_db = RedisDummyDB()

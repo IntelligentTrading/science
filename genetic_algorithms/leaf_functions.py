@@ -197,10 +197,12 @@ class ReddisDummyTAProvider(TAProvider):
     def get_indicator(self, indicator_name, input):
         timestamp = self._get_timestamp(input)
         # query Redis to get indicator_name at timestamp
+        return 35
 
     def get_indicator_at_previous_timestamp(self, indicator_name, input):
         timestamp = self._get_timestamp(input)
         # query Redis to get indicator_name at timestamp-1
+        return 28
 
 
 class TAProviderCollection(FunctionProvider):

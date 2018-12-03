@@ -125,7 +125,11 @@ class Data:
 
 
     def __str__(self):
-        return f"{self.transaction_currency}-{self.counter_currency}-{int(self.start_time)}-{int(self.end_time)}"
+        return self.to_string(self.transaction_currency, self.counter_currency, self.start_time, self.end_time)
+
+    @staticmethod
+    def to_string(transaction_currency, counter_currency, start_time, end_time):
+        return f"{transaction_currency}-{counter_currency}-{int(start_time)}-{int(end_time)}"
 
     def build_buy_and_hold_benchmark(self):
 

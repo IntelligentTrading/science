@@ -251,6 +251,7 @@ class GeneticProgram:
         self.order_generator = kwargs.get('order_generator', OrderGenerator.ALTERNATING)
 
         self.reseed_params = kwargs.get('reseed_params', None)
+        self.hof_size = kwargs.get('hof_size', 10)
         self._build_toolbox()
 
 
@@ -326,7 +327,7 @@ class GeneticProgram:
         if len(premade) > 0:
             logging.info(f'Inserted {len(premade)} individuals into the initial population.')
 
-        hof = tools.HallOfFame(10)
+        hof = tools.HallOfFame(self.hof_size)
 
         stats_fit = tools.Statistics(lambda ind: ind.fitness.values)
         stats_size = tools.Statistics(len)
